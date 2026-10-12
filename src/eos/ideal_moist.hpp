@@ -110,6 +110,24 @@ class IdealMoistImpl final : public torch::nn::Cloneable<IdealMoistImpl>,
    * \return            internal energy
    */
   torch::Tensor _temp2intEng(torch::Tensor cons, torch::Tensor temp);
+
+  //! _prim2temp's memo of the last primitive, held per instance. Keeps prim
+  //! itself, so the key tensor cannot be freed and its address reused
+  struct TempMemo {
+    torch::Tensor prim, val;
+    void const* data = nullptr;
+    int64_t ver = -1;
+    std::vector<int64_t> shape, stride;
+  };
+  TempMemo _temp_memo;
+
+  //! species_enthalpy's per-species coefficient, held per instance. Keeps the
+  //! two species-table buffers it is built from, for the same reason
+  struct SpeciesCoeff {
+    torch::Tensor a, b, val;
+    int64_t va = -1, vb = -1;
+  };
+  SpeciesCoeff _cc;
 };
 TORCH_MODULE(IdealMoist);
 
