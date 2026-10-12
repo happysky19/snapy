@@ -278,6 +278,13 @@ class HydroImpl : public torch::nn::Cloneable<HydroImpl> {
   mutable std::shared_ptr<X1PressureSourceStencils> x1src_;
   //! SNAP_GRAVITY_WORK_RADIAL_EXACT grid-only work factors, built on first use
   CorrectedPEFactors _pe_work;
+  //! face_moment2_x1() for this block's x1 grid, built on first use. Holds
+  //! x1f, so the key tensor cannot be freed and its address reused
+  struct FaceMoment2 {
+    torch::Tensor x1f, val;
+    int64_t ver = -1;
+  };
+  mutable FaceMoment2 _s2;
 
   torch::Tensor _flux1, _flux2, _flux3, _face_pressure1, _div, _forcing_dry;
   torch::Tensor _positivity_hits, _positivity_severe, _positivity_min;

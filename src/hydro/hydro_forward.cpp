@@ -111,29 +111,21 @@ torch::Tensor HydroImpl::_flux_covariance(torch::Tensor const& wl,
   auto un = wbar[dim == 2 ? IVY : IVZ];
 
   auto x1v = pcoord->x1v.to(p.device(), p.scalar_type());
-  // face_moment2_x1() is grid-only; cache it by the
-  // dx1f tensor identity, version, device and dtype
-  static thread_local struct {
-    c10::TensorImpl const* impl = nullptr;
-    int64_t ver = -1;
-    torch::Device dev = torch::kCPU;
-    c10::ScalarType st = torch::kDouble;
-    torch::Tensor val;
-  } s2c;
-  auto const& dx1f_ = pcoord->dx1f;
-  if (s2c.impl != dx1f_.unsafeGetTensorImpl() || s2c.ver != dx1f_._version() ||
-      s2c.dev != p.device() || s2c.st != p.scalar_type() ||
-      !s2c.val.defined()) {
-    s2c.val = pcoord->face_moment2_x1()
+  // face_moment2_x1() is grid-only; cache it per block, keyed on the x1f
+  // tensor it is built from, its version, the device and the dtype
+  auto const& x1f_ = pcoord->x1f;
+  if (!(_s2.x1f.defined() && _s2.x1f.is_same(x1f_) &&
+        _s2.ver == X1GridKey::version(x1f_) && _s2.val.defined() &&
+        _s2.val.device() == p.device() &&
+        _s2.val.scalar_type() == p.scalar_type())) {
+    _s2.val = pcoord->face_moment2_x1()
                   .to(p.device(), p.scalar_type())
                   .unsqueeze(0)
                   .unsqueeze(1);
-    s2c.impl = dx1f_.unsafeGetTensorImpl();
-    s2c.ver = dx1f_._version();
-    s2c.dev = p.device();
-    s2c.st = p.scalar_type();
+    _s2.x1f = x1f_;
+    _s2.ver = X1GridKey::version(x1f_);
   }
-  auto s2 = s2c.val;
+  auto s2 = _s2.val;
   // Second O(dx1^2) term, nonzero on curved grids only: a cell stores the
   // average over the CELL measure, whose x1 centroid is r_v, while the flux
   // needs the average over the FACE measure, whose centroid is r_c. The
