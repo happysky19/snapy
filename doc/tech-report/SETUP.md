@@ -199,6 +199,52 @@ tooling run and the chapter-15 `ctest` line above all traverse excluded chapters
 carry no verdict on an excluded chapter.** They are recorded here only so the leakage is visible.
 `tools/chapter-owners.tsv` is a rewrite-owner lock, not a complete authorship register.
 
+## Checking the numbers behind the figures
+
+```bash
+python3 tools/check_figure_data.py                 # every figure
+python3 tools/check_figure_data.py --chapters ch05 # some chapters
+python3 tools/check_figure_data.py --unmatched --unverifiable   # the full picture
+```
+
+Two SVGs can differ byte for byte and show the same curve — padding and metadata move without a
+number changing — and the reverse is worse and quieter. Hashing the SVG answers neither question,
+so this one asks about the numbers. It draws each figure exactly as `tools/render_figures.py` does,
+with the same audit hook recording which files the draw opened, and then checks two things against
+`tools/figure-data-baseline.json`:
+
+- **every series the figure plots**, by fingerprint. This is what catches a changed number,
+  wherever it came from — the data file, the figure module or a library.
+- **which committed reference series the figure was found to be drawing**, and how. This is what
+  catches a figure that quietly stops reading its committed data.
+
+Both halves are needed, and the first cannot be replaced by comparing the figure with its own data
+file: a figure that *reads* that file moves with it, so perturb the file and the figure draws the
+perturbed value and the two still agree. Only a committed fingerprint stays put.
+
+A reference series counts as plotted when some plotted series equals it elementwise within
+`--rtol 1e-9` / `--atol 1e-12`, over its whole length or as a contiguous slice, allowing a reversed
+axis and the named transforms `negated` and `absolute value` (a log axis plots magnitudes). A single
+scale factor is allowed **only** when it is a unit conversion — a power of ten or a small integer
+ratio, and positive. A free factor would absorb the very error this exists to catch, and `-1` would
+hide a sign flip, so both are refused and reported as differences.
+
+**Why that tolerance.** The committed CSVs print ten significant digits, so a value read from the
+file and plotted unchanged is exact, and one recomputed instead of read differs by about 5e-11
+relative at worst. `1e-9` sits three orders above that rounding and well below anything a reader
+would see on a page. The fingerprint digest is taken over the same ten significant figures, so the
+two halves agree about what "unchanged" means.
+
+**It cannot speak for every figure.** Of 145 figures, **16 read committed data** and 129 compute
+everything in the figure module, so there is no committed reference to compare them with; those are
+listed by `--unverifiable` and are never reported as passing. Of 127 reference series found in the
+16 data files, 76 are verified as plotted; the other 51 are parameters, grid sizes and columns the
+figure does not draw, and are reported by `--unmatched` as information, never as failures — a
+same-length plotted series is not evidence that the figure meant to draw a given column.
+
+`--update` rewrites the baseline. It is deliberately a separate, explicit run: a changed number
+should be read and understood, not absorbed.
+
 ## The gate
 
 ```bash
