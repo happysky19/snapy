@@ -108,7 +108,18 @@
     "bookmark",
     "luatexbase",
     "luacolor",
-    "luatex85"
+    "luatex85",
+    "colortbl",
+    "fontawesome5",
+    "needspace",
+    "tikzfill"
+   ],
+   "_why_these_packages": [
+    "The first four of these were found the hard way: the render installed colortbl, fontawesome5,",
+    "needspace and tikzfill on its own, and .report-env/tex-packages.lock caught it afterwards.",
+    "They came from the pinned snapshot, so that render was still reproducible -- but a package the",
+    "setup step did not install is a package whose version nobody chose, so they are named here and",
+    "the lock is expected to be unchanged across a full render."
    ]
   },
   "universal-ctags": {

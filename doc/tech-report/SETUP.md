@@ -129,7 +129,11 @@ render fetched nothing" is checkable rather than assumed:
 diff .report-env/tex-packages.lock <(tlmgr list --only-installed | sort)
 ```
 
-Any difference is a package that arrived at render time.
+Any difference is a package that arrived at render time. That check earned its keep immediately: a
+full render pulled in `colortbl`, `fontawesome5`, `needspace` and `tikzfill` on its own. They came
+from the pinned snapshot, so that render was still reproducible — but a package the setup step did
+not install is a package whose version nobody chose, so all four are now named in
+`tools/env-pins.json` and the lock is expected to be unchanged across a render.
 
 ## The native route
 

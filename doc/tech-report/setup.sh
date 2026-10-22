@@ -246,10 +246,11 @@ done
   See $LOGS/tlmgr.log. Refusing to continue: the render would fetch these from a rolling repository."
 info "scrbook $("$PREFIX/bin/kpsewhich" scrbook.cls | xargs grep -m1 -o '[0-9]\{4\}/[0-9/]* v[0-9.a-z]*')"
 
-# Belt and braces for the render itself. Quarto installs a missing LaTeX package mid-render through
-# this same tlmgr; with the repository pinned above that is already the snapshot, and with
-# auto-install off it cannot quietly reach anywhere at all -- a missing package stops the render and
-# names itself instead of being papered over.
+# Quarto installs a missing LaTeX package mid-render through this same tlmgr. With the repository
+# pinned above, anything it pulls comes from the dated snapshot, so such a render is still
+# reproducible -- but a package the setup step did not install is a package whose version nobody
+# chose. tex-packages.lock below is what makes that visible: four packages (colortbl, fontawesome5,
+# needspace, tikzfill) were found exactly this way and are now named in env-pins.json.
 "$PREFIX/bin/tlmgr" option autobackup 0 >>"$LOGS/tlmgr.log" 2>&1 || true
 "$PREFIX/bin/tlmgr" option auto-remove 0 >>"$LOGS/tlmgr.log" 2>&1 || true
 
