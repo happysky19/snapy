@@ -207,43 +207,61 @@ python3 tools/check_figure_data.py --chapters ch05 # some chapters
 python3 tools/check_figure_data.py --unmatched --unverifiable   # the full picture
 ```
 
-Two SVGs can differ byte for byte and show the same curve — padding and metadata move without a
-number changing — and the reverse is worse and quieter. Hashing the SVG answers neither question,
-so this one asks about the numbers. It draws each figure exactly as `tools/render_figures.py` does,
-with the same audit hook recording which files the draw opened, and then checks two things against
-`tools/figure-data-baseline.json`:
+Two SVGs can differ byte for byte and show the same curve, and a figure whose data drifted can keep
+the same byte size. Hashing the SVG answers neither question, so this one asks about the numbers. It
+draws each figure exactly as `tools/render_figures.py` does, with the same audit hook recording
+which files the draw opened, and compares against `tools/figure-data-baseline.json`:
 
-- **every series the figure plots**, by fingerprint. This is what catches a changed number,
-  wherever it came from — the data file, the figure module or a library.
-- **which committed reference series the figure was found to be drawing**, and how. This is what
-  catches a figure that quietly stops reading its committed data.
+- **every series the figure plots**, by stored values. This catches a changed number wherever it
+  came from — the data file, the figure module or a library.
+- **which committed reference series the figure was found to be drawing, on which artist.** This
+  catches a figure that quietly stops reading its committed data, or starts reading it somewhere
+  else.
 
-Both halves are needed, and the first cannot be replaced by comparing the figure with its own data
-file: a figure that *reads* that file moves with it, so perturb the file and the figure draws the
-perturbed value and the two still agree. Only a committed fingerprint stays put.
+Neither half can be replaced by comparing a figure with its own data file: a figure that *reads*
+that file moves with it, so perturbing the file makes the figure draw the perturbed value and the
+two still agree. Only a committed reference stays put.
 
-A reference series counts as plotted when some plotted series equals it elementwise within
-`--rtol 1e-9` / `--atol 1e-12`, over its whole length or as a contiguous slice, allowing a reversed
-axis and the named transforms `negated` and `absolute value` (a log axis plots magnitudes). A single
-scale factor is allowed **only** when it is a unit conversion — a power of ten or a small integer
-ratio, and positive. A free factor would absorb the very error this exists to catch, and `-1` would
-hide a sign flip, so both are refused and reported as differences.
+### Links and candidates
 
-**Why that tolerance.** The committed CSVs print ten significant digits, so a value read from the
-file and plotted unchanged is exact, and one recomputed instead of read differs by about 5e-11
-relative at worst. `1e-9` sits three orders above that rounding and well below anything a reader
-would see on a page. The fingerprint digest is taken over the same ten significant figures, so the
-two halves agree about what "unchanged" means.
+Only an **identity** reading counts as a link: this exact series, in this order, at this length, on
+a named artist. Everything else — reversed, a slice, negated, absolute value, a unit factor — is
+recorded as a **candidate** and is not provenance. A column can match a reversed x axis by
+arithmetic coincidence while the figure never draws it, and that is what used to be counted. The
+artist is stored with the link, so a reference moving from one curve to another on the same figure
+is a change rather than a silent pass.
 
-**It cannot speak for every figure.** Of 145 figures, **16 read committed data** and 129 compute
-everything in the figure module, so there is no committed reference to compare them with; those are
-listed by `--unverifiable` and are never reported as passing. Of 127 reference series found in the
-16 data files, 76 are verified as plotted; the other 51 are parameters, grid sizes and columns the
-figure does not draw, and are reported by `--unmatched` as information, never as failures — a
-same-length plotted series is not evidence that the figure meant to draw a given column.
+### Acceptance
 
-`--update` rewrites the baseline. It is deliberately a separate, explicit run: a changed number
-should be read and understood, not absorbed.
+Acceptance is the advertised `--rtol 1e-9` / `--atol 1e-12`, applied to the stored values. It is
+deliberately **not** digest equality: quantising and comparing hashes puts a hard edge inside the
+tolerance band, so `1.0000000004999` and `1.0000000005001` are within `rtol` of each other yet round
+to different tenth digits. The digest is kept only as a fast path. Values are stored rounded to
+twelve significant figures, three orders tighter than the default `rtol`, so storage never decides
+an acceptance the tolerance would not.
+
+Nonfinite values are kept in position. Filtering them per axis loses the pairing between x and y:
+with `y = [1, NaN, 2, 3]` and `y = [1, 2, NaN, 3]` the surviving values are the same list, so
+compacting them hides a moved point. A NaN matches only a NaN.
+
+### It fails rather than passing quietly
+
+A missing baseline, a figure in the baseline that was not drawn, a figure or numerical series that
+appeared without being baselined, an unknown chapter selection and a selection that discovers
+nothing are all **failures**. Missing coverage is not a pass; new coverage is read and baselined
+deliberately with `--update`, not absorbed.
+
+### What it still cannot do
+
+- Of 145 figures, **16 read committed data**; 129 compute everything in the figure module, so there
+  is no committed reference for them. `--unverifiable` lists them; they are never reported as
+  passing. Their numbers are still stored, so drift in them is caught.
+- Of 127 reference series, **80 are found in their figure** (66 identity links, 14 candidates) and
+  47 are not. Those 47 are parameters, grid sizes and columns the figure does not draw, reported by
+  `--unmatched` as information. A same-length plotted series is not evidence of intent.
+- **The baseline is drift detection, not proof of historical equivalence.** It records this run
+  against the current working tree: no source revision, no independently reviewed per-series oracle.
+  Observing a file open proves access, not that its values produced a particular curve.
 
 ## The gate
 

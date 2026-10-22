@@ -151,9 +151,66 @@ def test_the_snapshot_keeps_the_fingerprints_and_the_links():
                 "matches": [{"file": "d.csv", "series": "a", "plotted_as": "axes0.line0.y",
                              "how": "as committed"}]}]
     snap = cfd.snapshot(results)
-    assert snap["fig-x"]["links"] == {"d.csv::a": "as committed"}
+    # the artist is part of the link: a reference moving to another curve has to be visible
+    assert snap["fig-x"]["links"] == {
+        "d.csv::a": {"plotted_as": "axes0.line0.y", "how": "as committed"}}
     assert snap["fig-x"]["series"]["axes0.line0.y"]["n"] == 2
     json.dumps(snap)  # the baseline has to be serialisable
+
+
+def test_only_an_identity_reading_is_a_link_the_rest_are_candidates():
+    """A reversed, sliced or rescaled coincidence is a candidate, not provenance."""
+    base = {"label": "fig-x", "chapter": "ch09", "error": None, "series": {}}
+    ident = cfd.snapshot([base | {"matches": [
+        {"file": "d.csv", "series": "a", "plotted_as": "axes0.line0.y", "how": "as committed"}]}])
+    other = cfd.snapshot([base | {"matches": [
+        {"file": "d.csv", "series": "a", "plotted_as": "axes0.line0.x",
+         "how": "as committed, reversed"}]}])
+    assert "links" in ident["fig-x"] and "candidates" not in ident["fig-x"]
+    assert "candidates" in other["fig-x"] and "links" not in other["fig-x"]
+
+
+def test_a_stairs_plot_is_extracted():
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    ax.stairs([0.25, 0.5], [0.0, 1.0, 2.0])
+    got = dict(cfd.plotted_series(fig))
+    plt.close(fig)
+    assert got["axes0.step0.values"] == [0.25, 0.5]
+    assert got["axes0.step0.edges"] == [0.0, 1.0, 2.0]
+
+
+def test_a_nonfinite_value_keeps_its_position():
+    a = cfd.fingerprint([1.0, float("nan"), 2.0, 3.0])
+    b = cfd.fingerprint([1.0, 2.0, float("nan"), 3.0])
+    assert a["sha256"] != b["sha256"]
+    assert a["n"] == b["n"] == 4
+
+
+def test_a_nan_never_matches_a_number():
+    assert cfd._close([float("nan")], [1.0], 1e-9, 1e-12) is False
+    assert cfd._close([float("nan")], [float("nan")], 1e-9, 1e-12) is True
+
+
+def test_a_single_point_series_is_kept():
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    ax.plot([1.0], [2.0])
+    got = dict(cfd.plotted_series(fig))
+    plt.close(fig)
+    assert got["axes0.line0.y"] == [2.0]
+
+
+def test_acceptance_follows_the_tolerance_not_the_digest():
+    """The pair that straddles a rounding boundary is inside rtol, so it has to be accepted."""
+    a = cfd.fingerprint([1.0000000004999, 2.0])
+    b = cfd.fingerprint([1.0000000005001, 2.0])
+    assert cfd.fingerprints_agree(a, b, 1e-9, 1e-12) is True
+    assert cfd.fingerprints_agree(a, cfd.fingerprint([1.1, 2.0]), 1e-9, 1e-12) is False
 
 
 def test_a_figure_that_failed_to_draw_is_not_baselined():

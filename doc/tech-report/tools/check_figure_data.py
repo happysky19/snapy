@@ -61,6 +61,9 @@ import render_figures as rf  # noqa: E402
 
 REPORT = cfo.REPORT
 DATA_SUFFIXES = {".csv", ".json"}
+# The only reading that is provenance rather than a numeric coincidence: this exact
+# series, in this order, at this length. Everything else is recorded as a candidate.
+IDENTITY = "as committed"
 # A JSON block that describes a run rather than a plotted quantity.
 SKIP_JSON_KEYS = {"provenance"}
 
@@ -138,8 +141,10 @@ def series_from_csv(text: str) -> list[tuple[str, list[float]]]:
     width = max(len(r) for r in rows)
     out = []
     for c in range(width):
-        col = [r[c] for r in rows if c < len(r) and math.isfinite(r[c])]
-        if len(col) > 1:
+        # every row contributes, short rows included as nan: filtering a column independently
+        # would slide the remaining values up and break alignment with the other columns.
+        col = [r[c] if c < len(r) else math.nan for r in rows]
+        if col:
             name = header[c] if header and len(header) == width else f"column{c}"
             out.append((name, col))
     return out
@@ -160,7 +165,14 @@ def reference_series(path: Path) -> list[tuple[str, list[float]]]:
 # ----------------------------------------------------------------- plotted series --
 
 def plotted_series(fig) -> list[tuple[str, list[float]]]:
-    """every numeric series the figure actually drew, named by where it came from"""
+    """every numeric series the figure actually drew, named by the artist it came from.
+
+    Nonfinite values are kept in place rather than filtered out. Dropping them per axis loses the
+    pairing between x and y: with x = [0,1,2,3], y = [1,NaN,2,3] and y = [1,2,NaN,3] the surviving
+    values are the same list, so compacting them makes a figure that moved a valid point look
+    unchanged. Length-one series are kept for the same reason -- a series going from one point to
+    none is a change.
+    """
     import numpy as np
     out: list[tuple[str, list[float]]] = []
 
@@ -169,8 +181,7 @@ def plotted_series(fig) -> list[tuple[str, list[float]]]:
             arr = np.asarray(values, dtype=float).ravel()
         except (TypeError, ValueError):
             return
-        arr = arr[np.isfinite(arr)]
-        if arr.size > 1:
+        if arr.size:
             out.append((name, [float(v) for v in arr]))
 
     for ai, ax in enumerate(fig.axes):
@@ -178,6 +189,7 @@ def plotted_series(fig) -> list[tuple[str, list[float]]]:
         for li, line in enumerate(ax.get_lines()):
             xy = line.get_xydata()
             if xy is not None and len(xy):
+                xy = np.asarray(xy, dtype=float)
                 add(f"{where}.line{li}.x", xy[:, 0])
                 add(f"{where}.line{li}.y", xy[:, 1])
         for ci, coll in enumerate(ax.collections):
@@ -196,6 +208,20 @@ def plotted_series(fig) -> list[tuple[str, list[float]]]:
             arr = getattr(coll, "get_array", lambda: None)()
             if arr is not None:
                 add(f"{where}.coll{ci}.array", np.asarray(arr).ravel())
+        # ax.stairs draws a StepPatch, which carries its numbers in get_data() and has neither
+        # get_height nor get_width, so the bar branch below never saw it. fig-ch09-sponge-profile
+        # draws its committed data this way: without this, changing those values changed nothing.
+        steps = [p for p in ax.patches if hasattr(p, "get_data") and not hasattr(p, "get_height")]
+        for si, patch in enumerate(steps):
+            data = patch.get_data()
+            values = getattr(data, "values", None)
+            edges = getattr(data, "edges", None)
+            if values is None and isinstance(data, (tuple, list)) and len(data) >= 2:
+                values, edges = data[0], data[1]
+            if values is not None:
+                add(f"{where}.step{si}.values", np.asarray(values, dtype=float))
+            if edges is not None:
+                add(f"{where}.step{si}.edges", np.asarray(edges, dtype=float))
         bars = [p for p in ax.patches if hasattr(p, "get_height") and hasattr(p, "get_width")]
         if bars:
             add(f"{where}.bars.height", [p.get_height() for p in bars])
@@ -211,7 +237,19 @@ def plotted_series(fig) -> list[tuple[str, list[float]]]:
 # ------------------------------------------------------------------------ matching --
 
 def _close(a, b, rtol: float, atol: float) -> bool:
+    """elementwise, with nonfinite values matching only themselves.
+
+    Without the explicit nonfinite arm every comparison against a NaN is False, so `abs(x-y) > tol`
+    is False too and a NaN would silently "match" any number at all.
+    """
     for x, y in zip(a, b):
+        xf, yf = math.isfinite(x), math.isfinite(y)
+        if xf != yf:
+            return False
+        if not xf:
+            if math.isnan(x) != math.isnan(y) or (not math.isnan(x) and x != y):
+                return False
+            continue
         if abs(x - y) > atol + rtol * abs(y):
             return False
     return True
@@ -372,18 +410,50 @@ def check(chapters=None, rtol=1e-9, atol=1e-12, report: Path = REPORT):
 
 
 def fingerprint(values) -> dict:
-    """what a plotted series is, compactly enough to commit and precisely enough to compare.
+    """what a plotted series is: its values, plus a digest and a few statistics for messages.
 
-    The digest is taken over the values formatted to ten significant figures, the same scale as the
-    default rtol, so the two agree about what "unchanged" means: a difference the matcher would
-    tolerate does not move the digest, and one it would reject does.
+    The values are stored because acceptance has to use the advertised rtol/atol, and a hash cannot.
+    Quantising to ten significant figures and comparing digests exactly puts a hard edge inside the
+    tolerance band: 1.0000000004999 and 1.0000000005001 are within rtol 1e-9 of each other, so the
+    matcher accepts them, yet they round to different tenth digits and so hash differently. A check
+    that accepts a pair in one place and rejects it in another is not one policy.
+
+    Storage rounds to twelve significant figures, three orders tighter than the default rtol, so the
+    stored form never decides an acceptance that the tolerance would not.
     """
-    text = ",".join(f"{v:.9e}" for v in values)
-    return {"n": len(values),
-            "sha256": hashlib.sha256(text.encode()).hexdigest()[:16],
-            "min": float(min(values)), "max": float(max(values)),
-            "mean": sum(values) / len(values),
-            "first": float(values[0]), "last": float(values[-1])}
+    vals = [float(v) for v in values]
+    stored = [None if math.isnan(v) else (v if math.isinf(v) else float(f"{v:.11e}"))
+              for v in vals]
+    text = ",".join("nan" if v is None else f"{v!r}" for v in stored)
+    finite = [v for v in vals if math.isfinite(v)]
+    fp = {"n": len(vals),
+          "sha256": hashlib.sha256(text.encode()).hexdigest()[:16],
+          "values": stored}
+    if finite:
+        fp.update({"min": min(finite), "max": max(finite),
+                   "mean": sum(finite) / len(finite),
+                   "first": finite[0], "last": finite[-1]})
+    return fp
+
+
+def fingerprint_values(fp: dict) -> list[float] | None:
+    """the stored series, nan restored; None for a baseline written before values were stored"""
+    vals = fp.get("values")
+    if vals is None:
+        return None
+    return [math.nan if v is None else float(v) for v in vals]
+
+
+def fingerprints_agree(was: dict, now: dict, rtol: float, atol: float) -> bool:
+    """acceptance, by the advertised tolerance -- the digest is only a fast path"""
+    if was.get("n") != now.get("n"):
+        return False
+    if was.get("sha256") == now.get("sha256"):
+        return True
+    a, b = fingerprint_values(was), fingerprint_values(now)
+    if a is None or b is None:
+        return False          # an old baseline carries no values; it has to be rewritten
+    return _close(b, a, rtol, atol)
 
 
 def fingerprint_delta(was: dict, now: dict) -> str:
@@ -424,9 +494,18 @@ def snapshot(results):
         if r["error"]:
             continue
         entry = {"chapter": r["chapter"], "series": r.get("series", {})}
-        links = {f"{m['file']}::{m['series']}": m["how"] for m in r.get("matches", [])}
+        # The artist is part of the link. Without it, a reference that moves from one curve to
+        # another on the same figure reads as unchanged, which is exactly the provenance the link
+        # is supposed to carry.
+        links, candidates = {}, {}
+        for m in r.get("matches", []):
+            key = f"{m['file']}::{m['series']}"
+            value = {"plotted_as": m["plotted_as"], "how": m["how"]}
+            (links if m["how"] == IDENTITY else candidates)[key] = value
         if links:
             entry["links"] = dict(sorted(links.items()))
+        if candidates:
+            entry["candidates"] = dict(sorted(candidates.items()))
         out[r["label"]] = entry
     return out
 
@@ -467,64 +546,117 @@ def main() -> int:
     for r in errored:
         print(f"\n[draw failed] {r['label']} ({r['chapter']}): {r['error']}")
 
-    changed, broken = [], []
+    changed, broken, missing = [], [], []
     if args.update:
         merged = json.loads(BASELINE.read_text()) if (BASELINE.exists() and chapters) else {}
         merged.update(now)
         BASELINE.write_text(json.dumps(merged, indent=1, sort_keys=True) + "\n")
         nseries = sum(len(v.get("series", {})) for v in now.values())
         nlinks = sum(len(v.get("links", {})) for v in now.values())
-        print(f"\nbaseline written: {nseries} plotted series fingerprinted and {nlinks} "
-              f"reference link(s) verified, across {len(now)} figure(s)")
-    elif BASELINE.exists():
-        was = json.loads(BASELINE.read_text())
-        kept = 0
-        for label, entry in sorted(was.items()):
-            if label not in now:
-                continue
-            cur = now[label]
-            for name, fp in sorted(entry.get("series", {}).items()):
-                got = cur.get("series", {}).get(name)
-                if got is None:
-                    changed.append((label, name, "the figure no longer draws this series", None))
-                elif got["sha256"] != fp["sha256"]:
-                    changed.append((label, name, fingerprint_delta(fp, got), (fp, got)))
-                else:
-                    kept += 1
-            for key, how in sorted(entry.get("links", {}).items()):
-                now_how = cur.get("links", {}).get(key)
-                if now_how is None:
-                    rec = next((r for r in results if r["label"] == label), None)
-                    bad = next((m for m in (rec or {}).get("unmatched", [])
-                                if f"{m['file']}::{m['series']}" == key), None)
-                    broken.append((label, key, how, bad))
-                elif now_how != how:
-                    # still found, but read differently: a transform appearing or disappearing is
-                    # itself a change in what the figure does with the committed numbers.
-                    broken.append((label, key, f"{how}  ->  now {now_how}", None))
-        print(f"  baseline: {kept} plotted series unchanged, {len(changed)} changed; "
-              f"{len(broken)} reference link(s) broken")
-    else:
-        print("  no tools/figure-data-baseline.json yet; run with --update to write one")
+        ncand = sum(len(v.get("candidates", {})) for v in now.values())
+        print(f"\nbaseline written: {nseries} plotted series, {nlinks} identity link(s) and "
+              f"{ncand} candidate(s), across {len(now)} figure(s)")
+        return 0
+
+    # No baseline is not a pass. Nothing was compared, so there is nothing to report as unchanged.
+    if not BASELINE.exists():
+        print(f"\n[NO BASELINE] {BASELINE} does not exist, so nothing was compared.")
+        print("  Run with --update to write one, and commit it. Until then this check is not a"
+              " statement about the figures.")
+        return 1
+
+    was = json.loads(BASELINE.read_text())
+    # Compare like with like: a chapter filter narrows both sides, so --chapters ch05 is not a
+    # licence to ignore every other figure's absence.
+    scoped = {k: v for k, v in was.items() if not chapters or v.get("chapter") in chapters}
+    if chapters:
+        known = {v.get("chapter") for v in was.values()}
+        unknown = [c for c in chapters if c not in known]
+        if unknown:
+            print(f"\n[UNKNOWN CHAPTER] {', '.join(unknown)} is not in the baseline; "
+                  "nothing was selected from it.")
+            return 1
+    if not results:
+        print("\n[NOTHING DISCOVERED] no figure cell matched the selection, so nothing ran.")
+        return 1
+
+    kept = 0
+    for label, entry in sorted(scoped.items()):
+        cur = now.get(label)
+        if cur is None:
+            missing.append((label, entry.get("chapter"), "the figure is in the baseline but was "
+                            "not drawn in this run"))
+            continue
+        for name, fp in sorted(entry.get("series", {}).items()):
+            got = cur.get("series", {}).get(name)
+            if got is None:
+                changed.append((label, name, "the figure no longer draws this series", None))
+            elif not fingerprints_agree(fp, got, args.rtol, args.atol):
+                changed.append((label, name, fingerprint_delta(fp, got), (fp, got)))
+            else:
+                kept += 1
+        for key, link in sorted(entry.get("links", {}).items()):
+            how = link["how"] if isinstance(link, dict) else link
+            where = link.get("plotted_as") if isinstance(link, dict) else None
+            got = cur.get("links", {}).get(key)
+            if got is None:
+                rec = next((r for r in results if r["label"] == label), None)
+                bad = next((m for m in (rec or {}).get("unmatched", [])
+                            if f"{m['file']}::{m['series']}" == key), None)
+                broken.append((label, key, f"{how}" + (f" on {where}" if where else ""), bad))
+            elif isinstance(got, dict) and where and got.get("plotted_as") != where:
+                broken.append((label, key,
+                               f"{how} on {where}  ->  now on {got.get('plotted_as')}", None))
+
+    # New coverage is not automatically good news: a numerical series nobody has looked at is a
+    # series nobody has looked at. It has to be reviewed and baselined deliberately.
+    for label, cur in sorted(now.items()):
+        if chapters and cur.get("chapter") not in chapters:
+            continue
+        entry = was.get(label)
+        if entry is None:
+            missing.append((label, cur.get("chapter"), "the figure was drawn but is not in the "
+                            "baseline"))
+            continue
+        for name in sorted(cur.get("series", {})):
+            if name not in entry.get("series", {}):
+                missing.append((label, cur.get("chapter"),
+                                f"new numerical series {name} is not in the baseline"))
+
+    print(f"  baseline: {kept} plotted series unchanged, {len(changed)} changed; "
+          f"{len(broken)} identity link(s) broken; {len(missing)} coverage difference(s)")
 
     for label, name, why, pair in changed:
         print(f"\n[CHANGED] {label}: {name}")
         print(f"  {why}")
         if pair:
             was_fp, now_fp = pair
-            print(f"  committed fingerprint {was_fp['sha256']} (n={was_fp['n']}), "
-                  f"now {now_fp['sha256']} (n={now_fp['n']})")
+            print(f"  committed digest {was_fp.get('sha256')} (n={was_fp.get('n')}), "
+                  f"now {now_fp.get('sha256')} (n={now_fp.get('n')})")
+            a, b = fingerprint_values(was_fp), fingerprint_values(now_fp)
+            if a is None:
+                print("  the committed baseline stores no values; rewrite it with --update after "
+                      "reading what changed.")
+            elif b is not None:
+                for i, (x, y) in enumerate(zip(b, a)):
+                    if not _close([x], [y], args.rtol, args.atol):
+                        print(f"  first difference at index {i}: plotted {x!r} vs committed {y!r}")
+                        break
         print("  The plotted numbers moved. Find out whether the data file, the figure module or a "
               "library changed before touching the baseline.")
 
     for label, key, how, bad in broken:
         print(f"\n[BROKEN LINK] {label}: {key}")
-        print(f"  was plotted {how}; it is no longer found in the figure within tolerance.")
+        print(f"  was {how}; it is no longer found there within tolerance.")
         if bad and bad.get("closest"):
             print(f"  nearest plotted series now: {bad['closest']}")
             print(f"  worst at index {bad['at_index']}: plotted {bad['plotted']!r} vs "
                   f"committed {bad['committed']!r}  (relative {bad['max_rel_diff']:.3e})")
-        print("  Either the data file changed or the figure stopped drawing it.")
+        print("  Either the data file changed or the figure stopped drawing it there.")
+
+    for label, chapter, why in missing:
+        print(f"\n[COVERAGE] {label} ({chapter}): {why}")
+        print("  Read it, then baseline it deliberately with --update.")
 
     if args.unmatched:
         for r in backed:
@@ -546,7 +678,7 @@ def main() -> int:
             {"rtol": args.rtol, "atol": args.atol, "linkage": now, "results": results},
             indent=1) + "\n")
 
-    return 1 if (changed or broken or errored) else 0
+    return 1 if (changed or broken or missing or errored) else 0
 
 
 if __name__ == "__main__":
