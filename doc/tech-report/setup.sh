@@ -25,18 +25,20 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PREFIX="$HERE/.report-env"
 WITH_NATIVE=0
-FORCE_NETCDF_BUILD=0
+ALLOW_HOST_NETCDF=0
 PRINT_DIGESTS=0
 JOBS="$( (command -v nproc >/dev/null && nproc) || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 
 usage() {
-  sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  # the header comment, however long it grows: every line until the first that is not a comment
+  sed -n '2,/^[^#]/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'
   cat <<'EOF'
 
 Options:
   --prefix DIR           where to install (default: doc/tech-report/.report-env)
   --with-native          also build pydisort, pyharp, kintera and snapy at their pins
-  --force-netcdf-build   build NetCDF and HDF5 from source even if the machine already has them
+  --allow-host-netcdf    link against this machine's NetCDF instead of building the pinned one;
+                         the result is then NOT the documented reproduction route
   --jobs N               parallel compile jobs (default: all cores)
   --print-digests        download every artifact and print its sha256, then stop
   -h, --help             this text
@@ -47,7 +49,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --prefix) PREFIX="$(mkdir -p "$2" && cd "$2" && pwd)"; shift 2 ;;
     --with-native) WITH_NATIVE=1; shift ;;
-    --force-netcdf-build) FORCE_NETCDF_BUILD=1; shift ;;
+    --allow-host-netcdf) ALLOW_HOST_NETCDF=1; shift ;;
     --jobs) JOBS="$2"; shift 2 ;;
     --print-digests) PRINT_DIGESTS=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -207,10 +209,28 @@ mkdir -p "$TEXMFVAR" "$TEXMFCONFIG" "$TEXMFHOME"
 # immutable, so that self-update is reproducible.
 TLNET="$(pin render tinytex tlnet_repository)"
 info "package repository pinned to $TLNET"
-{
-  "$PREFIX/bin/tlmgr" option repository "$TLNET"
-  "$PREFIX/bin/tlmgr" update --self
-} >"$LOGS/tlmgr.log" 2>&1 || info "tlmgr could not reach the pinned snapshot; see logs/tlmgr.log"
+
+# Every failure below is fatal, on purpose. The one thing this step must never do is carry on and let
+# the render pull TeX from a rolling mirror: that is the silent fallback that produced a koma-script
+# four days newer than the branch and killed the PDF. A TeX we could not pin is not a TeX we will use.
+"$PREFIX/bin/tlmgr" option repository "$TLNET" >"$LOGS/tlmgr.log" 2>&1 \
+  || die "could not point tlmgr at the pinned snapshot
+    $TLNET
+  See $LOGS/tlmgr.log. Refusing to continue against a rolling repository."
+"$PREFIX/bin/tlmgr" update --self >>"$LOGS/tlmgr.log" 2>&1 \
+  || die "tlmgr could not update itself from the pinned snapshot
+    $TLNET
+  See $LOGS/tlmgr.log. The snapshot may have gone; it is a third-party archive (env-pins.json says so).
+  Refusing to continue, because tlmgr would then install from a rolling repository."
+
+# Confirm the repository actually in effect is the pinned one, not a default tlmgr fell back to.
+in_effect="$("$PREFIX/bin/tlmgr" option repository 2>/dev/null | sed -n 's/.*:[[:space:]]*\(https\{0,1\}:.*\)$/\1/p' | tail -1)"
+case "$in_effect" in
+  "$TLNET"*) : ;;
+  *) die "tlmgr reports its repository as '$in_effect', not the pinned
+    $TLNET
+  Refusing to continue." ;;
+esac
 
 info "adding the LaTeX packages the book loads"
 tlmgr_pkgs="$(pin render tinytex tlmgr_packages)"
@@ -218,15 +238,26 @@ tlmgr_pkgs="$(pin render tinytex tlmgr_packages)"
 # says nothing useful here. Ask kpsewhich afterwards instead, which answers the question we have.
 "$PREFIX/bin/tlmgr" install $tlmgr_pkgs >>"$LOGS/tlmgr.log" 2>&1 || true
 missing=""
-for probe in scrbook.cls fontspec.sty caption.sty tcolorbox.sty unicode-math.sty koma-script.sty; do
-  case "$probe" in koma-script.sty) continue ;; esac
+for probe in scrbook.cls fontspec.sty caption.sty tcolorbox.sty unicode-math.sty luacolor.sty; do
   "$PREFIX/bin/kpsewhich" "$probe" >/dev/null 2>&1 || missing="$missing $probe"
 done
-if [ -n "$missing" ]; then
-  info "the pinned snapshot did not provide:$missing (see logs/tlmgr.log)"
-else
-  info "scrbook $("$PREFIX/bin/kpsewhich" scrbook.cls | xargs grep -m1 -o '[0-9]\{4\}/[0-9/]* v[0-9.a-z]*')"
-fi
+[ -z "$missing" ] || die "the pinned snapshot did not provide:$missing
+    $TLNET
+  See $LOGS/tlmgr.log. Refusing to continue: the render would fetch these from a rolling repository."
+info "scrbook $("$PREFIX/bin/kpsewhich" scrbook.cls | xargs grep -m1 -o '[0-9]\{4\}/[0-9/]* v[0-9.a-z]*')"
+
+# Belt and braces for the render itself. Quarto installs a missing LaTeX package mid-render through
+# this same tlmgr; with the repository pinned above that is already the snapshot, and with
+# auto-install off it cannot quietly reach anywhere at all -- a missing package stops the render and
+# names itself instead of being papered over.
+"$PREFIX/bin/tlmgr" option autobackup 0 >>"$LOGS/tlmgr.log" 2>&1 || true
+"$PREFIX/bin/tlmgr" option auto-remove 0 >>"$LOGS/tlmgr.log" 2>&1 || true
+
+# Record what TeX now holds, so "the render fetched nothing" is checkable instead of assumed:
+#   diff .report-env/tex-packages.lock <(tlmgr list --only-installed)
+# after a render. Any difference is a package that came in at render time.
+"$PREFIX/bin/tlmgr" list --only-installed 2>/dev/null | sort > "$PREFIX/tex-packages.lock" || true
+info "$(wc -l < "$PREFIX/tex-packages.lock") TeX packages recorded in tex-packages.lock"
 "$PREFIX/bin/luaotfload-tool" --update >"$LOGS/luaotfload.log" 2>&1 || true
 info "$("$PREFIX/bin/lualatex" --version 2>/dev/null | head -1)"
 
@@ -247,26 +278,32 @@ info "$("$PREFIX/bin/ctags" --version | head -1)"
 
 # ------------------------------------------------------------------ netcdf --
 
-step "NetCDF"
+step "NetCDF $(pin native netcdf-c version)"
+# The default route builds the pinned NetCDF. It used to prefer whatever the host already had, which
+# meant the documented reproduction silently linked against a different library on every machine --
+# this host has 4.8.1, the pin is 4.9.3 -- and a pin nobody installs is not a pin. --allow-host-netcdf
+# is the deliberate opt-out, and it still refuses anything below `minimum` and says what it took.
 NETCDF_ROOT=""
-nc_ok() {
-  local v want="$(pin native netcdf-c minimum)"
+host_netcdf_version() {
   command -v nc-config >/dev/null || return 1
-  v="$(nc-config --version 2>/dev/null | awk '{print $2}')" || return 1
+  nc-config --version 2>/dev/null | awk '{print $2}' | grep -q . || return 1
   [ -r "$(nc-config --includedir 2>/dev/null)/netcdf.h" ] || return 1
-  "$PYTHON" - "$v" "$want" <<'EOF'
+  nc-config --version 2>/dev/null | awk '{print $2}'
+}
+if [ "$ALLOW_HOST_NETCDF" = 1 ]; then
+  v="$(host_netcdf_version)" || die "--allow-host-netcdf was given but this machine has no usable
+  NetCDF (nc-config plus netcdf.h). Drop the flag and the pinned $(pin native netcdf-c version) is built."
+  want="$(pin native netcdf-c minimum)"
+  "$PYTHON" - "$v" "$want" <<'EOF' || die "the host NetCDF is below the minimum env-pins.json allows"
 import sys
 f=lambda s: tuple(int(p) for p in s.split(".")[:3])
 sys.exit(0 if f(sys.argv[1]) >= f(sys.argv[2]) else 1)
 EOF
-}
-if [ "$FORCE_NETCDF_BUILD" = 0 ] && nc_ok; then
   NETCDF_ROOT="$(nc-config --prefix)"
-  info "using the NetCDF already installed: $(nc-config --version) at $NETCDF_ROOT"
+  info "--allow-host-netcdf: taking this machine's NetCDF $v at $NETCDF_ROOT"
+  info "NOT the pinned $(pin native netcdf-c version); results are not the documented route"
 else
-  info "no usable NetCDF found; building the pinned one from source"
   if [ ! -f "$PREFIX/netcdf/include/netcdf.h" ]; then
-    HDF5_ARG=()
     if ! command -v h5cc >/dev/null; then
       info "HDF5 $(pin native hdf5 version) from source (netcdf-c needs it)"
       read -r URL SHA STRIP <<<"$(pin_artifact native hdf5 "$PLATFORM")"
@@ -286,7 +323,10 @@ else
       || die "netcdf-c did not build; see $LOGS/netcdf.log"
   fi
   NETCDF_ROOT="$PREFIX/netcdf"
-  info "built $("$PREFIX/netcdf/bin/nc-config" --version 2>/dev/null || echo netcdf) at $NETCDF_ROOT"
+  built="$("$PREFIX/netcdf/bin/nc-config" --version 2>/dev/null | awk '{print $2}')"
+  [ "$built" = "$(pin native netcdf-c version)" ] \
+    || die "built NetCDF reports '$built', env-pins.json pins $(pin native netcdf-c version)"
+  info "built and verified netCDF $built at $NETCDF_ROOT"
 fi
 
 # ------------------------------------------------------- python environment --
