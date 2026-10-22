@@ -59,6 +59,27 @@
           "strip": 1
         }
       },
+      "tlnet_repository": "https://www.texlive.info/tlnet-archive/2026/10/17/tlnet",
+      "_why_tlnet_repository": [
+        "Pinning the TinyTeX tarball does NOT pin TeX: scheme 1 ships no koma-script at all, so the",
+        "class the book is built on is fetched at render time from whatever the default repository",
+        "serves that day. That is a rolling mirror, and it broke the report: koma-script 3.49.3",
+        "(2026/10/19) removed \\ifstr, which book/_tex/theme.tex:30 calls, and the PDF died with",
+        "  Undefined control sequence.",
+        "  \\chapterlinesformat #1#2#3->\\ifstr",
+        "on a head written four days earlier against 3.49.2.",
+        "",
+        "www.texlive.info keeps a dated, immutable tlnet snapshot per day, so naming one pins every",
+        "TeX package by date the way requirements.txt pins the Python ones. 2026/10/17 is the last",
+        "snapshot before koma-script 3.49.3 and gives 3.49.2 (2026/02/02), which has \\ifstr.",
+        "",
+        "setup.sh runs `tlmgr update --self` against this same snapshot first, because the tlmgr in",
+        "the TinyTeX tarball is older than the snapshot's and refuses to install until it matches.",
+        "That update is deterministic: the snapshot does not move.",
+        "",
+        "\\ifstr is deprecated in KOMA-Script and gone from 3.49.3. Pinning buys time, it does not fix",
+        "it; book/_tex/theme.tex should move to \\Ifstr, which is its chapter owner's call."
+      ],
       "tlmgr_packages": [
         "koma-script", "fontspec", "unicode-math", "lm-math", "amsmath", "amsfonts",
         "booktabs", "caption", "float", "etoolbox", "fancyvrb", "framed", "geometry",

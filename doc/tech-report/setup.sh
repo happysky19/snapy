@@ -114,6 +114,10 @@ info "jobs        $JOBS"
 mkdir -p "$DL" "$SRC" "$LOGS" "$PREFIX/bin" \
          "$CACHE"/{pip,xdg,matplotlib,jupyter/runtime,jupyter/data,tmp,snapy-report,texmf-var,texmf-config}
 
+# setup.sh is itself subject to the read-only $HOME it exists to work around: pip and matplotlib are
+# both run below. activate exports the full set for every later session.
+export MPLCONFIGDIR="$CACHE/matplotlib" XDG_CACHE_HOME="$CACHE/xdg" TMPDIR="$CACHE/tmp"
+
 # Read one field out of env-pins.json.
 pin() { "$PYTHON" -c "
 import json,sys
@@ -195,9 +199,22 @@ export TEXMFVAR="$CACHE/texmf-var" TEXMFCACHE="$CACHE/texmf-var" TEXMFCONFIG="$C
 export TEXMFHOME="$CACHE/texmf-home" PATH="$PREFIX/bin:$PATH"
 mkdir -p "$TEXMFVAR" "$TEXMFCONFIG" "$TEXMFHOME"
 
+# Pin the package repository before installing anything. Scheme 1 ships no koma-script, so the class
+# the book is built on would otherwise come from a rolling mirror on the day of the render -- and did
+# break that way once, when koma-script 3.49.3 dropped the \ifstr that book/_tex/theme.tex calls.
+# env-pins.json explains the date. tlmgr must update itself from the same snapshot first: the one in
+# the tarball is older than the snapshot's and refuses to install until it matches. The snapshot is
+# immutable, so that self-update is reproducible.
+TLNET="$(pin render tinytex tlnet_repository)"
+info "package repository pinned to $TLNET"
+{
+  "$PREFIX/bin/tlmgr" option repository "$TLNET"
+  "$PREFIX/bin/tlmgr" update --self
+} >"$LOGS/tlmgr.log" 2>&1 || info "tlmgr could not reach the pinned snapshot; see logs/tlmgr.log"
+
 info "adding the LaTeX packages the book loads"
 tlmgr_pkgs="$(pin render tinytex tlmgr_packages)"
-if ! "$PREFIX/bin/tlmgr" install $tlmgr_pkgs >"$LOGS/tlmgr.log" 2>&1; then
+if ! "$PREFIX/bin/tlmgr" install $tlmgr_pkgs >>"$LOGS/tlmgr.log" 2>&1; then
   info "tlmgr could not add every package (see logs/tlmgr.log); the render will say which one it misses"
 fi
 "$PREFIX/bin/luaotfload-tool" --update >"$LOGS/luaotfload.log" 2>&1 || true
@@ -387,7 +404,10 @@ fi
 # -------------------------------------------------------------------- done --
 
 step "Checking the pins are consistent"
-"$VPY" "$HERE/tools/check_env.py" || die "tools/check_env.py refused the committed pins"
+# Through the clone made above, so the floor check reads snapy's own CMakeLists.txt at the pin
+# instead of skipping -- that check is the whole reason this gate exists.
+SNAPY_REPO="$PREFIX/snapy-pin" KINTERA_REPO="$SRC/kintera" \
+  "$VPY" "$HERE/tools/check_env.py" || die "tools/check_env.py refused the committed pins"
 
 cat <<EOF
 
