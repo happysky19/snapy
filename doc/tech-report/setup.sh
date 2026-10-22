@@ -61,8 +61,10 @@ SRC="$PREFIX/src"
 CACHE="$PREFIX/cache"
 LOGS="$PREFIX/logs"
 
-step()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
-info()  { printf '    %s\n' "$*"; }
+# Progress goes to stderr so that a function can return a value on stdout: `fetch` prints the path of
+# the file it verified, and `$(fetch ...)` must capture that and nothing else.
+step()  { printf '\n\033[1m==> %s\033[0m\n' "$*" >&2; }
+info()  { printf '    %s\n' "$*" >&2; }
 die()   { printf '\n\033[31msetup.sh: %s\033[0m\n' "$*" >&2; exit 1; }
 
 # ---------------------------------------------------------------- preflight --
@@ -142,7 +144,7 @@ fetch() {
     mv "$out.part" "$out"
   fi
   got="$(sha256sum "$out" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$out" | cut -d' ' -f1)"
-  if [ "$PRINT_DIGESTS" = 1 ]; then printf '    %s  %s\n' "$got" "$(basename "$url")"; return 0; fi
+  if [ "$PRINT_DIGESTS" = 1 ]; then printf '    %s  %s\n' "$got" "$(basename "$url")" >&2; return 0; fi
   [ "$got" = "$want" ] || die "sha256 mismatch for $url
     committed in tools/env-pins.json: $want
     the file that was served:         $got
