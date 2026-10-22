@@ -304,8 +304,10 @@ EOF
   info "NOT the pinned $(pin native netcdf-c version); results are not the documented route"
 else
   if [ ! -f "$PREFIX/netcdf/include/netcdf.h" ]; then
-    if ! command -v h5cc >/dev/null; then
-      info "HDF5 $(pin native hdf5 version) from source (netcdf-c needs it)"
+    # HDF5 too, for the same reason: netcdf-c is a thin layer over it, so taking the host's HDF5
+    # would put an unpinned library straight back under the pinned NetCDF. Build both or neither.
+    if [ ! -f "$PREFIX/netcdf/include/hdf5.h" ]; then
+      info "HDF5 $(pin native hdf5 version) from source (netcdf-c is a layer over it)"
       read -r URL SHA STRIP <<<"$(pin_artifact native hdf5 "$PLATFORM")"
       unpack "$(fetch "$URL" "$SHA")" "$SRC/hdf5" "$STRIP"
       cmake -S "$SRC/hdf5" -B "$SRC/hdf5-build" -DCMAKE_BUILD_TYPE=Release \
