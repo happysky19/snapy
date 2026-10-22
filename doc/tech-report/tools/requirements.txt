@@ -1,0 +1,38 @@
+# The Python environment of the report, pinned. `setup.sh` installs exactly this into its virtual
+# environment and then adds `src/` itself (snapy_report) with --no-deps, so the three unpinned
+# dependencies of src/pyproject.toml never override what is pinned here.
+#
+# These are the direct dependencies only. Their transitive closure is resolved by pip, and the exact
+# closure that was verified on linux-x86_64 is committed next to this file as
+# requirements-linux-x86_64.lock.txt; install that instead when you need the audited environment
+# byte for byte. It is not used by default because it names the CUDA wheels that torch pulls in on
+# a Linux x86_64 host, which no macOS or CPU-only machine can install.
+#
+# Why each line is here, and why at this version:
+
+# The three src/pyproject.toml declares, at the versions the report's own numbers were produced with
+# (the fresh-clone reproduction of 2026-10-22 recorded numpy 2.4.6, sympy 1.14.0, matplotlib 3.11.2).
+# Every derivation check and every figure reads these, so they are the pins that decide the digits.
+numpy==2.4.6
+sympy==1.14.0
+matplotlib==3.11.2
+
+# tools/check_math_spans.py, check_reader_hygiene.py and the five gen_*_contract.py generators parse
+# YAML; tools/do-cards.yaml and book/_quarto.yml are read with it.
+PyYAML==6.0.3
+
+# Author gates 9 and 10 of AUTHOR-CHECKLIST.md are pytest runs (tools/tests and src/tests).
+pytest==8.4.2
+
+# Quarto executes the figures' {python} cells through a Jupyter kernel; without these the render
+# produces no figure at all. `jupyter` is what .github/workflows/tech-report.yml installs.
+jupyter==1.1.1
+nbclient==0.10.2
+ipykernel==6.30.1
+
+# The scientific stack is Torch-backed: snapy, kintera, pyharp and pydisort are all built against it,
+# and the report's cards and data provenance record torch 2.10.0 throughout. Pinning it here also
+# fixes the one failure that is easy to misread: a pydisort wheel built for CUDA cannot be imported
+# against a CPU-only torch, and FindDisort.cmake then reports the unrelated-looking
+# "cmake_path CONVERT called with an unknown action: disort_init_file".
+torch==2.10.0

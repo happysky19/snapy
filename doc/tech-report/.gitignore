@@ -1,0 +1,4 @@
+# The prefix setup.sh installs into: the pinned toolchain, the virtual environment, the caches that
+# activate points at, and the downloads it verifies. All of it is rebuildable from the committed
+# pins, so none of it is tracked.
+.report-env/

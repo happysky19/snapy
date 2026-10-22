@@ -6,6 +6,7 @@ This branch (`tech-report` on UCzhangxi/snapy) holds a technical description of 
 - `BRIEF_C0.md`: the brief for the architect/editor. `ISSUES.md`: known gaps in the sources. `STATUS.md`: progress log.
 - `STYLE.md`: the binding style guide, covering the six-layer template, citations, evidence, figures and checks.
 - `AUTHOR-CHECKLIST.md`: the gates to run before opening a chapter PR, with the command for each and what it must say, and what belongs in the PR body. `REVIEW-RECORD.md`: the template a reviewer fills (head/tree/base shas with read times, the gate table against the base, the render run, findings, verdict).
+- **Setting up.** `bash setup.sh`, then `source .report-env/activate`: one command that installs everything this report needs at the pinned versions, into one prefix, with no package manager and no `sudo`. `SETUP.md` says what it installs and why each version; `tools/env-pins.json` pins Quarto, TinyTeX, Universal Ctags, NetCDF and HDF5 with the sha256 of every download; `tools/requirements.txt` pins the Python environment. `bash setup.sh --with-native` also builds pydisort, pyharp, kintera and snapy at their pins, which the chapters' `ctest` and do-card commands need. `python3 tools/check_env.py` checks that the committed pins are consistent and installable.
 - `code_pin.yml`: the one commit every `{{< code >}}` citation resolves at. It is the single source of truth for the snapy pin; no other file restates that sha.
 - `NOTATION.md`: every symbol, with one meaning each.
 - `OUTLINE.md`: the plan, chapter by chapter and scheme by scheme.

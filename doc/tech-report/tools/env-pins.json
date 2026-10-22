@@ -1,0 +1,184 @@
+{
+  "_comment": [
+    "Every non-Python dependency the report needs, with the exact version, the public source it is",
+    "fetched from and the sha256 of that file. `setup.sh` reads this file and refuses any download",
+    "whose digest does not match. The Python environment is pinned separately in tools/requirements.txt;",
+    "the scientific packages are pinned by code_pin.yml (snapy) and tools/package-pins.json (the rest).",
+    "A digest here was taken from the file the URL served; re-record it with `bash setup.sh --print-digests`",
+    "if an upstream release is ever re-cut."
+  ],
+
+  "python": {
+    "minimum": "3.11",
+    "below": "3.14",
+    "ci": "3.12",
+    "why": "torch 2.10.0 publishes no wheel below 3.11; the report's own cards record 3.11 and 3.12 runs"
+  },
+
+  "render": {
+    "quarto": {
+      "version": "1.10.19",
+      "why": "QUARTO_VERSION of .github/workflows/tech-report.yml",
+      "artifacts": {
+        "linux-x86_64": {
+          "url": "https://github.com/quarto-dev/quarto-cli/releases/download/v1.10.19/quarto-1.10.19-linux-amd64.tar.gz",
+          "sha256": "8e38c2b2df6a6dbd369ea16e15acded6894545258d13a02f777f81ad18fd7973",
+          "strip": 1
+        },
+        "linux-aarch64": {
+          "url": "https://github.com/quarto-dev/quarto-cli/releases/download/v1.10.19/quarto-1.10.19-linux-arm64.tar.gz",
+          "sha256": "bba2bb55add74c754c313905df42b0f45a8250aee2110a4fce7f83020bfe1b8f",
+          "strip": 1
+        },
+        "darwin": {
+          "url": "https://github.com/quarto-dev/quarto-cli/releases/download/v1.10.19/quarto-1.10.19-macos.tar.gz",
+          "sha256": "c617db5422824e506750573ea94a1e26a475532adfe18c8fea310816ced97f47",
+          "strip": 1
+        }
+      }
+    },
+
+    "tinytex": {
+      "version": "v2026.10",
+      "scheme": "TinyTeX-1",
+      "why": "the workflow asks quarto-actions/setup for tinytex: true; scheme 1 carries LuaLaTeX and KOMA scrbook, and setup.sh adds the remaining packages with tlmgr",
+      "artifacts": {
+        "linux-x86_64": {
+          "url": "https://github.com/rstudio/tinytex-releases/releases/download/v2026.10/TinyTeX-1-linux-x86_64-v2026.10.tar.xz",
+          "sha256": "4d519d6236ee6798e3ec0d8e2093d1fda01aeb267aa22c2a5586d76bcfce6566",
+          "strip": 1
+        },
+        "linux-aarch64": {
+          "url": "https://github.com/rstudio/tinytex-releases/releases/download/v2026.10/TinyTeX-1-linux-arm64-v2026.10.tar.xz",
+          "sha256": "1bc5465c7a7c6f13e13c1b54a52147577eb3f389033af0444bc097698eb6653f",
+          "strip": 1
+        },
+        "darwin": {
+          "url": "https://github.com/rstudio/tinytex-releases/releases/download/v2026.10/TinyTeX-1-darwin-v2026.10.tar.xz",
+          "sha256": "e40c294efae81026d8cc8d12c09d2dd456d268efe7fe092410478bc1973fd40f",
+          "strip": 1
+        }
+      },
+      "tlmgr_packages": [
+        "koma-script", "fontspec", "unicode-math", "lm-math", "amsmath", "amsfonts",
+        "booktabs", "caption", "float", "etoolbox", "fancyvrb", "framed", "geometry",
+        "hyperref", "listings", "longtable", "microtype", "multirow", "pdfcol",
+        "tcolorbox", "titling", "upquote", "xcolor", "environ", "trimspaces",
+        "pdflscape", "footnotehyper", "bookmark", "luatexbase", "luacolor", "luatex85"
+      ]
+    },
+
+    "universal-ctags": {
+      "version": "6.2.1",
+      "why": "CTAGS_VERSION of the workflow and CTAGS_VERSION of tools/code_anchors.py:50; the report's code citations are resolved with this version",
+      "artifacts": {
+        "source": {
+          "url": "https://github.com/universal-ctags/ctags/releases/download/v6.2.1/universal-ctags-6.2.1.tar.gz",
+          "sha256": "2c63efe9e0e083dc50e6fdd8c5414781cc8873d8c8940cf553c01870ed962f8c",
+          "strip": 1
+        }
+      },
+      "configure": ["--disable-json", "--disable-xml", "--disable-yaml", "--disable-seccomp"]
+    }
+  },
+
+  "native": {
+    "_comment": [
+      "snapy, pyharp and kintera configure with -DNETCDF=ON. setup.sh uses a NetCDF already on the",
+      "machine when nc-config reports at least `minimum` and netcdf.h is present; otherwise it builds",
+      "these two from source into the prefix. --force-netcdf-build takes the source path regardless."
+    ],
+    "netcdf-c": {
+      "version": "4.9.3",
+      "minimum": "4.8.0",
+      "artifacts": {
+        "source": {
+          "url": "https://github.com/Unidata/netcdf-c/archive/refs/tags/v4.9.3.tar.gz",
+          "sha256": "990f46d49525d6ab5dc4249f8684c6deeaf54de6fec63a187e9fb382cc0ffdff",
+          "strip": 1
+        }
+      },
+      "cmake": [
+        "-DBUILD_SHARED_LIBS=ON",
+        "-DNETCDF_ENABLE_TESTS=OFF",
+        "-DNETCDF_ENABLE_DAP=OFF",
+        "-DNETCDF_ENABLE_BYTERANGE=OFF",
+        "-DNETCDF_ENABLE_NCZARR=OFF",
+        "-DNETCDF_ENABLE_PLUGINS=OFF",
+        "-DNETCDF_ENABLE_LIBXML2=OFF"
+      ]
+    },
+    "hdf5": {
+      "version": "1.14.6",
+      "why": "the storage layer netcdf-c 4.9.3 needs; built only when netcdf-c is built from source and no h5cc is found",
+      "artifacts": {
+        "source": {
+          "url": "https://github.com/HDFGroup/hdf5/archive/refs/tags/hdf5_1.14.6.tar.gz",
+          "sha256": "09ee1c671a87401a5201c06106650f62badeea5a3b3941e9b1e2e1e08317357f",
+          "strip": 1
+        }
+      },
+      "cmake": [
+        "-DBUILD_SHARED_LIBS=ON",
+        "-DBUILD_STATIC_LIBS=OFF",
+        "-DBUILD_TESTING=OFF",
+        "-DHDF5_BUILD_TOOLS=OFF",
+        "-DHDF5_BUILD_EXAMPLES=OFF",
+        "-DHDF5_BUILD_UTILS=OFF",
+        "-DHDF5_BUILD_CPP_LIB=OFF",
+        "-DHDF5_BUILD_FORTRAN=OFF",
+        "-DHDF5_BUILD_HL_LIB=ON",
+        "-DHDF5_ENABLE_Z_LIB_SUPPORT=ON",
+        "-DHDF5_ENABLE_SZIP_SUPPORT=OFF"
+      ]
+    }
+  },
+
+  "scientific_packages": {
+    "_comment": [
+      "Source pins only; the shas themselves stay in their one home, so nothing here restates them.",
+      "setup.sh --with-native clones each at its pin and installs it into the virtual environment, in",
+      "this order, because each configure step finds the one before it by importing it."
+    ],
+    "order": ["pydisort", "pyharp", "kintera", "snapy"],
+    "pydisort": {
+      "repo": "zoeyzyhu/pydisort",
+      "pin": "unpinned by the report",
+      "version": "1.8.13",
+      "source": "pypi",
+      "why": "no pin exists for pydisort in this report; FindDisort.cmake of snapy, pyharp and kintera locates it by importing it, so it must be installed first"
+    },
+    "pyharp": { "repo": "chengcli/pyharp", "pin": "tools/package-pins.json: pyharp" },
+
+    "kintera": {
+      "repo": "chengcli/kintera",
+      "pin": "tools/package-pins.json: kintera",
+      "build": "b6ad37394b29f037bdf82dd540be613522bfe45d",
+      "build_version": "2.6.3",
+      "_why_build_differs_from_pin": [
+        "These are two different questions and the report had one field for both.",
+        "",
+        "`pin` is the commit the chapters CITE kintera source lines at: v2.6.2, c55b13b2. 296 citations",
+        "in 70 files resolve there, and tools/ratchet_gate.py counts any other kintera sha as `offpin`.",
+        "",
+        "`build` is the commit that must be INSTALLED for the snapy commit in code_pin.yml to configure.",
+        "snapy ccf40f9565642c32be69f4b9ef0cfa6daff3f201 says, at CMakeLists.txt:104,",
+        "`find_package(Kintera 2.6.3 REQUIRED)`, so v2.6.2 cannot configure it:",
+        "  Could NOT find Kintera: Found unsuitable version \"2.6.2\", but required is at least \"2.6.3\"",
+        "v2.6.3 (b6ad3739) is the smallest revision at or above that floor -- exactly one commit after",
+        "the citation pin -- so setup.sh installs that and the pinned snapy builds.",
+        "",
+        "The citation pin is deliberately NOT moved here. Moving it is chapter work, not setup work:",
+        "v2.6.3 changes src/kinetics/{evaporation,kinetics}.{cpp,hpp}, and the lines shift from line 2",
+        "of evaporation.cpp onwards, so the 17 citations into those four files would silently point at",
+        "different code. Measured consequence of a bare move: ratchet offpin rises 92 -> 230 and nine",
+        "chapters fail (ch02 5->63, ch10 2->48, ch14 7->20, ch09 0->6, ch16 0->6, ch04 8->9, appa, appe,",
+        "apph). The project's own rule for the snapy pin says the same: `code_anchors.py bump` lists the",
+        "cited symbols whose body changed so their claims can be re-read. tools/check_env.py reports this",
+        "gap on every run so it stays visible until a chapter owner closes it."
+      ]
+    },
+
+    "snapy": { "repo": "chengcli/snapy", "pin": "code_pin.yml: sha" }
+  }
+}
