@@ -87,7 +87,12 @@ def _rel(path: str, report: Path) -> str | None:
         rel = p.resolve().relative_to(report.resolve())
     except ValueError:
         return None
-    if p.suffix in _SKIP_SUFFIXES or "__pycache__" in rel.parts or rel.parts[0] == "build" or not p.is_file():
+    # A dot-directory at the top of the report is never figure data: it is somewhere a tool keeps its
+    # own files. setup.sh installs into .report-env/ by default, and the matplotlib inside its virtual
+    # environment opens its bundled fonts while a figure draws, which would otherwise be recorded as
+    # that figure's data and rewrite FIGURES.md with three .ttf paths.
+    if (p.suffix in _SKIP_SUFFIXES or "__pycache__" in rel.parts or rel.parts[0] == "build"
+            or rel.parts[0].startswith(".") or not p.is_file()):
         return None
     return rel.as_posix()
 

@@ -96,3 +96,17 @@ def test_figure_modules_are_read_from_the_imports():
             "from snapy_report import figstyle as fs\n")
     assert render_figures.figure_modules(code) == [
         "snapy_report.ch05.figures.fig_a", "snapy_report.ch06.figures.fig_b", "snapy_report.ch07.figures.fig_c"]
+
+
+def test_a_tool_s_own_directory_is_not_figure_data(tmp_path):
+    """setup.sh installs into doc/tech-report/.report-env, and the matplotlib in its virtual
+    environment opens its bundled fonts while a figure draws. Those are not that figure's data:
+    recording them rewrote FIGURES.md with three .ttf paths under the prefix."""
+    report = tree(tmp_path)
+    font = report / ".report-env" / "venv" / "lib" / "matplotlib" / "fonts" / "STIXGeneral.ttf"
+    font.parent.mkdir(parents=True)
+    font.write_bytes(b"not really a font")
+    assert render_figures._rel(str(font), report) is None
+    # a real data file next to it still counts
+    data = report / "src" / "demo_data" / "data" / "values.json"
+    assert render_figures._rel(str(data), report) == "src/demo_data/data/values.json"
