@@ -46,8 +46,10 @@ luaotfload | load :   × "luaotfload-init.lua:301: system : no writeable cache p
 and no PDF is produced. `tools/code_anchors.py:51`, `tools/check_provenance.py:126` and
 `tools/check_citations.py:407` default to `~/.cache/...` the same way, and matplotlib and Jupyter do
 too. `activate` points `TEXMFVAR`, `TEXMFCACHE`, `TEXMFCONFIG`, `TEXMFHOME`, `SNAPY_REPORT_CACHE`,
-`XDG_*`, `MPLCONFIGDIR`, `JUPYTER_*`, `PIP_CACHE_DIR` and `TMPDIR` inside the prefix, so none of them
-ever looks at `$HOME`.
+`XDG_*`, `MPLCONFIGDIR`, `IPYTHONDIR`, `JUPYTER_*`, `PIP_CACHE_DIR` and `TMPDIR` inside the prefix, so
+none of them ever looks at `$HOME`. `IPYTHONDIR` matters more than it looks: every figure cell starts
+an IPython kernel, and at the default each one warns twice that `~/.ipython` is not writable, which is
+112 lines of warning in a full render and fails `render_gate.py`'s `stdout` gate.
 
 It also sets `SNAPY_REPO` to a clone of `chengcli/snapy` at `code_pin.yml`, which `setup.sh` makes.
 With it, `tools/code_anchors.py` resolves every `{{< code >}}` without touching the network; without

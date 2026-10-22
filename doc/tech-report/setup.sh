@@ -112,7 +112,7 @@ info "prefix      $PREFIX"
 info "jobs        $JOBS"
 
 mkdir -p "$DL" "$SRC" "$LOGS" "$PREFIX/bin" \
-         "$CACHE"/{pip,xdg,matplotlib,jupyter/runtime,jupyter/data,tmp,snapy-report,texmf-var,texmf-config}
+         "$CACHE"/{pip,xdg,matplotlib,ipython,jupyter/runtime,jupyter/data,tmp,snapy-report,texmf-var,texmf-config}
 
 # setup.sh is itself subject to the read-only $HOME it exists to work around: pip and matplotlib are
 # both run below. activate exports the full set for every later session.
@@ -214,8 +214,18 @@ info "package repository pinned to $TLNET"
 
 info "adding the LaTeX packages the book loads"
 tlmgr_pkgs="$(pin render tinytex tlmgr_packages)"
-if ! "$PREFIX/bin/tlmgr" install $tlmgr_pkgs >>"$LOGS/tlmgr.log" 2>&1; then
-  info "tlmgr could not add every package (see logs/tlmgr.log); the render will say which one it misses"
+# tlmgr exits non-zero when any name in the list is already part of the scheme, so its exit status
+# says nothing useful here. Ask kpsewhich afterwards instead, which answers the question we have.
+"$PREFIX/bin/tlmgr" install $tlmgr_pkgs >>"$LOGS/tlmgr.log" 2>&1 || true
+missing=""
+for probe in scrbook.cls fontspec.sty caption.sty tcolorbox.sty unicode-math.sty koma-script.sty; do
+  case "$probe" in koma-script.sty) continue ;; esac
+  "$PREFIX/bin/kpsewhich" "$probe" >/dev/null 2>&1 || missing="$missing $probe"
+done
+if [ -n "$missing" ]; then
+  info "the pinned snapshot did not provide:$missing (see logs/tlmgr.log)"
+else
+  info "scrbook $("$PREFIX/bin/kpsewhich" scrbook.cls | xargs grep -m1 -o '[0-9]\{4\}/[0-9/]* v[0-9.a-z]*')"
 fi
 "$PREFIX/bin/luaotfload-tool" --update >"$LOGS/luaotfload.log" 2>&1 || true
 info "$("$PREFIX/bin/lualatex" --version 2>/dev/null | head -1)"
@@ -349,6 +359,10 @@ export MPLCONFIGDIR="$CACHE/matplotlib"
 export JUPYTER_RUNTIME_DIR="$CACHE/jupyter/runtime"
 export JUPYTER_DATA_DIR="$CACHE/jupyter/data"
 export JUPYTER_PLATFORM_DIRS=1
+# Every figure cell starts an IPython kernel, and IPython writes its profile under ~/.ipython. Left
+# at the default on a read-only \$HOME it warns twice per kernel, which is 112 lines of warning in a
+# full render and fails render_gate.py's "stdout" gate.
+export IPYTHONDIR="$CACHE/ipython"
 export PIP_CACHE_DIR="$CACHE/pip"
 export TMPDIR="$CACHE/tmp"
 
