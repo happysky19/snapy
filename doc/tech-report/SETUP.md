@@ -131,6 +131,70 @@ diff .report-env/tex-packages.lock <(tlmgr list --only-installed | sort)
 
 Any difference is a package that arrived at render time.
 
+## The native route
+
+```bash
+bash setup.sh --with-native
+source .report-env/activate
+```
+
+adds pydisort, pyharp, kintera, `pinc` and snapy, each at its pin, and leaves the build in
+`.report-env/snapy-pin/build` with `SNAP_PIN_BUILD` pointing at it. That is what the chapters'
+`ctest` lines and the do-cards need.
+
+Three things it has to get right, each of which silently did not work before:
+
+- **CMake before pip.** Neither kintera's nor snapy's `setup.py` runs CMake. They link the Python
+  extension against whatever is in `<src>/build/lib`, so with no CMake build there is nothing to
+  link — and `pip install` still exits 0. The import is what fails, with
+  `undefined symbol: _ZTIN7kintera17EquilibriumTPImplE`. Every package is therefore built, then
+  installed, then **imported** to prove the wheel works.
+- **`pinc`.** snapy defaults `PNETCDF=ON` on Linux (`CMakeLists.txt:14-18`) and
+  `cmake/parameters.cmake:39` then refuses to configure without the Python package `pinc`. The
+  report declares it nowhere, including in the configure line `README.md` prints for refreshing the
+  test index. It is pinned in `tools/env-pins.json` at 0.2.0.
+- **`SNAPY_TEST_PYTHONPATH`.** Without it CMake warns that the `*_python` ctests "will import the
+  installed snapy, not this tree", and on a clean machine they all fail with `ModuleNotFoundError`.
+  `setup.sh` points it at the environment it just installed snapy into.
+
+`tools/requirements-build.txt` pins the four build-time requirements pyharp and kintera declare.
+They are installed with `--no-build-isolation` so that they build against the pinned torch rather
+than one pip fetches into a throwaway environment, which only works if those requirements are
+genuinely present.
+
+### Two documented commands this does not fix
+
+They are the report's, not the environment's, and they are listed here so nobody mistakes them for
+setup failures:
+
+- `ctest --output-on-failure -E '^test_shallow_xy_decomp$'`, printed by eight chapter-15 section
+  files, is not scoped to snapy. It sweeps in the Eigen suite the build fetches and reports **821
+  failures out of 1054** — every one of them Eigen's own or the reference BLAS's, none of them
+  snapy's. `README.md` already notes that Eigen's tests "are counted, not listed", so this wants a
+  selector. **Chapter 15 is an excluded chapter** (see below); the command was run because it
+  exercises snapy's code rather than the prose, and it yields no verdict on that chapter.
+
+  `-R '^test_'` added to the same build gives **127 of 127 passed, exit 0**. That selector is mine,
+  not the report's: it is a manually verified scoping of the documented command, offered as evidence
+  that snapy's own tests pass, not as a committed fix.
+- `run: ctest -R`, which names no test. Run verbatim it is `CMake Error: Invalid value used with
+  -R`, exit 1. Four sites, at `ce725f672df68740d4c6cffc3d99a9bd74656eee`:
+
+  | file:line | chapter |
+  |---|---|
+  | `book/chapters/04-spatial-discretization.qmd:85` | 04 — **excluded** |
+  | `book/chapters/04-spatial-discretization/_fluxcov.qmd:334` | 04 — **excluded** |
+  | `book/chapters/07-time-integration.qmd:49` | 07 |
+  | `book/chapters/10-moist-coupling.qmd:60` | 10 |
+
+### Authorship exclusions
+
+Seven chapters are excluded from this audit as owner-authored: **03, 04, 06, 08, 12, 15, 16**.
+Broad tooling unavoidably crosses them — the whole-book render, the figure manifest, the all-check
+tooling run and the chapter-15 `ctest` line above all traverse excluded chapters. **Those executions
+carry no verdict on an excluded chapter.** They are recorded here only so the leakage is visible.
+`tools/chapter-owners.tsv` is a rewrite-owner lock, not a complete authorship register.
+
 ## The gate
 
 ```bash
@@ -146,10 +210,30 @@ internally consistent and nothing compared the pair.
 
 ## What was and was not verified
 
-Verified on linux-x86_64 (RHEL 9, glibc 2.34, GCC 11.5.0, Python 3.11.13) from a fresh clone with an
-empty prefix: the download-and-verify path, Quarto, TinyTeX, Universal Ctags built from source, the
-pinned NetCDF 4.9.3 + HDF5 1.14.6 source build, the Python environment, and the HTML and PDF render.
+Verified on linux-x86_64 (RHEL 9, glibc 2.34, GCC 11.5.0, Python 3.11.13, CPU only) from a fresh
+clone with an empty prefix and empty caches:
 
-Not exercised: the macOS and linux-aarch64 branches. Their artifacts are in `tools/env-pins.json`
-with digests taken from the files those URLs serve, but the install path itself has only been run on
-linux-x86_64.
+| | |
+|---|---|
+| `bash setup.sh` | exit 0 |
+| `bash setup.sh --with-native` | exit 0; pydisort 1.8.13, pyharp 2.7.6, kintera 2.6.3, pinc 0.2.0, snapy 2.11.12, torch 2.10.0+cu128, netCDF 4.9.3 |
+| `python3 tools/check_env.py` | 5 passed, 1 reported, 0 failed |
+| `python3 tools/code_anchors.py check` | 3552 citations, 793 distinct, 0 unresolved |
+| `python3 -m pytest tools/tests -q` | see the branch's own run |
+| the 77 `chNN/checks/*_check.py` | 77 run, exit 0 |
+| `ctest -R '^test_' -E '^test_shallow_xy_decomp$'` | 127 of 127 passed, exit 0 |
+| `ctest -R 'shallow_xy_decomp\|restart' --output-on-failure` | 6 of 6 passed, exit 0 |
+| do-cards (`SNAP_PIN_BUILD=… pytest -rs tools/tests/test_do_cards_run.py`) | 60 passed, 0 failed |
+| `python3 tools/render_gate.py book/` | HTML and PDF produced |
+| `diff .report-env/tex-packages.lock <(tlmgr list --only-installed)` | unchanged: the render and the tests fetched no TeX package |
+
+Not exercised, and not claimed:
+
+- **The macOS and linux-aarch64 branches.** Their artifacts are in `tools/env-pins.json` with digests
+  taken from the files those URLs serve, but the install path has only been run on linux-x86_64.
+- **GPU.** This is a CPU machine. The 2 GPU do-cards, the chapter-14 GPU and bpp items and every
+  CUDA ctest are untouched and remain GPU-only exclusions.
+- **Multi-rank.** The 7 multi-rank cards need 2 ranks with `pd-run`/`pd-combine`/`pd-inspect`; they
+  are not part of the CPU do-card runner.
+- **The Eigen suite** that `ctest` fetches. It is third-party, it is not scoped out by the chapter-15
+  command, and its 821 failures are not snapy's.
