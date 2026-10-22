@@ -193,6 +193,7 @@
    "pydisort",
    "pyharp",
    "kintera",
+   "pinc",
    "snapy"
   ],
   "pydisort": {
@@ -237,6 +238,12 @@
   "snapy": {
    "repo": "chengcli/snapy",
    "pin": "code_pin.yml: sha"
+  },
+  "pinc": {
+   "pypi": "pinc",
+   "version": "0.2.0",
+   "source": "pypi",
+   "why": "snapy at code_pin.yml defaults PNETCDF=ON and UCX=ON on Linux (CMakeLists.txt:14-18), and PNETCDF=ON refuses to configure without this Python package: cmake/parameters.cmake:39 says \"PNETCDF=ON now requires Python package 'pinc'\". The report declares it nowhere, so the configure line printed in README.md stops there on a clean machine. Found by running setup.sh --with-native from a fresh clone on 2026-10-22."
   }
  }
 }

@@ -1,0 +1,11 @@
+# What pyharp and kintera need at BUILD time, pinned. setup.sh --with-native installs these before
+# it builds either, because it installs them with --no-build-isolation: they must build against the
+# torch that tools/requirements.txt pins, not against one pip fetches into a throwaway environment.
+# Both projects declare exactly these in their own pyproject.toml [build-system] requires.
+#
+# Nothing here is imported by the report itself. tools/requirements.txt is the report's environment.
+
+setuptools-scm==10.3.4
+ninja==1.13.2
+build==1.6.1
+cmake==4.4.4

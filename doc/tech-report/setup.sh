@@ -431,6 +431,13 @@ if [ "$WITH_NATIVE" = 1 ]; then
   "$VPY" -m pip install --quiet "pydisort==$(pin scientific_packages pydisort version)" \
     >"$LOGS/pydisort.log" 2>&1 || die "pydisort did not install; see $LOGS/pydisort.log"
 
+  # The build requirements these projects declare. We install with --no-build-isolation so that they
+  # build against the torch that tools/requirements.txt pins, instead of pip fetching its own torch
+  # into a throwaway environment; that means their build-time imports have to be here for real.
+  info "the build requirements pyharp and kintera declare"
+  "$VPY" -m pip install --quiet -r "$HERE/tools/requirements-build.txt" >>"$LOGS/pip.log" 2>&1 \
+    || die "the pinned build requirements did not install; see $LOGS/pip.log"
+
   build_pinned() {  # build_pinned <name> <repo> <sha>
     local name="$1" repo="$2" sha="$3" dir="$SRC/$1"
     info "$name at $sha"
@@ -438,11 +445,41 @@ if [ "$WITH_NATIVE" = 1 ]; then
     git -C "$dir" fetch --quiet origin "$sha" 2>/dev/null || git -C "$dir" fetch --quiet origin
     git -C "$dir" checkout --quiet --detach "$sha"
     git -C "$dir" submodule update --quiet --init --recursive 2>/dev/null || true
-    "$VPY" -m pip install --quiet --no-build-isolation "$dir" >"$LOGS/$name.log" 2>&1 \
+
+    # CMake first, then pip -- in that order, because setup.py does not run CMake. It links the
+    # Python extension against whatever libraries it finds in <src>/build/lib, so with no CMake build
+    # there is nothing to link and pip still reports success: the wheel installs, and the import then
+    # fails with an undefined symbol such as
+    #   kintera/kintera.cpython-311-x86_64-linux-gnu.so: undefined symbol:
+    #   _ZTIN7kintera17EquilibriumTPImplE          (typeinfo for kintera::EquilibriumTPImpl)
+    # Building the library first is what kintera's own install.sh assumes has already happened.
+    if [ -f "$dir/CMakeLists.txt" ]; then
+      info "  $name: the C++ library (cmake), before the Python extension"
+      cmake -S "$dir" -B "$dir/build" -DCMAKE_BUILD_TYPE=Release -DNETCDF=ON \
+            -DPython3_EXECUTABLE="$VPY" -DCMAKE_PREFIX_PATH="$NETCDF_ROOT" \
+            >"$LOGS/$name-cmake.log" 2>&1 \
+        && cmake --build "$dir/build" -j"$JOBS" >>"$LOGS/$name-cmake.log" 2>&1 \
+        || die "$name's C++ library did not build at $sha; see $LOGS/$name-cmake.log"
+    fi
+
+    "$VPY" -m pip install --quiet --no-build-isolation --no-cache-dir "$dir" \
+      >"$LOGS/$name.log" 2>&1 \
       || die "$name did not build at $sha; see $LOGS/$name.log"
+
+    # pip reports success on a wheel that cannot be imported, so ask.
+    "$VPY" -c "import $name" 2>>"$LOGS/$name.log" \
+      || die "$name installed at $sha but cannot be imported; see $LOGS/$name.log"
+    info "  $name $("$VPY" -c "import $name;print($name.__version__)" 2>/dev/null)"
   }
   build_pinned pyharp  chengcli/pyharp  "$PYHARP_SHA"
   build_pinned kintera chengcli/kintera "$KINTERA_SHA"
+
+  # snapy defaults PNETCDF=ON and UCX=ON on Linux (CMakeLists.txt:14-18), and PNETCDF=ON refuses to
+  # configure without the Python package `pinc` (cmake/parameters.cmake:39). The report declares it
+  # nowhere, so the documented configure line in README.md stops there on a clean machine.
+  info "pinc $(pin scientific_packages pinc version) (snapy's PNETCDF=ON default needs it)"
+  "$VPY" -m pip install --quiet "pinc==$(pin scientific_packages pinc version)" \
+    >"$LOGS/pinc.log" 2>&1 || die "pinc did not install; see $LOGS/pinc.log"
 
   info "verifying the pins satisfy snapy's own floors"
   "$VPY" "$HERE/tools/check_env.py" --installed || die "the installed packages do not satisfy snapy's floors"

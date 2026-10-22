@@ -23,8 +23,8 @@ is unpacked; a mismatch stops the run rather than installing the file.
 | Quarto | 1.10.19 | `tools/env-pins.json` | `QUARTO_VERSION` of `.github/workflows/tech-report.yml` |
 | TinyTeX | v2026.10, scheme 1 | `tools/env-pins.json` | the workflow asks `quarto-actions/setup` for `tinytex: true` |
 | Universal Ctags | 6.2.1 | `tools/env-pins.json` | `CTAGS_VERSION` of the workflow and of `tools/code_anchors.py:50` |
-| NetCDF | 4.9.3 (or the machine's, ≥ 4.8.0) | `tools/env-pins.json` | `-DNETCDF=ON` in the snapy, pyharp and kintera builds |
-| HDF5 | 1.14.6 | `tools/env-pins.json` | only when NetCDF is built from source and no `h5cc` is found |
+| NetCDF | 4.9.3, built | `tools/env-pins.json` | `-DNETCDF=ON` in the snapy, pyharp and kintera builds |
+| HDF5 | 1.14.6, built | `tools/env-pins.json` | netcdf-c is a thin layer over it, so both come from the pin or neither does |
 | pydisort | 1.8.13 | `tools/env-pins.json` | the report pins no pydisort; `FindDisort.cmake` needs it importable |
 | pyharp | `47217158` | `tools/package-pins.json` | the report's pin |
 | kintera | `b6ad3739` (v2.6.3) | `tools/env-pins.json` | see "The two kintera revisions" below |
@@ -77,14 +77,59 @@ Until this report was audited there was one field for both questions, and it hel
 native command of the report could be reproduced at the pins the report gives.
 
 **The citation pin is still below the floor, and closing that is chapter work, not setup work.**
-v2.6.3 changes `src/kinetics/{evaporation,kinetics}.{cpp,hpp}`, and the lines shift from line 2 of
-`evaporation.cpp` onwards, so the 17 citations into those four files would silently point at
-different code if the sha were simply replaced. A bare move raises the ratchet's `offpin` count from
-92 to 230 and fails nine chapters (ch02 5→63, ch10 2→48, ch14 7→20, ch09 0→6, ch16 0→6, ch04 8→9,
-appa, appe, apph). The project's own rule for the snapy pin says the same thing: `code_anchors.py
-bump` lists the cited symbols whose body changed so their claims can be re-read.
-`python3 tools/check_env.py` reports the gap on every run so it stays visible until a chapter owner
-closes it.
+The reason is structural, not clerical: the commit that satisfies snapy's floor *is* the commit that
+rewrote `src/kinetics/evaporation.cpp` and `src/kinetics/kinetics.cpp` — the explicit same-call rate
+constants for the kinetics Jacobian — and chapter 10's kinetics section cites those files by line.
+Every revision at or above the floor contains that rewrite, so no choice of revision avoids it.
+
+`python3 tools/kintera_pin_migration.py` checks every kintera citation at both revisions and compares
+the cited lines byte for byte. Against a clone holding both (`bash setup.sh --with-native` leaves one
+in `.report-env/src/kintera`):
+
+```
+194 citation(s) found
+  identical, the sha can simply be swapped : 180
+  same code at new line numbers            :   4
+  BLOCKED, the cited code is gone          :  10
+```
+
+The ten are eight in `book/chapters/10-moist-coupling/_kinetics.qmd` and two in
+`reviews/code-anchors-unmapped*.tsv`. The tool prints each one with its file, line and cited range,
+and exits 1 while any remains. Until a chapter owner re-reads those claims against v2.6.3, moving the
+pin would either point at code that is not there or raise ch10's ratchet `offpin` count — a bare move
+takes the total from 92 to 230 and fails nine chapters. The project's own rule for the snapy pin says
+the same thing: `code_anchors.py bump` lists the cited symbols whose body changed so their claims can
+be re-read. `python3 tools/check_env.py` reports the gap on every run so it stays visible.
+
+## The pins are installed, not just written down
+
+The default route **builds** the pinned NetCDF and the pinned HDF5 and then checks that `nc-config`
+reports exactly the pinned version. It used to prefer whatever the machine already had and only build
+when it found nothing usable, which meant the documented reproduction silently linked against a
+different library on every host — 4.8.1 here against a 4.9.3 pin. A pin nobody installs is not a pin.
+
+`bash setup.sh --allow-host-netcdf` is the deliberate opt-out. It still refuses anything below the
+`minimum` in `tools/env-pins.json`, and it says in as many words that the result is not the
+documented route.
+
+## The TeX pin fails loudly or not at all
+
+Every step that pins TeX is fatal: pointing `tlmgr` at the dated snapshot, `tlmgr`'s self-update from
+that same snapshot, and the package install. After them `setup.sh` reads back the repository actually
+in effect and compares it with the pinned one, so a silent fall-back to a default mirror cannot pass,
+and a package the snapshot cannot serve stops setup and names itself.
+
+That matters because carrying on is precisely what broke the PDF: a repository step that reported a
+failure and continued let the render pull koma-script 3.49.3 from a rolling mirror.
+
+`setup.sh` also records `tlmgr list --only-installed` in `.report-env/tex-packages.lock`, so "the
+render fetched nothing" is checkable rather than assumed:
+
+```bash
+diff .report-env/tex-packages.lock <(tlmgr list --only-installed | sort)
+```
+
+Any difference is a package that arrived at render time.
 
 ## The gate
 
