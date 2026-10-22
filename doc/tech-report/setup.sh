@@ -484,14 +484,29 @@ if [ "$WITH_NATIVE" = 1 ]; then
   info "verifying the pins satisfy snapy's own floors"
   "$VPY" "$HERE/tools/check_env.py" --installed || die "the installed packages do not satisfy snapy's floors"
 
+  # Build inside the clone, not beside it: snapy's setup.py links the Python extension against
+  # <src>/build/lib exactly as kintera's does, so the library has to be there for pip to find it.
+  # SNAPY_TEST_PYTHONPATH tells the *_python ctests which snapy to import; without it CMake warns
+  # that "their verdicts do not constrain this branch" and every one of them fails on a clean
+  # machine with ModuleNotFoundError, because nothing has installed snapy yet.
+  SITE="$("$VPY" -c 'import sysconfig;print(sysconfig.get_paths()["platlib"])')"
   info "configuring snapy at $PIN_SHA"
-  cmake -S "$PREFIX/snapy-pin" -B "$PREFIX/snapy-build" -DCMAKE_BUILD_TYPE=Release -DNETCDF=ON \
-        -DPython3_EXECUTABLE="$VPY" >"$LOGS/snapy-configure.log" 2>&1 \
+  cmake -S "$PREFIX/snapy-pin" -B "$PREFIX/snapy-pin/build" -DCMAKE_BUILD_TYPE=Release -DNETCDF=ON \
+        -DPython3_EXECUTABLE="$VPY" -DSNAPY_TEST_PYTHONPATH="$SITE" \
+        >"$LOGS/snapy-configure.log" 2>&1 \
     || die "snapy did not configure at the pin; see $LOGS/snapy-configure.log"
-  cmake --build "$PREFIX/snapy-build" -j"$JOBS" >"$LOGS/snapy-build.log" 2>&1 \
+  cmake --build "$PREFIX/snapy-pin/build" -j"$JOBS" >"$LOGS/snapy-build.log" 2>&1 \
     || die "snapy did not build at the pin; see $LOGS/snapy-build.log"
-  info "snapy built; its test binaries are in $PREFIX/snapy-build"
-  echo "export SNAP_PIN_BUILD=\"$PREFIX/snapy-build\"" >> "$PREFIX/activate"
+
+  # The C++ test binaries are only half of it: every do-card and every *_python ctest starts with
+  # `import snapy`, so the Python package has to be installed from the same pin.
+  info "installing snapy $PIN_SHA into the environment"
+  "$VPY" -m pip install --quiet --no-deps --no-build-isolation --no-cache-dir "$PREFIX/snapy-pin" \
+    >"$LOGS/snapy-pip.log" 2>&1 || die "snapy did not install; see $LOGS/snapy-pip.log"
+  "$VPY" -c "import snapy" 2>>"$LOGS/snapy-pip.log" \
+    || die "snapy installed at the pin but cannot be imported; see $LOGS/snapy-pip.log"
+  info "snapy $("$VPY" -c 'import snapy;print(snapy.__version__)'); tests in $PREFIX/snapy-pin/build"
+  echo "export SNAP_PIN_BUILD=\"$PREFIX/snapy-pin/build\"" >> "$PREFIX/activate"
 fi
 
 # -------------------------------------------------------------------- done --
