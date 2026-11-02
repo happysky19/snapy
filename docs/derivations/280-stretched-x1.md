@@ -507,13 +507,109 @@ Recorded as a factual comparison, **not** a verdict. Neither set of numbers is a
 
 ## 8. Acceptance criteria
 
-1. **Round-off rest.** Resting isothermal and adiabatic columns on x1rat 1.05 and 1.1 (convention per D1) at nx1 = 32, 64, 128, explicit and implicit-9, initial condition projected by `balance_column` **at its default rtol 1e−10**, which must converge. Pass when max|v|/c_s after 300 s is within 10× of the uniform control at the same nx1 [threshold proposed]. Main today passes at 32 and fails at 128 (3.1e−7 m/s isothermal).
-2. **WENO5 order (reworded).** Fix the stretching **map** and refine under it: X(ξ) = (q₀^{N₀ξ} − 1)/(q₀^{N₀} − 1) with N₀ = 64, refined by subdividing ξ. Equivalently, per-cell ratio q₀^{N₀/N}. A fixed per-cell ratio on a fixed domain is not a convergent family, because h_max tends to (r − 1)L/r (Tianhao §3.2; Xinyue B4).
+**The core change is the reconstruction rewrite** of §4 (route A): per-face WENO5 and cp5 candidate rows, per-face linear weights d0/d1/d2, and per-face smoothness indicators β. Everything else in this note (grid key, ghosts, reference fix) exists to feed it or to keep it honest. The review and the gates below are written to be strict about that rewrite.
+
+**Measured motivation.**
+- **Thread (UU9SW7MHU, ts 1793657903), citing Xinyue's and Tianhao's reports:** with frozen uniform coefficients the order falls to **1.6–2.7** inside a stretched column, and the error is **190× route A at n = 40**. The same message gives the context: an earlier non-uniform-x1 attempt in this codebase family came out poor, *most likely* because the WENO coefficients were left uniform. That attribution is UU9SW7MHU's hypothesis and is recorded as such.
+- **In this note** [measured offline]: frozen-coefficient rates are 1.66–1.93 under a fixed map (§1 item 2). In the contract band, §4.8 gives frozen rates of 3.24 / 2.52 / **2.09** on the tracer, against route A at 4.07 / 4.73 / **4.95**, with route A **105×** better at n = 40. On the velocity through cp5 the frozen rates are 2.69 / 2.09 / 2.01 and route A is **329×** better at n = 40, but those cp5 columns are `shock: false` numbers and §4.8 forbids quoting them for `jupiter_gcm`.
+- **The 190× figure does not appear in this note**, and its source report is not cited here yet (open item O4, §9). Until it is traced, the in-note figures are the 105× (tracer, valid under either `shock` setting) and the 329× (velocity, `shock: false` only).
+
+### 8.0 Order of work and stop rule
+
+1. **No code starts until Xi has seen this note** (UU9SW7MHU, ts 1793648649 and ts 1793657903). Phase 1 stays read-only until then.
+2. The **review gate (§8.1)** passes before any implementation PR is opened against chengcli/snapy.
+3. The **hard gates (§8.2)** are written as tests first and run on main at 2d9fa419 to record their starting state (RED where main is known to fail, for example G4 at nx1 = 128). After that, **any hard-gate failure on the implementation branch stops the work** until it is understood and fixed. A gate is not relaxed to get a pass.
+4. The **end-to-end runs (§8.3) start early**: as soon as the grid key (§2) and route A (§4) run end to end, not after the other gates are green.
+5. **Cost (§8.4) is measured in snapy,** not projected.
+
+### 8.1 Review gate: independent re-derivation (UJ42UV0TW)
+
+UJ42UV0TW derives the following **independently, from Shu's divided-difference form** (Shu 1998, eq. 2.20, the non-uniform c_rj; Appendix B), **without reading §4 first**:
+
+| item | quantity to derive for arbitrary spacing | compare against |
+|---|---|---|
+| R1 | the three WENO5 candidate rows at a face, both one-sided states | §4.2, primitive-function form |
+| R2 | the linear weights d0, d1, d2 | §4.2 closed form (a, b, c, e) |
+| R3 | the smoothness indicators β_r: the integral, its h_i scaling, and the two-square factorisation | §4.2, β formula and storage choice |
+| R4 | the cp5 row | §4.2, cp5 = Σ d_r p_r |
+
+Then UJ42UV0TW compares **term by term** with the note **at its head sha** (e61f58e0 or newer, stated in the post) and posts **agree / disagree per item** R1–R4 in the thread. The gate passes when every item is "agree", or when each disagreement has been resolved by a commit to this note and re-checked at the new sha. The note authors do **not** do this derivation. The positivity statement under R2 is about reconstruction at a **face**; the CWENO remark about leaving [0, 1] concerns the **cell centre** (§4.2).
+
+| item | result | at sha | post |
+|---|---|---|---|
+| R1–R4 | *PENDING (UJ42UV0TW)* | – | – |
+
+### 8.2 Hard gates in code — any failure stops the work
+
+Every gate is a ctest in snapy. Every gate runs on CPU and CUDA, and on MPS where available, because route A changes all three backends (§4.3). The grids, unless a gate says otherwise:
+- (u) uniform;
+- (g) geometric at local ratio 1.058 and 1.2 in both directions (D1 is open, so both signs are tested);
+- (j) Jiheng's n = 5 and n = 10 face lists, read by sha256 (70e36e85… and 5eff3ab4…, thread ts 1793656155);
+- (r) one face list with an abrupt ratio jump (the junction case of §4.6 item 3).
+
+ε is snapy's shipped absolute 1e−6 throughout. §7.7 recommends no ε change, and the gates do not test one.
+
+| gate | test | tolerance | pass criterion |
+|---|---|---|---|
+| **G1 constants and linear data exact on any grid** | Feed the per-face coefficient builder and the WENO5 and cp5 kernels exact cell averages of u ≡ c and u = α + β(x − x_f) on (u), (g), (j) and (r), and check every face and both sides. Also check that each candidate row and the cp5 row sum to 1, and that d_r > 0 on every face (§4.2). WENO5's nonlinear combination of three exact candidates is exact for linear data whatever the weights, so the nonlinear path is held to the same bound. | \|face − exact\| ≤ 8·2.22e−16·max\|u\| over the stencil; \|Σw − 1\| ≤ 4·2.22e−16 [tolerances proposed; route A's free-stream error was 4.4e−16 to 6.7e−16, §4.6 item 2] | all faces, all grids, all backends |
+| **G2 fifth order under a fixed stretching map, refined** | Criterion of §8 item 2 below: fix X(ξ) and refine by subdividing ξ. (a) The reconstruction operator on a smooth profile. (b) The §4.8 contract-band case on the **raw** tracer row, where route A is visible. ρ′ and p′ are reference-limited and route A is invisible on them (§4.8). (c) A running column with reflecting walls, to expose the ghost rule (§3). | observed order over the last two levels ≥ 4.5 [threshold proposed; offline route A reached 4.94 and 4.84 at N = 2048 (§8 item 2a) and 4.95 on the tracer at n = 40 (§4.8)] | (a), (b) and (c) all ≥ 4.5; (c) records the wall faces separately |
+| **G3 uniform grid bitwise identical** | A deck with neither `x1rat` nor `x1f` runs the uniform short-circuit (§4.5). The whole existing ctest suite, plus a fixed list of example decks for a fixed number of steps, compared with a build of 2d9fa419. | 0 bits: every output and restart tensor `torch.equal`, the same on CPU and CUDA | no difference anywhere |
+| **G4 resting column at round-off** | §8 item 1 below: isothermal and adiabatic columns on (g) at nx1 = 32, 64, 128 and on (j), explicit and implicit-9, initial condition projected by `balance_column` at its default rtol 1e−10, which must converge. The gate measures max\|v\|. It does not measure p − pref, which §7.4 shows is capped by the shipped top anchor (6e−4 relative, isothermal) without moving the fluid. | max\|v\|/c_s after 300 s within 10× of the uniform control at the same nx1 [threshold proposed] | every column and nx1. Main passes at 32 and fails at 128 (3.1e−7 m/s isothermal, §5) |
+| **G5 mass and energy conservation to round-off** | A closed column (reflecting x1 walls, gravity only, no sedimentation, reactions or other forcing) with a non-rest perturbation, on (g) and (j), explicit and implicit-9. Track total mass Σ ρ_i V_i and total energy Σ (E_i + ρ_i Φ_i) V_i, with Φ = −g1·x1v, the E+PE that the gravity-work fixer books (`src/hydro/hydro_forward.cpp:949-950`, `:1144-1152`), in each `gravity-work` mode (`src/forcing/const_gravity.cpp:28-36`). | mass: relative drift ≤ 1e−13 per 1000 steps [proposed]. Energy: first record the same drift on the **uniform** grid at 2d9fa419; the stretched grid must be within 10× of it [proposed]. Whether main conserves E+PE to round-off in every mode is **[H]** until that uniform baseline is measured. | mass within bound on every grid; energy within 10× of the uniform baseline in the same mode |
+
+### 8.3 End-to-end runs, started early
+
+**E1 — the real `jupiter_gcm` deck: 30-level stretched (x1rat 1.058) against 77-level uniform**, run long enough to compare T(z), the winds, the energy budget and the redo counts.
+- **Compare:** horizontal-mean T(z); rms horizontal winds and max |w|; the E+PE budget and the gravity-work-fixer booking (`src/hydro/hydro_forward.cpp:949-950`); and the number of redone steps (`check_redo`, the halving at `src/mesh/meshblock.cpp:534`).
+- **Run length:** not set here (open item O5). The deck's own `tlim` is 100.e5 s (`examples/jupiter_gcm.yaml:113`).
+
+**The deck at 2d9fa419**, read only: gnomonic-equiangle on a cubed-sphere layout (`examples/jupiter_gcm.yaml:56,73`); x1 from 69 911 000 to 70 211 000 m, a 300 km span (`:59-60`); `nx1: 100` (`:67`), `nghost: 3` (`:70`); `vertical: {type: weno5, scale: true, shock: true}` (`:88`); HLLC (`:92`); reflecting x1 walls (`:101-102`); RK3 with `cfl: 0.45` and `implicit-scheme: 9` (`:109-111`); `grav1: -22.` (`:128`); `Ps: 100.e5`, `Ts: 600.`, `Tmin: 110.` (`:184-186`).
+
+**Consistency check** [derivation from those lines, not run]:
+
+| quantity | value | note |
+|---|---|---|
+| deck's own uniform count | **100** cells, Δz = 3 000 m | `:67` — **not 77** |
+| 77 uniform cells | Δz = 3 896 m | |
+| geometric q = 1.058, 30 cells over 300 km | finest 3 930 m, coarsest 20 161 m (ratio 5.13) | h_0 = L(q−1)/(q^n−1), §2.2 |
+| 300 km / 3 930 m | 76.3 | so 77 is the smallest uniform count no coarser than the stretched grid's finest cell; it is **not** the deck's count |
+| H/5 with dry R_s ≈ 3 936 J/kg/K (from the `dry` composition, `:7`) | 21 470 m at 600 K; 3 936 m at 110 K | moist molar mass ignored [H] |
+
+The geometric grid's two ends fit dz ≤ H/5: 20 161 ≤ 21 470 if the coarse cell is at the bottom, and 3 930 ≤ 3 936 at the top. That requires cells growing **downward**, q = 1/1.058 in §2.2's +x1 convention (D1). In between, §4.9 applies: one ratio meets the contract only for a constant lapse rate. If the upper column is isothermal at Tmin, H/5 stays at 3 936 m there, and the second cell from the top is already 3 930·1.058 = 4 158 m. A single x1rat 1.058 therefore cannot satisfy n = 5 through an isothermal layer more than one cell thick [derivation; the deck's T(z) was not computed here].
+
+Jiheng's n = 5 list (30 cells, sha256 70e36e8503fb9651912faaf159bdfc51c22f985e594e8d85e1d2f02f141f8c7e, ts 1793656155) was built top-down with dz ≤ H(centre)/5 from this deck's initial state. It is a geometric 1.058 grid only if its `r_dz_i_over_dz_i_minus_1` column is constant. That CSV is not on this host, so it was not checked. **Open (O1–O3, §9), not resolved by assumption:**
+- whether 77 or 100 is the intended uniform control;
+- whether E1's stretched run uses Jiheng's face list (option B) or a geometric x1rat 1.058 (option A);
+- that the deck is gnomonic, while §1 scopes the change to Cartesian columns.
+
+**E2 — shock tube on the stretched grid.** A Sod-type Riemann problem along x1: Cartesian, no gravity, `shock: true`, on (u), (g) and (r). Compare the L1 error in ρ against the exact solution, the position of the shock and the contact, and the overshoot at the shock against the uniform run at the same finest Δz. [Pass thresholds to be proposed by the implementer before running.] No ε or shock result exists in this note (§7.5), so E2 is new evidence, not a check of an existing number.
+
+**E3 — gravity wave on the stretched grid.** A small-amplitude internal gravity wave in an isothermal or stably stratified column on (g) and (j), explicit and implicit-9. Measure frequency, phase speed and amplitude decay against linear theory and against the uniform run. [Thresholds to be proposed before running.] This is the first non-rest test of the reference split (§5) and the ghost rule (§3) together.
+
+### 8.4 Cost, measured in snapy
+
+The **11–17 %** of §4.4 is a **projection** from a standalone kernel pair onto snapy's kernel. It is **not a measurement** and is to be **replaced** by one. On the route-A branch, measure in snapy:
+- the x1 reconstruction kernel time and the full step time;
+- stretched against uniform at the same nx1, and stretched against the uniform count of E1;
+- on CPU and CUDA;
+- reporting the GPU model and its L2 size, including this machine's GTX 1080 Ti (smaller L2 than the RTX 5090, §4.4 caveat 2).
+
+This item has no pass threshold, but the measured numbers must be in this note before any merge.
+
+### 8.5 Other acceptance criteria (unchanged in substance)
+
+1. **Round-off rest** — the specification of G4. Resting isothermal and adiabatic columns on x1rat 1.05 and 1.1 (convention per D1) at nx1 = 32, 64, 128, explicit and implicit-9, initial condition projected by `balance_column` at its default rtol 1e−10, which must converge. Pass when max|v|/c_s after 300 s is within 10× of the uniform control at the same nx1 [threshold proposed]. Main today passes at 32 and fails at 128 (3.1e−7 m/s isothermal).
+2. **WENO5 order (reworded)** — the specification of G2. Fix the stretching **map** and refine under it: X(ξ) = (q₀^{N₀ξ} − 1)/(q₀^{N₀} − 1) with N₀ = 64, refined by subdividing ξ. Equivalently, the per-cell ratio is q₀^{N₀/N}. A fixed per-cell ratio on a fixed domain is not a convergent family, because h_max tends to (r − 1)L/r (Tianhao §3.2; Xinyue B4).
    - 2a: a smooth profile converges at ≥ 4.5 over the last two levels [threshold proposed; offline route A reaches 4.94 and 4.84 at N = 2048].
    - 2b: the same test in a running column with reflecting walls, to expose the ghost rule (§3).
-3. **Bitwise uniform.** A deck without `x1rat`/`x1f` gives bitwise the same output as 2d9fa419 on CPU and CUDA, and the existing ctest suite passes unchanged.
+3. **Bitwise uniform** — the specification of G3. A deck without `x1rat`/`x1f` gives bitwise the same output as 2d9fa419 on CPU and CUDA, and the existing ctest suite passes unchanged.
 4. **Tall-column implicit test passes on a stretched grid,** through Courant 250 and including the new g·Δz_max/c_s² rung (§6).
-5. **Cost per step vs uniform.** Measure it at the same nx1 on CPU and CUDA, replacing the 11–17 % kernel-only projection with an in-snapy number. Report the GPU and its L2 size, and include one smaller-L2 GPU.
+5. **Cost per step against uniform** — measured in snapy, §8.4.
+
+**Kept consistent with the rest of the note:**
+- the real-grid `shock: true` rerun of §4.8, §7.5 and §7.7 is still **PENDING**, and no gate quotes a number from it;
+- the ε results stay scoped by row and location (§7.7), so no gate changes ε;
+- every threshold above marked [proposed] is a proposal for Xi and Cheng, not a measured value.
 
 ---
 
@@ -521,19 +617,30 @@ Recorded as a factual comparison, **not** a verdict. Neither set of numbers is a
 
 | # | item | owner | state |
 |---|---|---|---|
-| D1 | `x1rat` direction convention; whether to add option B (`x1f` list) in the first PR | Linfeng proposes; Xi/Cheng decide | open |
+| X1 | **Xi sees this note before any code starts** (§8.0) | UU9SW7MHU takes it to Xi | open — blocks all code |
+| G0 | review gate §8.1: independent re-derivation of R1–R4 from Shu's divided-difference form, then a term-by-term comparison at the head sha | UJ42UV0TW | requested (ts 1793657903) |
+| G1–G5 | hard-gate tests of §8.2, written first and run on 2d9fa419 for their starting state | implementer, after X1 | not started |
+| E1 | `jupiter_gcm` 30-level stretched vs uniform, early (§8.3) | to be assigned | blocked on O1–O3 and X1 |
+| E2, E3 | shock tube and gravity wave on the stretched grid (§8.3) | to be assigned | not started; thresholds to be proposed first |
+| C1 | cost measured in snapy, CPU and CUDA, including a smaller-L2 GPU (§8.4); replaces the 11–17 % projection | Tianhao / Linfeng | not started (supersedes Q4) |
+| O1 | uniform control for E1: 77 (the smallest count no coarser than the stretched grid's finest cell, §8.3) or the deck's own 100 (`examples/jupiter_gcm.yaml:67`) | UU9SW7MHU / Jiheng | **open — mismatch with the deck** |
+| O2 | E1 stretched grid: Jiheng's n = 5 face list (option B) or a geometric x1rat 1.058 (option A). A single ratio cannot satisfy n = 5 through an isothermal Tmin layer more than one cell thick (§8.3, §4.9) | Jiheng / Tianhao | **open — not checked; the CSV is not on this host** |
+| O3 | the deck is gnomonic-equiangle (`examples/jupiter_gcm.yaml:56`); §1 scopes the change to Cartesian columns. Extend the scope or run E1 on a Cartesian analogue? | Xi / Cheng | open |
+| O4 | source of the "190× route A at n = 40" figure (ts 1793657903): not in this note (§4.8 has 105× tracer, 329× velocity `shock: false`) | UU9SW7MHU / Xinyue / Tianhao | open |
+| O5 | E1 run length (the deck's `tlim` is 100.e5 s, `examples/jupiter_gcm.yaml:113`) | to be assigned with E1 | open |
+| P1 | real-grid `shock: true` rerun of §4.8, §7.5 and §7.7 on Jiheng's lists (posted ts 1793656155) | Tianhao | **PENDING** |
+| D1 | `x1rat` direction convention; whether to add option B (`x1f` list) in the first PR. §4.9 makes option B a contract requirement for realistic T(z) | Linfeng proposes; Xi/Cheng decide | open |
 | D2 | ghost-width rule per boundary type (§3) | Linfeng + Tianhao | proposed |
 | D3 | uniform classification from the grid key instead of the per-block probe | Linfeng + Xinyue | proposed |
-| D4 | route-A layout (CPU index, MPS, CUDA global rows), cp5 per-face rows | Tianhao | drafted here; needs his edit |
+| D4 | route-A layout (CPU index, MPS, CUDA global rows), cp5 per-face rows | Tianhao | drafted; checked by G0 |
 | D5 | rung values; Courant defined on Δz_min or Δz_max | Jiheng | pending |
-| Q1 | §7: which variables WENO5 sees; rerun on deviations | Tianhao + Xinyue | pending (ts 1793648649) |
-| Q2 | log1p Q in snapy (all three backends), and `SNAP_WB_REF4` round-off on thin cells | Xinyue (fix branch, after design sign-off) | hypothesis |
+| Q1 | §7: which variables WENO5 sees | Tianhao + Xinyue | answered at 2d9fa419 (§7.2); real-grid rerun is P1 |
+| Q2 | log1p Q in snapy (all three backends), and `SNAP_WB_REF4` round-off on thin cells | Xinyue (fix branch, after X1) | hypothesis |
 | Q3 | Käppeli & Mishra equations with page/equation numbers | Xinyue | pending |
-| Q4 | route-A cost on a smaller-L2 GPU (e.g. this machine's GTX 1080 Ti) and per step | Tianhao / Linfeng | unmeasured |
 | Q5 | Wang, Feng & Spiteri (2008) content; novelty not claimed | Tianhao | unread |
-| F1 | other uniform-spacing fixes from the inventory: diffusion `centered_derivative` (`src/forcing/diffusion.cpp:70-84`) and `face_average` (`:99-108`), cubed-sphere diffusion scalar h (`src/forcing/diffusion_cubed_sphere.cpp:191`), `bot_heat`/`top_cool` budgets (`src/forcing/bot_heat.cpp:52-54`, `src/forcing/top_cool.cpp:52-54`), the dx²/12 curvature correction (`src/hydro/hydro_forward.cpp:1023-1047`) | unassigned | listed |
-| R1 | critic review of this note | UJ42UV0TW | after the note lands |
-| H1 | hosting: one file on a doc-only branch of happysky19/snapy (proposed) | Tianhao to agree | no push until agreed |
+| F1 | other uniform-spacing fixes from the inventory: diffusion `centered_derivative` (`src/forcing/diffusion.cpp:70-84`) and `face_average` (`:99-108`), cubed-sphere diffusion scalar h (`src/forcing/diffusion_cubed_sphere.cpp:191`), `bot_heat`/`top_cool` budgets (`src/forcing/bot_heat.cpp:52-54`, `src/forcing/top_cool.cpp:52-54`), the dx²/12 curvature correction (`src/hydro/hydro_forward.cpp:1023-1047`). The cubed-sphere diffusion item matters for E1 (O3) | unassigned | listed |
+| R1 | critic review of this note as a whole (distinct from G0) | UJ42UV0TW | after the note lands |
+| H1 | hosting: happysky19/snapy `doc/280-stretched-x1`; Tianhao's worker is the single pusher | Tianhao | hosted |
 
 ---
 
