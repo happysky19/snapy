@@ -206,6 +206,8 @@ All of §4.8 is **[measured offline]** on the replica validated against the comp
 
 **So even at a local ratio of 1.063 — well inside the contract — today's frozen coefficients are second order on the raw variables and route A is fifth.** This is the in-contract case for route A, and it does not rest on any out-of-contract number.
 
+**Scope of the cp5 columns: they are `shock: false` numbers and do NOT describe the `jupiter_gcm` deck.** `shock` is **explicitly true** in that deck — `examples/jupiter_gcm.yaml:88`, `vertical: {type: weno5, scale: true, shock: true}`, and the same at `examples/jupiter_gcm_dry.yaml:43`. It is not a default. In that branch `src/recon/reconstruct.cpp:99-100` sends the **whole tensor** through `pinterp1` = WENO5, so under that deck the velocities and p − p_ref do not reach cp5 at all (§7.2). The **velocity** table above (route A 4.82/4.86/4.67 against frozen 2.69/2.09/2.01, **329×** at n = 40) and the p − p_ref result below (rate 2.00, route A equal to frozen) are therefore `shock: false` measurements, and **must not be quoted for `jupiter_gcm`**. The **ρ − ρ_ref and tracer columns remain valid for it** — including the **105×** at n = 40 — because those rows go through WENO5 either way. **WENO5 nonlinear weights on p − p_ref and on raw velocity under `shock: true` were NOT run.** That would be **new columns**, not a rescoping of these, and no number in §4.8 is relabelled to stand in for them.
+
 **Where route A changes nothing: ρ − ρ_ref and p − p_ref.** On those two rows route A and the frozen coefficients agree **to three digits** at every level, because both are **reference-limited** rather than reconstruction-limited: p converges at rate **2.00** and ρ at **0.53–1.53**, with the same numbers either way. The cap on p is the log-mean cell reference (`src/hydro/hydro_ref_x1_impl.h:181-186`); the cap on ρ is the index-space binomial smoother in `dref` (`:107`), which §7.1 measures as first order on its own. Route A is invisible on these rows, and an acceptance test for route A must therefore use the **raw** rows above, not ρ′ or p′.
 
 **Isothermal columns.** Under the contract an isothermal column is **exactly uniform** (ratio 1.000000, §4.9), so route A and the frozen coefficients are identical to the digit on every row and both are fifth order. That is §4.5 holding in practice, not a separate result.
@@ -349,13 +351,25 @@ $$
 
 This **closes** the open question rather than producing a fix. The out-of-contract collapse of §7.3 (ω_2/d_2 → 0.018 at dz/H ≈ 1) has no counterpart in band.
 
-**The only excursion is the bottom two faces, and it is the density reference's smoother.** Three controls attribute it to the 5-point **index-space binomial smoother** applied to ρ/p when `dref` is built (`src/hydro/hydro_ref_x1_impl.h:107`, edge clamping at `:97-102`) — **not** to stratification and **not** to the wall continuation [measured offline]:
+**RETRACTION — the bottom-two-face attribution made in this note is withdrawn.** An earlier revision of §7.1 attributed the bottom-two-face weight excursion to the 5-point index-space **binomial smoother** applied to ρ/p when `dref` is built (`src/hydro/hydro_ref_x1_impl.h:107`), and credited Xinyue Chen's wall-row hypothesis as *measured*. **That attribution is retracted.** It was an artefact of a harness with **no ghost region**. The "bottom face" column of the table above is a no-ghost-region number and is kept only as the record of that harness; the **interior** column is unaffected. With a ghost region in place the smoother is not the lever either way (see variant A below), so this note neither confirms nor refutes her hypothesis — it has nothing to say about it.
 
-1. **It is confined to the faces whose stencil touches the array edge.** ω_r/d_r is **exactly 1.0000 from the third face on**, at every N (the second face reads 1.0886/1.0886/0.0188 at N = 18 and 1.0717/1.0717/0.3204 at N = 72, and i ≥ 4 is 1.0000).
-2. **It gets *milder* with refinement** — ω_2/d_2 = 0.0001 → 0.0012 → 0.0105 at N = 18 → 36 → 72. A stratification mis-fire would spread down the column and worsen as n falls; this does the opposite.
-3. **It vanishes entirely when `dref` is rebuilt from the exact ρ/p,** everything else identical: 1.0000/1.0000/1.0000 at the bottom face for every N. It is absent for an isothermal column either way, because there ρ/p is constant and the smoother is exact.
+**The ghost-region control** [measured offline]. The harness was rebuilt with `nghost = 3` and `il`/`iu`; `wb_wall_clamp = true`, verified to be the shipped default (`src/hydro/hydro.hpp:54`, `src/hydro/hydro_options.cpp:57`); `phys_in`/`phys_out = true`, so `jlo = il` and `jhi = iu`; `ext_lo`/`ext_hi = true` (`src/hydro/hydro_ref_x1_impl.h:189-192`); the wall `rop` continuation (`:68-72`); the scan over the **full** array (`:30-59`); ghost widths continuing the contract map; and the ghost state taken from the reflecting index mirror (`src/bc/bc_func.cpp:14`). Two orders of operation were run, and they disagree.
 
-**This measures Xinyue Chen's stated hypothesis** — the binomial bias in the wall rows — and confirms it as the cause. WENO5 is correctly detecting a grid-scale kink that the reference's own smoother puts into `dref`; that is a reference artefact, and the lever is in the reference, not in the reconstruction.
+**Variant B — the order the code actually uses — shows NO collapse.** Variant B subtracts the reference (`src/hydro/hydro_forward.cpp:400-401`), then overwrites the **deviation** ghosts with the even mirror (`:409-413`), then reconstructs (`:456`). This is the faithful one.
+
+* **Rest isothermal is exactly 1.000 at all four bottom faces at N = 18, 36 and 72** — with the shipped smoother and with exact ρ/p alike.
+* **Dry adiabat**, worst case **1.003 / 0.998 / 1.004** at i = `il`, N = 18 (1.005 / 0.996 / 1.007 with exact ρ/p); worst single value **0.944** (ω_2/d_2 at `il`+1, N = 18). Everything is 1.000 by N = 36–72.
+* **Nothing differs from 1.000 by more than 0.006 at N ≥ 36.**
+
+**Variant A — state mirror only, omitting `:409-413` — collapses.** With the deviation mirror left out, the first two faces collapse on **both** grids, including the **uniform isothermal control**:
+
+| case | face | ω_0/ω_1/ω_2 ÷ d |
+|---|---|---|
+| rest isothermal (uniform grid), every N | i = `il` | 3.333 / 0.000 / 0.000 |
+| rest isothermal (uniform grid), every N | i = `il`+1 | 1.111 / 1.111 / 0.000 |
+| rest dry adiabat | i = `il` | 3.009–3.247 / 0.000 / 0.000 |
+
+The smoothed and the exact ρ/p runs are **identical to every printed digit** at those faces. **That is why the smoother is not the lever either way:** the collapse appears on a uniform isothermal column, where ρ/p is constant, the smoother is exact and there is no stretching at all. Whether the deviation mirror at `:409-413` is applied is the whole of the difference.
 
 **The smoother also costs an order globally.** `max |ρ − dref|/ρ` on the dry-adiabat contract grid [measured offline]:
 
@@ -368,7 +382,11 @@ This **closes** the open question rather than producing a fix. The out-of-contra
 
 The shipped smoother converges at exactly **first** order (2.287e−02 → 2.860e−03 over an 8× refinement); with the exact ρ/p the rate is **1.96**. So it inflates the density deviation 15× at n = 5 and 107× at n = 40, and **caps the ρ path near 0.6 order whatever reconstruction route is used** — which is why route A and the frozen coefficients are indistinguishable on ρ − ρ_ref (§4.8).
 
-**Explicit limit of the harness** [H]. The harness has **no ghost region**, so faces i = 2 and 3 sit at the array edge and the excursion above is an array-edge effect in the replica. In snapy the smoother **clamps at the physical boundary** (`jlo = il` when `wall_clamp && phys_in`, `src/hydro/hydro_ref_x1_impl.h:189-192`) and reconstruction starts at `il`, so **an analogous two-face region at a real bottom wall is a hypothesis for the main code**, not a measurement of it: the exact ghost/clamp bookkeeping was not modelled. The interior result (1.0000) is the robust one. Confirming or refuting the two-face region in snapy belongs to **Xinyue's main-code baseline**.
+**The interior result is untouched, and it never depended on the edge** [measured offline]. ω_r/d_r = **1.0000** in the interior, so **there is no Jiang–Shu β mis-fire in dz/H 0.05–0.25**, and the three controls already written for that answer — the smooth wave, the localised perturbation and the deliberately mismatched reference rows of the table above — stand exactly as they were. Neither variant, nor the presence of the ghost region, nor the smoother setting moved the interior off 1.0000. Nothing in this retraction reaches the in-contract answer of §7.1; it reaches only the bottom-face attribution.
+
+**Caveat [H, not measured]: an OUTFLOW bottom boundary.** `src/hydro/hydro_forward.cpp:409-413` is gated on `phys_x1inner && !is_outflow(pmb->options->bfuncs()[0])`, so with an **outflow** bottom it does not fire at all, and **variant A is then the closer model of the code**. The collapse could therefore be **real for outflow bottoms**. That was not measured and stays a hypothesis; every number above is for a reflecting bottom.
+
+**Open, and not measured: the ghost cell WIDTHS.** The harness continues the contract map into the ghost cells, whereas snapy builds ghost faces as a **uniform** extension at the mean width (`src/coord/coordinate.cpp:322-323`, `torch::linspace(gmin − nghost·dx, gmax + nghost·dx, …)`). The uniform-ghost-width alternative was **not** tested, so every ghost-region number above is at contract-map ghost widths.
 
 ### 7.2 Which variables WENO5 receives on the x1 sweep — answered at 2d9fa419
 
@@ -446,6 +464,14 @@ with σ_j the stencil's own amplitude scale — the quantity snapy's `scale` opt
 **Two things to record rather than recommend.** First, **no shock or discontinuity case was tested**: every profile here is smooth, so nothing in §7.5 is a recommendation about ε for shock capturing, and the paper's own trade-off (h better on smooth data, h² better on discontinuities) stands untested by me. Second, **snapy's absolute ε = 1e−6 is not scale-free**: how nonlinear WENO5 actually is depends on the units and magnitude of the row being reconstructed — negligible for pressure in Pa, dominant for a small density deviation. A relative ε would at least make that uniform across rows. Neither point is an acceptance criterion, and §7.1's answer does not depend on either.
 
 **PENDING:** the `jupiter_gcm` face-list rerun of §7.1 and §7.5 awaits Jiheng's lists (§4.9). No numbers are guessed for it.
+
+### 7.6 Where this diverges from the in-thread bottom-face study
+
+Recorded as a factual comparison, **not** a verdict. Neither set of numbers is asserted here to be wrong.
+
+**Difference 1 — the deviation mirror, and it is the single switch.** Variant A of §7.1 reproduces the other study's reported collapse on **every** grid, including the **uniform isothermal control**. Variant B, on the same harness and the same columns, does not show it at all. So **whether the even mirror on the deviation at `src/hydro/hydro_forward.cpp:409-413` is applied is the one thing that flips the answer**, and the question that separates the two results is which of the two orders the other study used. Variant B is the order the shipped code uses — that is a statement about which variant models `hydro_forward.cpp`, not a claim about the other study's correctness. The outflow caveat of §7.1 cuts the other way: where `:409-413` does not fire, variant A is the closer model.
+
+**Difference 2 — the temperature profile.** Every column measured here has a **constant** lapse rate, which is precisely why the contract grid of §4.9 carries **one constant ratio per n** rather than varying local ratios. A **varying T(z)** — the troposphere-under-stratosphere case §4.9 points at, where the contract needs an explicit face list — was **not run** here, and a grid with varying local ratios is a materially different input to the β indicators. §7 measures that case in neither direction.
 
 ---
 
