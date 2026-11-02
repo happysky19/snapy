@@ -17,7 +17,7 @@
 2. **Reconstruction loses order.** One fixed WENO5/cp5 coefficient table serves every face (`src/recon/weno5.cpp:11-23`, `src/recon/cp5.cpp:13-14`, weights `src/recon/interp_impl.h:115-117`). On a stretched grid that is about 2nd order under a fixed stretching map [measured offline, Tianhao: 1.66–1.93], and 1st order at a fixed per-cell ratio [measured offline, Linfeng]. §4.
 3. **Well-balance is already structural on main.** The face scan uses per-cell `dx1f` (`src/hydro/hydro_ref_x1_impl.h:43,53`), and a stretched grid automatically takes the log-mean cell reference (`src/hydro/hydro.cpp:550-556`, `src/hydro/hydro_ref_x1_impl.h:181-186`). Rest fails at nx1 = 128 only through the round-off of that log-mean [measured in snapy, Xinyue]. §5.
 4. **The implicit operator already uses per-cell metrics** (`src/implicit/vic_assemble_full_impl.h:89-99`). §6.
-5. **An open physics question decides whether this is worth doing:** the Jiang–Shu nonlinear weights collapse at a coarse bottom (dz/H ≳ 0.6) on perfectly smooth data. §7.
+5. **The grid contract bounds how coarse the bottom may get.** Cheng has set the contract: dz(z) ≤ H(z)/n with a **fixed n ≥ 5 over the whole column**, so the stretch ratio *follows from* T(z) through H(z) = RT(z)/g and is not a free `x1rat` the deck may choose. That puts the realistic band at **dz/H 0.05–0.25**, with **local stretch ratios near 1**. The earlier dz/H 0.6–1.0 measurements (route-A linear exponent 4.0–4.8; A_weno 1.97 and 1.43, identical for route A, route B and the frozen coefficients) are **out of contract everywhere** and are retained **only as a clearly labelled OUT-OF-CONTRACT APPENDIX** (§7.3); they are **not acceptance evidence**. The in-contract measurement at dz/H 0.05–0.25 is **still running**. §7.
 
 **In scope:** Cartesian x1 (vertical) columns. The design must not change the arithmetic of spherical-polar/gnomonic geometries. **Out of scope:** x2/x3 stretching, AMR, and shocks: every profile measured so far is smooth.
 
@@ -108,6 +108,10 @@ The ghost-width rule applies only at the two ends of the global face vector. Gho
 
 ## 4. Reconstruction: route A (Tianhao; section owner Tianhao)
 
+**Grid contract (Cheng).** This section is written for the contract Cheng set: **dz(z) ≤ H(z)/n with a fixed n ≥ 5 over the whole column**. The stretch ratio is then a *consequence* of T(z), not a free `x1rat`: the realistic band is **dz/H 0.05–0.25** and the **local stretch ratios are near 1**. Route A itself is indifferent to the restriction — its linear weights are positive and well conditioned for ratio jumps s ∈ [1/16, 16] (§4.2), far outside anything the contract can produce — but the restriction changes **what counts as evidence**. Any number measured at dz/H 0.6–1.0 is out of contract and lives only in the labelled OUT-OF-CONTRACT APPENDIX (§7.3); it is not acceptance evidence for route A or against it.
+
+> **OPEN QUESTION (D1) — `x1rat` direction convention. Not settled; do not read §2.2 as a decision.** Cheng is taking this to Xi together with this note. The two candidates are Linfeng's convention in §2.2 — q ≡ h_{k+1}/h_k, the cell above divided by the cell below, so the thread's "each cell 1.05× the one above it" means q = 1/1.05 — and its inverse, (cell below)/(cell above). §2.2 records a *preference* for the first; that preference is **not** a decision and this note does not make one. Linfeng's accompanying point stands under either choice and is exactly why the question has to be answered explicitly rather than inferred: **Xinyue's runs grew cells downward by 1.05**, so whichever convention is adopted, the tests must state it. Route A reads face positions directly and is correct under either convention; what the convention decides is the meaning of the deck key, and therefore which grid a test actually builds.
+
 ### 4.1 What is fixed today
 
 WENO5 candidate rows c1–c3 and smoothness rows c4–c9 are in `src/recon/weno5.cpp:11-23`. The linear weights `.3/.6/.1`, ε = 1e−6 (absolute) and p = 2 are at `src/recon/interp_impl.h:115-117`, with 13/12 and 1/4 at `:108-113`. The CUDA kernel uses the same constants (`src/recon/interp_impl.cuh:95-101`). cp5 is `(−3, 27, 47, −13, 2)/60` (`src/recon/cp5.cpp:13-14`), which equals Σ d_r p_r. The reconstruction modules carry no geometry: the interface is `InterpImpl::forward(w, dim, wl, wr)` (`src/recon/interpolation.hpp:60-63`), and the only options are `type` and `scale` (`:30-31`).
@@ -167,7 +171,7 @@ Evaluated on a uniform grid, the general formula differs from the stored literal
 
 Route B reconstructs q = (u∘X)·J on the uniform ξ grid, using q̄_i = (h_i/Δξ)ū_i, and sets û_f = WENO5(q̄)_f / J_f.
 
-1. **Metric error.** At a well-resolved bottom (dz/H = 0.05), route B's error relative to route A's linear reconstruction is 38×, 245×, 788×, 4828× and 32 936× at R = 1.01, 1.03, 1.05, 1.10 and 1.20 [measured offline, follow-up Check B]. Its error grows as (ln R)^2.32 while route A's is flat (fitted exponent −0.05). The exponent 2.32 is a fit over R ∈ [1.01, 1.20], not a derivation.
+1. **Metric error.** At a well-resolved bottom (dz/H = 0.05), route B's error relative to route A's linear reconstruction is 38×, 245×, 788×, 4828× and 32 936× at R = 1.01, 1.03, 1.05, 1.10 and 1.20 [measured offline, follow-up Check B]. Its error grows as (ln R)^2.32 while route A's is flat (fitted exponent −0.05). The exponent 2.32 is a fit over R ∈ [1.01, 1.20], not a derivation. **This comparison is inside the grid contract** (dz/H = 0.05 is the well-resolved end of the 0.05–0.25 band), so the rejection of route B does not rest on any out-of-contract number.
 2. **Free-stream preservation is lost.** Naive route B leaves |u_f − 1| = 2.8e−8 for u ≡ 1 at r = 1.1, N = 128, against 4.4e−16 for route A [measured offline, Tianhao §3.3]. The fix (divide by WENO5(J̄) with the same nonlinear weights) adds about 10 % flops.
 3. **Smoothness requirement.** Route B needs a map with as many derivatives as the scheme's order across every block junction and wall. Shu 1998 states that high-order finite-difference ENO/WENO "can only be applied to a uniform grid or a smoothly varying grid", while finite-volume WENO "can be applied to arbitrary nonuniform grids" (follow-up §2.2). That rules out option B face lists and the ghost rules (a) and (c).
 4. **Limiter semantics.** β would be computed on J̄·p′ instead of p′ (Tianhao §3.4).
@@ -253,26 +257,60 @@ which is 0.178 for that test (Δz/H_p = 0.250), computed from those constants. O
 
 ---
 
-## 7. Open question: nonlinear weights at the coarse bottom (section owner Tianhao)
+## 7. Nonlinear weights at the bottom of the column (section owner Tianhao)
 
-**Measured offline** (follow-up §1; R = 1.05/1.10, H = 1, profiles P1–P4):
-- The linear route-A reconstruction keeps an error-vs-dz/H exponent of **A_lin 4.35–4.78** in the 0.6–1.0 band on P2/P4. Jiang–Shu WENO on the same data falls to **A_weno 1.43–2.25**. These are exponents of error against dz/H, not convergence rates.
+### 7.1 The grid contract decides what is in scope
+
+**Contract (Cheng).** The vertical grid must satisfy
+
+$$
+\Delta z(z)\;\le\;\frac{H(z)}{n},\qquad n\ \text{fixed},\; n \ge 5,\ \text{over the whole column},
+$$
+
+with H(z) = RT(z)/g the local scale height. The ratio is therefore **not a free parameter**: a column is specified by n, and the widths **follow from T(z)**. Under this contract the realistic band is
+
+$$
+\Delta z/H \in [0.05,\,0.25],\qquad\text{local stretch ratios near } 1 .
+$$
+
+**What that does to this section.** The question as the draft posed it — do the Jiang–Shu weights collapse at a coarse bottom, dz/H ≳ 0.6, on smooth data — is **out of contract**: no column satisfying dz ≤ H/n with n ≥ 5 reaches that band anywhere, bottom included. The dz/H 0.6–1.0 measurements are therefore kept **only as the clearly labelled OUT-OF-CONTRACT APPENDIX in §7.3**, and they are **not acceptance evidence**: they support no criterion in §8 and must not be quoted as an acceptance failure of route A.
+
+**The in-contract question that replaces it,** and the only one §7 will answer: does the Jiang–Shu β mis-fire appear **at all** inside dz/H 0.05–0.25, measured at dz = H/n for n = 5, 8, 10, on the variables WENO5 actually receives (§7.2)? That measurement is **still running**; no result is claimed here, in either direction. An explicit "no mis-fire in band" **closes** this open question rather than producing a fix.
+
+### 7.2 Which variables WENO5 receives on the x1 sweep — answered at 2d9fa419
+
+The draft's placeholder asked which variables WENO5 sees. **Xinyue has answered at 2d9fa419**, and her file:line are kept as she gave them. This replaces the pre-fill. It is a **code read**, not a hypothesis.
+
+**With `type: weno5` and `shock: false`:**
+- **ρ − ρ_ref** goes through **WENO5** (`src/recon/reconstruct.cpp:139`);
+- **the tracers** go through **WENO5** (`:157`);
+- **v1, v2, v3 and p − p_ref** go through the **linear cp5**, as **one block**, rows `IVX..IPR` (`:146-148`);
+- the WENO5/cp5 pairing itself comes from `InterpImpl::create` (`src/recon/interpolation.cpp:29-33`).
+
+**With `shock: true`, every row including pressure goes through WENO5** (`:99-100`).
+
+**Xinyue's two corrections to the pre-fill.**
+1. **The cp5/WENO5 split exists only for `type: weno5`.** `weno3` pairs with `cp3` instead (`src/recon/interpolation.cpp:21-25`), so the split is a property of the chosen type, not of the x1 sweep as such.
+2. **A deck with no `vertical` `reconstruct` section does _not_ fail.** It **silently defaults to `shock = true` with `type: dc`** — first-order donor cell (`src/recon/reconstruct.cpp:19,20,29`; `src/recon/reconstruct.hpp:51`; `src/recon/interpolation.hpp:30`). This **replaces the draft's hypothesis that such a deck may fail at construction** (Appendix A item 4), and the **[H] label is dropped**: this is now a code-read result, not a hypothesis. The real behaviour is the more dangerous of the two, because the deck runs and quietly loses four orders of reconstruction instead of throwing.
+
+**Where the references are subtracted.** The well-balanced x1 path subtracts references **only from pressure and density** — `wx1[IPR] −= pref`, `wx1[IDN] −= dref` (`src/hydro/hydro_forward.cpp:400-401`) — and then calls the **same** reconstruction **with the floors off** (`:456`).
+
+**Consequence for the measured cases.** p′ reaches WENO5 only under `shock: true`, so the P4 (perturbation-only) case of §7.3 applies to p′ in that configuration alone. Under the default `shock: false` the case that matters is ρ′, whose amplitude depends on the index-smoothed `dref` (`src/hydro/hydro_ref_x1_impl.h:107`) [H: that amplitude is not measured]. The in-contract rerun of §7.1 is being run on this split, not on primitives.
+
+### 7.3 OUT-OF-CONTRACT APPENDIX: dz/H 0.6–1.0 — not acceptance evidence
+
+> **OUT OF CONTRACT.** Every number below was measured at dz/H 0.6–1.0, a band the grid contract of §7.1 excludes everywhere in the column. It is kept for the record only. It is **not acceptance evidence**, it supports no criterion in §8, and it must not be quoted as an acceptance failure.
+
+**Headline** [measured offline]: in the 0.6–1.0 band the **linear** reconstruction survives and the **nonlinear weights** do not. Route A's linear reconstruction holds an effective error-vs-dz/H exponent of **4.0–4.8** through dz/H = 1.0, while Jiang–Shu WENO falls to **A_weno 1.97** (exponential + structure) and **1.43** (perturbation only). The collapse is **identical for route A, route B and the frozen coefficients**, which is what identifies it as a property of the **weights** rather than of the coefficient route.
+
+Supporting detail [measured offline] (follow-up §1; R = 1.05/1.10, H = 1, profiles P1–P4):
+- Per profile, **A_lin 4.35–4.78** on P2/P4 against **A_weno 1.43–2.25**. These are exponents of error against dz/H, not convergence rates.
 - On an isolated stencil with u = exp(−z/H), the deepest candidate's weight relative to optimal is **w2/d2 = 0.096 at dz/H 0.8 and 0.018 at 1.0** (0.003 at 1.2). β measures absolute curvature, which on an exponential column tracks depth, not roughness. For example b2/b0 = 12 at dz/H = 1.0 on a perfectly smooth profile.
-- At dz/H = 0.8 the bottom error is 2.97e−3 against 1.43e−7 in the interior. Under a fixed stretching map the bottom recovers fifth order once dz/H ≲ 0.1.
+- At dz/H = 0.8 the bottom error is 2.97e−3 against 1.43e−7 in the interior. Under a fixed stretching map the bottom recovers fifth order once dz/H ≲ 0.1 — that is, **inside** the contract band.
 - snapy's `scale` option does not help: weights move by at most 2.3e−5. **WENO-Z** (Borges τ5) helps only up to about **dz/H 0.5** and tracks plain WENO from 0.8. Reconstructing **log p is worse**, by up to 46×, because the log of a cell average is not the cell average of the log.
-- Candidate directions (all untested): a relative or mesh-scaled β, an ε tied to the local cell size (Cravero & Semplice 2016 analyse ε = h_j² or h_j, at third order), or WENO-Z.
+- Candidate directions, all untested, and all relevant **only if the in-contract measurement finds a problem**: a relative or mesh-scaled β, an ε tied to the local cell size, or WENO-Z. The Cravero & Semplice (2016) ε question — ε = h_j² or h_j, analysed there at third order — is being carried **separately and unconditionally**, and does not depend on this appendix.
 
-**Pending answer, placeholder** (asked of Tianhao and Xinyue in ts 1793648649): *which variables WENO5 sees on the x1 sweep at 2d9fa419, and does the collapse persist on those?*
-> Code pre-fill for them to confirm or correct (Linfeng's reading, not their answer):
-> - With gravity on, the x1 sweep subtracts the reference before reconstructing: `wx1[IPR] −= pref`, `wx1[IDN] −= dref` (`src/hydro/hydro_forward.cpp:400-401`, reconstruction at `:456`).
-> - With `type: weno5`, `pinterp1` is WENO5 and `pinterp2` is **cp5** (`src/recon/interpolation.cpp:29-33`; `src/recon/reconstruct.cpp:75-76`).
-> - With `shock: false`, which is the default whenever a `vertical` section exists (`src/recon/reconstruct.cpp:33`), WENO5 sees **ρ′ = ρ − dref** (`:139-140`) and the **tracers as full fields** (`:157-158`). **p′ and v go through linear cp5** (`:146-148`).
-> - Only with `shock: true` does WENO5 also see p′ and v (`:99-100`).
-> - Consequence [H]: the P4 (perturbation) case applies to p′ only under `shock: true`. Under the default it applies to ρ′, whose size depends on the index-smoothed dref (`src/hydro/hydro_ref_x1_impl.h:107`).
->
-> *Rerun result on the deviations: pending (Tianhao, Xinyue).*
-
-**Why it goes first:** if the coarse bottom is effectively third order and biased upward even with route A, the cost saving at dz/H ≈ 1 may not be worth it. If WENO5 only sees ρ′ and tracers, the impact may be smaller [H].
+**Status of the design question.** The draft's argument that the bottom might be effectively third order and biased even with route A, so that the saving would not be worth it, was built on this out-of-contract band and does not carry over. Inside the contract the expectation is that it does not arise, but the point of the running measurement is to say so with an explicit yes/no rather than to assume it. Until it reports, **§7 makes no acceptance claim in either direction**.
 
 ---
 
