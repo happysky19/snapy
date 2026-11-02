@@ -17,7 +17,7 @@
 2. **Reconstruction loses order.** One fixed WENO5/cp5 coefficient table serves every face (`src/recon/weno5.cpp:11-23`, `src/recon/cp5.cpp:13-14`, weights `src/recon/interp_impl.h:115-117`). On a stretched grid that is about 2nd order under a fixed stretching map [measured offline, Tianhao: 1.66–1.93], and 1st order at a fixed per-cell ratio [measured offline, Linfeng]. §4.
 3. **Well-balance is already structural on main.** The face scan uses per-cell `dx1f` (`src/hydro/hydro_ref_x1_impl.h:43,53`), and a stretched grid automatically takes the log-mean cell reference (`src/hydro/hydro.cpp:550-556`, `src/hydro/hydro_ref_x1_impl.h:181-186`). Rest fails at nx1 = 128 only through the round-off of that log-mean [measured in snapy, Xinyue]. §5.
 4. **The implicit operator already uses per-cell metrics** (`src/implicit/vic_assemble_full_impl.h:89-99`). §6.
-5. **The grid contract bounds how coarse the bottom may get.** Cheng has set the contract: dz(z) ≤ H(z)/n with a **fixed n ≥ 5 over the whole column**, so the stretch ratio *follows from* T(z) through H(z) = RT(z)/g and is not a free `x1rat` the deck may choose. That puts the realistic band at **dz/H 0.05–0.25**, with **local stretch ratios near 1**. The earlier dz/H 0.6–1.0 measurements (route-A linear exponent 4.0–4.8; A_weno 1.97 and 1.43, identical for route A, route B and the frozen coefficients) are **out of contract everywhere** and are retained **only as a clearly labelled OUT-OF-CONTRACT APPENDIX** (§7.3); they are **not acceptance evidence**. The in-contract measurement at dz/H 0.05–0.25 is **still running**. §7.
+5. **The grid contract bounds how coarse the bottom may get.** Cheng has set the contract: dz(z) ≤ H(z)/n with a **fixed n ≥ 5 over the whole column**, so the stretch ratio *follows from* T(z) through H(z) = RT(z)/g and is not a free `x1rat` the deck may choose. That puts the realistic band at **dz/H 0.05–0.25**, with **local stretch ratios near 1**. The earlier dz/H 0.6–1.0 measurements (route-A linear exponent 4.0–4.8; A_weno 1.97 and 1.43, identical for route A, route B and the frozen coefficients) are **out of contract everywhere** and are retained **only as a clearly labelled OUT-OF-CONTRACT APPENDIX** (§7.3); they are **not acceptance evidence**. The in-contract measurement at dz/H 0.05–0.25 is **done**: there is **no Jiang–Shu β mis-fire in band** — the interior nonlinear weights sit exactly on the optimal linear weights (ω_r/d_r = 1.0000 to four decimals) in every case measured [measured offline]. §7.
 
 **In scope:** Cartesian x1 (vertical) columns. The design must not change the arithmetic of spherical-polar/gnomonic geometries. **Out of scope:** x2/x3 stretching, AMR, and shocks: every profile measured so far is smooth.
 
@@ -108,7 +108,7 @@ The ghost-width rule applies only at the two ends of the global face vector. Gho
 
 ## 4. Reconstruction: route A (Tianhao; section owner Tianhao)
 
-**Grid contract (Cheng).** This section is written for the contract Cheng set: **dz(z) ≤ H(z)/n with a fixed n ≥ 5 over the whole column**. The stretch ratio is then a *consequence* of T(z), not a free `x1rat`: the realistic band is **dz/H 0.05–0.25** and the **local stretch ratios are near 1**. Route A itself is indifferent to the restriction — its linear weights are positive and well conditioned for ratio jumps s ∈ [1/16, 16] (§4.2), far outside anything the contract can produce — but the restriction changes **what counts as evidence**. Any number measured at dz/H 0.6–1.0 is out of contract and lives only in the labelled OUT-OF-CONTRACT APPENDIX (§7.3); it is not acceptance evidence for route A or against it.
+**Grid contract (Cheng).** This section is written for the contract Cheng set: **dz(z) ≤ H(z)/n with a fixed n ≥ 5 over the whole column**. The stretch ratio is then a *consequence* of T(z), not a free `x1rat`: the realistic band is **dz/H 0.05–0.25** and the **local stretch ratios are near 1**. Route A itself is indifferent to the restriction — its linear weights are positive and well conditioned for ratio jumps s ∈ [1/16, 16] (§4.2), far outside anything the contract can produce — but the restriction changes **what counts as evidence**. Any number measured at dz/H 0.6–1.0 is out of contract and lives only in the labelled OUT-OF-CONTRACT APPENDIX (§7.3); it is not acceptance evidence for route A or against it. The in-contract comparison of route A against today's frozen coefficients is **§4.8**, and what the contract implies for the grid key is **§4.9**.
 
 > **OPEN QUESTION (D1) — `x1rat` direction convention. Not settled; do not read §2.2 as a decision.** Cheng is taking this to Xi together with this note. The two candidates are Linfeng's convention in §2.2 — q ≡ h_{k+1}/h_k, the cell above divided by the cell below, so the thread's "each cell 1.05× the one above it" means q = 1/1.05 — and its inverse, (cell below)/(cell above). §2.2 records a *preference* for the first; that preference is **not** a decision and this note does not make one. Linfeng's accompanying point stands under either choice and is exactly why the question has to be answered explicitly rather than inferred: **Xinyue's runs grew cells downward by 1.05**, so whichever convention is adopted, the tests must state it. Route A reads face positions directly and is correct under either convention; what the convention decides is the meaning of the deck key, and therefore which grid a test actually builds.
 
@@ -181,6 +181,62 @@ Shu (1998) recommends route A for non-uniform finite-volume grids in so many wor
 ### 4.7 Not covered by route A
 
 The hydrostatic reference (§5), PLM, WENO3 and cp3. PLM's harmonic-mean slope (`src/recon/plm.cpp:20-29`) is exact for linear data on an exactly geometric grid (slopes (1+1/q)h/2 and (1+q)h/2 have harmonic mean h; order 2.04–2.05 at q = 1.05–1.2) [measured offline, Linfeng]. It is not exact on an option-B face list or at a ratio jump.
+
+### 4.8 Measured in the contract band: route A against today's frozen coefficients
+
+All of §4.8 is **[measured offline]** on the replica validated against the compiled library in §7.1. The grid is the dry-adiabat contract grid of §4.9 at **local ratio 1.063** — cells growing *downward* by 1.063, i.e. 1/0.94080 in the +x1 convention §4.9 tabulates, which is exactly the ambiguity D1 has to settle — with the stretching *map* held fixed and refined under it (criterion 2 of §8). Errors are max absolute over the column.
+
+**Tracer through WENO5** (a raw row: no reference is subtracted from tracers, `src/hydro/hydro_forward.cpp:400-401`):
+
+| N | n = H/Δz | route A | rate | frozen | rate | A better by |
+|---|---|---|---|---|---|---|
+| 18 | 5 | 1.670e−03 | – | 2.904e−03 | – | 1.7× |
+| 36 | 10 | 9.958e−05 | **4.07** | 3.074e−04 | 3.24 | 3.1× |
+| 72 | 20 | 3.740e−06 | **4.73** | 5.374e−05 | 2.52 | 14× |
+| 144 | 40 | 1.208e−07 | **4.95** | 1.266e−05 | **2.09** | **105×** |
+
+**Velocity through cp5** (also raw, rows `IVX..IPR` minus the reference-subtracted pressure, §7.2):
+
+| N | n = H/Δz | route A | rate | frozen cp5 | rate | A better by |
+|---|---|---|---|---|---|---|
+| 18 | 5 | 3.995e−02 | – | 6.925e−02 | – | 1.7× |
+| 36 | 10 | 1.412e−03 | **4.82** | 1.070e−02 | 2.69 | 7.6× |
+| 72 | 20 | 4.850e−05 | **4.86** | 2.517e−03 | 2.09 | 52× |
+| 144 | 40 | 1.903e−06 | **4.67** | 6.269e−04 | **2.01** | **329×** |
+
+**So even at a local ratio of 1.063 — well inside the contract — today's frozen coefficients are second order on the raw variables and route A is fifth.** This is the in-contract case for route A, and it does not rest on any out-of-contract number.
+
+**Where route A changes nothing: ρ − ρ_ref and p − p_ref.** On those two rows route A and the frozen coefficients agree **to three digits** at every level, because both are **reference-limited** rather than reconstruction-limited: p converges at rate **2.00** and ρ at **0.53–1.53**, with the same numbers either way. The cap on p is the log-mean cell reference (`src/hydro/hydro_ref_x1_impl.h:181-186`); the cap on ρ is the index-space binomial smoother in `dref` (`:107`), which §7.1 measures as first order on its own. Route A is invisible on these rows, and an acceptance test for route A must therefore use the **raw** rows above, not ρ′ or p′.
+
+**Isothermal columns.** Under the contract an isothermal column is **exactly uniform** (ratio 1.000000, §4.9), so route A and the frozen coefficients are identical to the digit on every row and both are fifth order. That is §4.5 holding in practice, not a separate result.
+
+**Route B was not run.** The brief made it optional and it was not free — it needs its own metric construction on each refinement level — so no route B number was produced in the contract band. Route B is rejected in §4.6 on the grounds given there (including one in-contract measurement, §4.6 item 1); **nothing in §4.8 adds to or subtracts from that rejection.**
+
+### 4.9 Grid-key consequence of the contract: when one `x1rat` is enough
+
+Solving the contract `Δz(z) = H(z)/n` as `z_{i+1} = z_i + H(z_i)/n` on a 0–100 km Jupiter-like column (R_s = 3600 J/kg/K, g = 24 m/s², dry adiabat Γ = g/c_p = 2e−3 K/m) gives **[measured offline]**:
+
+| atmosphere | n | N | Δz/H | local ratio (min / max / median) |
+|---|---|---|---|---|
+| isothermal | 5 / 8 / 10 | 11 / 18 / 22 | 0.2020 / 0.1235 / 0.1010 | 1.00000 / 1.00000 / 1.00000 |
+| dry adiabat | 5 | 18 | 0.2034 | 0.94080 / 0.94080 / 0.94080 |
+| dry adiabat | 8 | 29 | 0.1263 | 0.96283 / 0.96283 / 0.96283 |
+| dry adiabat | 10 | 37 | 0.0990 | 0.97075 / 0.97075 / 0.97075 |
+
+Two structural facts follow **[derivation]**:
+
+* **Isothermal ⇒ the contract grid is exactly uniform.** H is constant, so Δz = H/n is constant and no stretching is needed at all.
+* **A constant lapse rate ⇒ the contract grid is exactly geometric,** with
+
+$$
+\texttt{ratio} \;=\; 1 - \frac{\Gamma R_s/g}{n},
+$$
+
+since H ∝ T, T is linear in z, and Δz_{i+1}/Δz_i = T(z_{i+1})/T(z_i) = 1 − Γ·Δz_i/T_i. Checked against the table: Γ R_s/g = 2e−3 · 3600/24 = 0.30, so 1 − 0.30/5 = 0.9400 against the measured 0.94080 and 1 − 0.30/10 = 0.9700 against 0.97075 (the excess is the finite-cell versus continuum difference).
+
+**Consequence for the grid key (§2.2), stated here and not there:** a single `x1rat` satisfies Δz ≤ H(z)/n over the whole column **if and only if the lapse rate is constant**. A column whose lapse rate changes with height — a troposphere under a stratosphere, which is the realistic case — is **not** expressible as one geometric ratio and needs an **explicit face list** (option B). That makes option B a requirement of the contract for realistic T(z), not a convenience. The `x1rat` direction convention itself remains the OPEN QUESTION (D1) recorded at the head of §4; nothing here decides it.
+
+**PENDING:** which of the two cases the `jupiter_gcm` deck is cannot be settled here. Jiheng has not posted the face lists, and no column was invented in their place. §4.8 and §7.5 are ready to rerun on his actual lists at n = 5 and 10.
 
 ---
 
@@ -259,7 +315,7 @@ which is 0.178 for that test (Δz/H_p = 0.250), computed from those constants. O
 
 ## 7. Nonlinear weights at the bottom of the column (section owner Tianhao)
 
-### 7.1 The grid contract decides what is in scope
+### 7.1 The grid contract decides what is in scope — and the in-contract answer
 
 **Contract (Cheng).** The vertical grid must satisfy
 
@@ -275,7 +331,44 @@ $$
 
 **What that does to this section.** The question as the draft posed it — do the Jiang–Shu weights collapse at a coarse bottom, dz/H ≳ 0.6, on smooth data — is **out of contract**: no column satisfying dz ≤ H/n with n ≥ 5 reaches that band anywhere, bottom included. The dz/H 0.6–1.0 measurements are therefore kept **only as the clearly labelled OUT-OF-CONTRACT APPENDIX in §7.3**, and they are **not acceptance evidence**: they support no criterion in §8 and must not be quoted as an acceptance failure of route A.
 
-**The in-contract question that replaces it,** and the only one §7 will answer: does the Jiang–Shu β mis-fire appear **at all** inside dz/H 0.05–0.25, measured at dz = H/n for n = 5, 8, 10, on the variables WENO5 actually receives (§7.2)? That measurement is **still running**; no result is claimed here, in either direction. An explicit "no mis-fire in band" **closes** this open question rather than producing a fix.
+**The in-contract question that replaces it,** and the only one §7 answers: does the Jiang–Shu β mis-fire appear **at all** inside dz/H 0.05–0.25, measured at dz = H/n for n = 5, 8, 10, on the variables WENO5 actually receives (§7.2)?
+
+**Harness validation** [measured in snapy]. Everything below is measured on an offline replica of what snapy hands WENO5, so the replica was first checked against the **compiled** library built from 2d9fa419 (`Weno5InterpImpl` and `Center5InterpImpl` called on a deterministic input of 3 variables × 24 cells, 60 faces per side). Max |replica − compiled| is **4.441e−16** for WENO5 and **2.220e−16** for cp5, with the cp5 right state **bitwise identical on 60 of 60 faces**. Route A evaluated on a **uniform** grid reproduces the same compiled kernel to **8.882e−16**, which is §4.5 measured against the shipped library rather than against a transcription. The `balance_column` residual comparison was **not** run here: that is a main-code baseline and is Xinyue's.
+
+**The answer: no.** [measured offline] **There is no Jiang–Shu β mis-fire in dz/H 0.05–0.25.** The interior ratio ω_r/d_r — where 1.0000 means the nonlinear weights sit exactly on the optimal linear weights — is **1.0000 to four decimals in every case**: rest isothermal, rest dry adiabat, a smooth wave, a localised perturbation, and a deliberately **mismatched** reference, at N = 18, 36 and 72.
+
+| case | N | bottom face ω_0/ω_1/ω_2 ÷ d | **interior median ω_0/ω_1/ω_2 ÷ d** |
+|---|---|---|---|
+| rest isothermal | 18/36/72 | 1.0000 / 1.0000 / 1.0000 | **1.0000 / 1.0000 / 1.0000** |
+| rest dry adiabat | 18 | 2.9081 / 0.0320 / 0.0001 | **1.0000 / 1.0000 / 1.0000** |
+| rest dry adiabat | 36 | 2.8082 / 0.1785 / 0.0012 | **1.0000 / 1.0000 / 1.0000** |
+| rest dry adiabat | 72 | 2.0889 / 0.5931 / 0.0105 | **1.0000 / 1.0000 / 1.0000** |
+| adiabat + smooth wave 1e−3 | 18 | 2.5971 / 0.2131 / 0.0001 | 1.0055 / 0.9978 / 0.9902 |
+| adiabat + localised 1e−3 | 18 | 2.9074 / 0.0325 / 0.0001 | 1.0000 / 1.0001 / 0.9981 |
+| inversion (reference mismatched) | 18 | 0.2992 / 1.5500 / 0.0036 | 1.1873 / 1.0000 / 0.4245 |
+
+This **closes** the open question rather than producing a fix. The out-of-contract collapse of §7.3 (ω_2/d_2 → 0.018 at dz/H ≈ 1) has no counterpart in band.
+
+**The only excursion is the bottom two faces, and it is the density reference's smoother.** Three controls attribute it to the 5-point **index-space binomial smoother** applied to ρ/p when `dref` is built (`src/hydro/hydro_ref_x1_impl.h:107`, edge clamping at `:97-102`) — **not** to stratification and **not** to the wall continuation [measured offline]:
+
+1. **It is confined to the faces whose stencil touches the array edge.** ω_r/d_r is **exactly 1.0000 from the third face on**, at every N (the second face reads 1.0886/1.0886/0.0188 at N = 18 and 1.0717/1.0717/0.3204 at N = 72, and i ≥ 4 is 1.0000).
+2. **It gets *milder* with refinement** — ω_2/d_2 = 0.0001 → 0.0012 → 0.0105 at N = 18 → 36 → 72. A stratification mis-fire would spread down the column and worsen as n falls; this does the opposite.
+3. **It vanishes entirely when `dref` is rebuilt from the exact ρ/p,** everything else identical: 1.0000/1.0000/1.0000 at the bottom face for every N. It is absent for an isothermal column either way, because there ρ/p is constant and the smoother is exact.
+
+**This measures Xinyue Chen's stated hypothesis** — the binomial bias in the wall rows — and confirms it as the cause. WENO5 is correctly detecting a grid-scale kink that the reference's own smoother puts into `dref`; that is a reference artefact, and the lever is in the reference, not in the reconstruction.
+
+**The smoother also costs an order globally.** `max |ρ − dref|/ρ` on the dry-adiabat contract grid [measured offline]:
+
+| N | n | smoothed (shipped) | exact ρ/p | inflation |
+|---|---|---|---|---|
+| 18 | 5 | 2.287e−02 | 1.558e−03 | **15×** |
+| 36 | 10 | 1.144e−02 | 4.097e−04 | 28× |
+| 72 | 20 | 5.720e−03 | 1.051e−04 | 54× |
+| 144 | 40 | **2.860e−03** | **2.660e−05** | **107×** |
+
+The shipped smoother converges at exactly **first** order (2.287e−02 → 2.860e−03 over an 8× refinement); with the exact ρ/p the rate is **1.96**. So it inflates the density deviation 15× at n = 5 and 107× at n = 40, and **caps the ρ path near 0.6 order whatever reconstruction route is used** — which is why route A and the frozen coefficients are indistinguishable on ρ − ρ_ref (§4.8).
+
+**Explicit limit of the harness** [H]. The harness has **no ghost region**, so faces i = 2 and 3 sit at the array edge and the excursion above is an array-edge effect in the replica. In snapy the smoother **clamps at the physical boundary** (`jlo = il` when `wall_clamp && phys_in`, `src/hydro/hydro_ref_x1_impl.h:189-192`) and reconstruction starts at `il`, so **an analogous two-face region at a real bottom wall is a hypothesis for the main code**, not a measurement of it: the exact ghost/clamp bookkeeping was not modelled. The interior result (1.0000) is the robust one. Confirming or refuting the two-face region in snapy belongs to **Xinyue's main-code baseline**.
 
 ### 7.2 Which variables WENO5 receives on the x1 sweep — answered at 2d9fa419
 
@@ -295,7 +388,7 @@ The draft's placeholder asked which variables WENO5 sees. **Xinyue has answered 
 
 **Where the references are subtracted.** The well-balanced x1 path subtracts references **only from pressure and density** — `wx1[IPR] −= pref`, `wx1[IDN] −= dref` (`src/hydro/hydro_forward.cpp:400-401`) — and then calls the **same** reconstruction **with the floors off** (`:456`).
 
-**Consequence for the measured cases.** p′ reaches WENO5 only under `shock: true`, so the P4 (perturbation-only) case of §7.3 applies to p′ in that configuration alone. Under the default `shock: false` the case that matters is ρ′, whose amplitude depends on the index-smoothed `dref` (`src/hydro/hydro_ref_x1_impl.h:107`) [H: that amplitude is not measured]. The in-contract rerun of §7.1 is being run on this split, not on primitives.
+**Consequence for the measured cases.** p′ reaches WENO5 only under `shock: true`, so the P4 (perturbation-only) case of §7.3 applies to p′ in that configuration alone. Under the default `shock: false` the case that matters is ρ′, whose amplitude depends on the index-smoothed `dref` (`src/hydro/hydro_ref_x1_impl.h:107`). That amplitude **is** now measured — §7.1, `max |ρ − dref|/ρ` — and the pre-fill's [H] on it is discharged. The in-contract measurement of §7.1 was run on this split, not on primitives.
 
 ### 7.3 OUT-OF-CONTRACT APPENDIX: dz/H 0.6–1.0 — not acceptance evidence
 
@@ -311,6 +404,48 @@ Supporting detail [measured offline] (follow-up §1; R = 1.05/1.10, H = 1, profi
 - Candidate directions, all untested, and all relevant **only if the in-contract measurement finds a problem**: a relative or mesh-scaled β, an ε tied to the local cell size, or WENO-Z. The Cravero & Semplice (2016) ε question — ε = h_j² or h_j, analysed there at third order — is being carried **separately and unconditionally**, and does not depend on this appendix.
 
 **Status of the design question.** The draft's argument that the bottom might be effectively third order and biased even with route A, so that the saving would not be worth it, was built on this out-of-contract band and does not carry over. Inside the contract the expectation is that it does not arise, but the point of the running measurement is to say so with an explicit yes/no rather than to assume it. Until it reports, **§7 makes no acceptance claim in either direction**.
+
+### 7.4 Correction of an earlier premise: "exact rest = round-off only"
+
+**That premise is false for the shipped code** [measured offline]. §1 item 3 and §5 describe rest on a stretched grid as failing "only through the round-off of the log-mean". For an **isothermal** resting column the dominant term is instead snapy's own **top anchor**, `top_anchor = pres_top · exp(−g·0.5·dx1f[iu]/rdt_top)` (`src/hydro/hydro_ref_x1_impl.h:37`):
+
+| anchor | N (n) | `max \|p − pref\|/p` |
+|---|---|---|
+| snapy's anchor (shipped) | 18 (n ≈ 8) | **5.975e−04** |
+| snapy's anchor (shipped) | 128 (n ≈ 58) | 1.245e−05 |
+| exact top-face pressure | 18 | **1.421e−15** |
+| exact top-face pressure | 128 | 1.038e−14 |
+
+With an exact anchor the rest deviation **is** round-off. With the shipped anchor it is **6e−4 — three orders above round-off and second-order convergent.** The log-mean digit loss is the smaller effect and is visible only on the exact-anchor rows, growing 1.4e−15 → 1.0e−14 between n ≈ 8 and n ≈ 58, which is the loss Xinyue described.
+
+On a **dry adiabat the anchor makes no difference at all**: 1.033e−03 with either anchor, rate 2.00 either way. There the cap is the **log-mean cell reference** (`src/hydro/hydro_ref_x1_impl.h:181-186`) being only second-order accurate as a cell average when the column is not isothermal. For an isothermal column the log-mean is exact **[derivation]**: with `lo/hi = e^{Δz/H}`, `pref = (lo − hi)/ln(lo/hi) = (lo − hi)·H/Δz = p̄` identically — which is why the exact-anchor rows above sit at round-off.
+
+This bears on **§5, which is Xinyue's section**: it is recorded here rather than edited into §5, and the log1p candidate fix (Q2) is unaffected by it either way.
+
+### 7.5 The Cravero & Semplice ε, measured in the contract band
+
+**What the paper prescribes.** `eps_j = h_j` or `eps_j = h_j²`, h_j the local cell size, used for the reconstruction in cell Ω_j (Theorem 3 with eq. (10); §5 Conclusions). The mechanism is the one §7.3 lists as a candidate direction: near a smooth extremum both indicators tend to zero and an ε that does not depend on h lets a slight imbalance between them change the order of convergence.
+
+**It is derived for THIRD order only.** The paper's two candidate stencils are 2 cells wide. On the fifth-order case the paper points at **Henrick, Aslam & Powers, J. Comput. Phys. 207 (2005) 542–567**, eq. (29b), for the corresponding condition, and says that there it "was not found useful" to design an optimal form of the nonlinear weights. **So carrying the h-scaling to WENO5 is [H], and the fifth-order proof was not reproduced here.** Jiang & Shu's own expansions give the same β scalings at fifth order as the paper's third-order indicator, which is why the two candidate exponents carry over at all; the stricter WENO5 accuracy condition (ω − d = O(h²) rather than O(h)) is exactly what the Henrick reference is about.
+
+**It is also dimensionally inconsistent as written:** β carries u² and h is a length. That is invisible in the paper's tests (u = x³ + cos x on h ~ 1e−3 makes both O(1)) but not in snapy, where β is in Pa² or (kg/m³)² and h is in metres. The transfer that preserves their **argument** is **[derivation]**
+
+$$
+\varepsilon_j \;=\; \sigma_j^2\,\big(h_j/L\big)^q,\qquad q = 1\ \text{or}\ 2,
+$$
+
+with σ_j the stencil's own amplitude scale — the quantity snapy's `scale` option already forms (`src/recon/interp_impl.h:90-98`) — and L a fixed reference length.
+
+**Measured** [measured offline], against snapy's absolute ε = 1e−6 (`src/recon/interp_impl.h:115-117`, same immediates in `src/recon/interp_impl.cuh:95-101`):
+
+* **It helps only raw WENO5 variables with smooth extrema.** On the tracer at n = 5 it tightens `max_r |ω_r/d_r − 1|` from **3.2190 to 0.1294**, and the error falls with it (4.949e−04 → 2.897e−04 at n = 5; 3.579e−08 → 1.546e−08 at n = 40, rate 5.01 against 4.95).
+* **On a function with a genuine critical point in the stencil the rate recovers an order earlier:** **3.28 against 2.47 at n = 10** (4.40 against 3.55 at n = 20).
+* **It cannot affect p or the velocities at all.** Those rows go through cp5, which is linear and has no ε (§7.2).
+* **It does not fix the edge artefact of §7.1.** The bottom face reads ω_2/d_2 = 0.000 under **all four** ε rules, while interior face i = 6 reads 1.000 under all four. That face i = 6 is 1.000 across several orders of magnitude in ε is also the proof that the interior 1.0000 of §7.1 is genuine — the βs really are equal — and not an artefact of ε dominating.
+
+**Two things to record rather than recommend.** First, **no shock or discontinuity case was tested**: every profile here is smooth, so nothing in §7.5 is a recommendation about ε for shock capturing, and the paper's own trade-off (h better on smooth data, h² better on discontinuities) stands untested by me. Second, **snapy's absolute ε = 1e−6 is not scale-free**: how nonlinear WENO5 actually is depends on the units and magnitude of the row being reconstructed — negligible for pressure in Pa, dominant for a small density deviation. A relative ε would at least make that uniform across rows. Neither point is an acceptance criterion, and §7.1's answer does not depend on either.
+
+**PENDING:** the `jupiter_gcm` face-list rerun of §7.1 and §7.5 awaits Jiheng's lists (§4.9). No numbers are guessed for it.
 
 ---
 
