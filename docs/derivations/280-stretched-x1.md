@@ -569,7 +569,7 @@ In stage 1 these are **Cartesian columns and 2-D Cartesian boxes** (stretched x1
 | G3 uniform bitwise | **full gate**, including the existing `jupiter_gcm` deck unchanged | **re-run**: the gnomonic fill change must leave a uniform deck bitwise identical |
 | G4 rest at round-off | **full gate**: uniform **and** stretched grids, including the varying-lapse column (v) | **re-run** in a cubed-sphere column; rest on the sphere is [H] until then (§8.6 row 11) |
 | G5 mass/energy to round-off | **full gate** on closed Cartesian columns and boxes | **deck budgets**: uniform-deck baseline first (SLOT G5-B), then the stretched E1 runs |
-| G6 convective-onset growth-rate ladder vs EVP | **full gate**; EVP reference by Jiheng (SLOT G6) | – |
+| G6 convective growth rate vs linear EVP | **full gate**; EVP reference by Jiheng (§8.5 item 6) | – |
 | G7 1 vs N x1 blocks | **full gate** | not applicable: the cubed sphere never splits x1 (§8.6 row 9) |
 | G8 wall rows, separately | **full gate** | re-run at the cubed-sphere column's walls |
 | G9 accuracy of the stage-1 reference | **full gate** | re-run on the cubed-sphere column (measure per §8.4) |
@@ -587,7 +587,7 @@ In stage 1 these are **Cartesian columns and 2-D Cartesian boxes** (stretched x1
 | **G3 uniform grid bitwise identical** | A deck with neither `x1rat` nor `x1f` runs the uniform short-circuit (§4.5). The whole existing ctest suite, plus a fixed list of example decks for a fixed number of steps, compared with a build of 2d9fa419. | 0 bits: every output and restart tensor `torch.equal`, the same on CPU and CUDA | no difference anywhere |
 | **G4 resting column at round-off** | §8.5 item 1: isothermal, adiabatic and varying-lapse (v) columns on (u), (g) (ratio 1.058; 1.2 as the stress case) and (j), at nx1 = 32, 64, 128, explicit and implicit-9, initial condition projected by `balance_column` at its default rtol 1e−10, which must converge. The uniform control is run **inside this gate** at the same nx1: §5 has no uniform nx1 = 32 control. The gate measures max\|v\|. It does not measure p − pref, which §7.4 shows is capped by the shipped top anchor (6e−4 relative, isothermal) without moving the fluid. | max\|v\|/c_s after 300 s ≤ K·ε = 2.22e−16 (machine epsilon), K stated with the test [K proposed: 1e3]. "Within 10× of uniform" is withdrawn: it is not round-off (review item 7) | every column and nx1. Main's measured starting state (§5, ratio 1.05): isothermal max\|v\| = 3.1e−7 m/s at nx1 = 128 |
 | **G5 mass and energy conservation to round-off** | **Stage 1:** a closed Cartesian column and a closed 2-D Cartesian box (reflecting x1 walls, gravity only, no sedimentation, reactions or other forcing), with a non-rest perturbation, on (g) and (j), explicit and implicit-9, in each `gravity-work` mode (`src/forcing/const_gravity.cpp:28-36`). Track total mass Σ ρ_i V_i and total energy Σ (E_i + ρ_i Φ_i) V_i, with Φ = −g1·x1v, the E+PE that the gravity-work fixer books (`src/hydro/hydro_forward.cpp:949-950`, `:1144-1152`). Energy is first recorded the same way on the **uniform** Cartesian setup at 2d9fa419. **Stage 2:** the deck budgets of §8.4 (SLOT G5-B). | stage 1: mass relative drift ≤ 1e−13 per 1000 steps [proposed]; energy within 10× of the uniform Cartesian drift in the same mode [proposed]. Stage 2: see §8.4. Whether main conserves E+PE to round-off is **[H]** until those uniform baselines are measured. | stage 1: every grid and mode within bound; stage 2: as in §8.4 |
-| **G6 convective-onset growth rate vs linear EVP** | A convectively unstable stratification in a 2-D Cartesian box on a **fixed stretching map, refined** at nx1 = 32, 64, 128 (§8.5 item 2). In an inviscid unstable layer the fastest mode is at the grid scale, so the run either **seeds a fixed (k_x, vertical mode 1)** perturbation or adds **viscosity at a stated Ra** (review item 2). Two columns (Jiheng): the **fitted `jupiter_gcm` profile** and the **varying-lapse column (v)** (review item 13). Compare the measured growth rate with a linear eigenvalue problem (EVP) on the same stratification. **[SLOT G6 — owner Jiheng (accepted ts 1793694441): EVP code name; seeded (k_x, mode 1) or Ra; thresholds on the relative error and its order.]** | relative error of the growth rate at each nx1 and its observed order, against SLOT G6's thresholds | the relative error decreases with refinement at SLOT G6's order on both columns, as it does on the uniform control |
+| **G6 convective growth rate vs linear EVP** | 2-D Cartesian box, compressible, inviscid, dry deck gas (`examples/jupiter_gcm.yaml:6-8`: cv_R 2.5, so γ = 1.4; μ = 2.112390 g/mol, R = 3936.0434 J/kg/K), g = 22 (`:126-128`), height L = 300 km (`:59-60`), periodic x2 of width L_x = 300 km. Both x1 walls reflecting with ghost rule (c). **Seed:** the EVP's vertical-mode-1 eigenfunction at k_x = 2π/L_x, cell-averaged onto the grid (§8.5 item 6). Two columns: **(i)** the jupiter_gcm dry linear fit, T = 600 K − 1.633333 K/km · z (superadiabatic by 2.28 %); **(ii)** the same troposphere under an isothermal stratosphere, tanh join at 200 km, width 25 km. Grids: the contract ladder (i) N = 30, 59, 118 (the (j) lists n5 and n10 plus the same map at 118) and (ii) N = 24, 48, 95; a uniform control at the same N; and, for (i), uniform 100 (the deck). Explicit RK3 is gated; implicit-9 is recorded. **Reference:** σ₁(i) = 1.361112242990e−3 s⁻¹, σ₁(ii) = 9.551947818189e−4 s⁻¹ (`evp_g6.py`, sha256 c719bcc0682649f625e2656eb3ff8d66fc3bab4d34732a6397e40a12c98bc376; jihenghu/snapy branch `data/280-jupiter-gcm-faces`, commit `711e33eef282a8b6a6d4b3a3836ec6c1cdf5f2f5`, blob `711dcab9f267c9d484a789476a71a93124d5784b`). | relative error E = σ_snapy/σ₁ − 1 at each grid ≤ T(grid), with T = max(\|E_FD2\|, C·N^−p, 10·max eps-bound), from table B4 (§8.5 item 6) [derived, not chosen]. Observed order on the contract ladder ≥ the FD2 order on the same ladder: (i) 1.61 over 30→59 and 1.91 over 59→118; (ii) 0.66 and 1.55. | every grid within T(grid) on both columns, and the uniform control within its own T at the same N. A stretched/uniform error ratio is recorded but not gated [H: route A should beat T on the stretched grids by a wider margin than on uniform; not tested, §8.5 item 6]. |
 | **G7 1 vs N x1 blocks** | The same stretched column and box run on 1 block and split into N x1 blocks (explicit only: the implicit scheme refuses an x1 split, `src/hydro/hydro.cpp:428-431`). The seams must carry the reference consistently: the anchor relay (`src/hydro/hydro.cpp:524-548`, `:591-593`), the ghost-row exchange of pref/dref (`:595-654`) and the REF4 face pass after it (`:656-659`). | bitwise; or round-off with a **stated reason** (for example a reduction whose order changes across a seam) | identical, or the round-off difference and its reason are recorded |
 | **G8 wall rows, tested separately** | At reflecting walls, the rest acceleration of the wall rows as a function of dz, reported separately from the interior, and the wall rows of G2(c)'s frozen-state test (review item 3). The wall stencils are one-sided per face (§8.3, Stage-1 reference, item 4). The even mirror of the deviation (`src/hydro/hydro_forward.cpp:408-420`) is only O(dz) accurate at the wall (stated in the thread and in review item 3; not re-derived here), so the wall rows are not allowed to hide behind the interior's order. | rest: the G4 bound (K·ε = 2.22e−16) at the wall rows; accuracy: observed order of the wall-row error ≥ 1 [proposed, matching the O(dz) mirror] (review item 11) | wall rows at rest within the G4 bound, and wall-row order ≥ 1 |
 | **G9 accuracy of the stage-1 reference** | REF4's generalisation is not tested by G4, which holds for any rows that sum to 1 (review item 4). On a known hydrostatic column, measure \|p̄ − pref\|, \|ρ − dref\| and the face density dsf against the exact values on (g) and (j), interior and wall rows reported separately, under the fixed-map refinement of §8.5 item 2. | observed orders: \|p̄ − pref\| and dsf ≥ 3.5 in the interior [proposed: REF4's cubic and quartic are 4th order]; \|ρ − dref\| reported, since the kept binomial is first order on a stretched grid (§7.1) [threshold proposed: ≥ 0.9]; wall rows reported | interior orders meet the proposed thresholds; wall rows recorded |
@@ -782,6 +782,62 @@ Jiheng's n = 5 list (30 cells, sha256 70e36e8503fb9651912faaf159bdfc51c22f985e59
 3. **Bitwise uniform** — the specification of G3. A deck without `x1rat`/`x1f` gives bitwise the same output as 2d9fa419 on CPU and CUDA, and the existing ctest suite passes unchanged.
 4. **Tall-column implicit test passes on a stretched grid,** through Courant 250 and including the new g·Δz_max/c_s² rung (§6). Stage 1 runs the Cartesian test; stage 2 runs its cubed-sphere variant (§8.2 table).
 5. **Cost per step against uniform** — measured in snapy: stage 1 under C1 (§8.3), stage 2 on E1 (§8.4).
+6. **G6 convective growth rate — specification** (Jiheng; accepted as proposed, UU9SW7MHU ts 1793695269).
+   - *Physics:* linearised compressible Euler about the hydrostatic column, perturbations ∝ exp(i k_x x + σt), w = 0 at both walls.
+     - Compressible, not anelastic, because snapy integrates the compressible equations, and an anelastic reference would build a filtering error into the comparison (its size was not computed).
+     - Inviscid, because jupiter_gcm runs inviscid and the stretched-x1 diffusion path refuses at stage 1 (review item 12). So the fastest mode is the grid scale, and G6 tests **one seeded mode, not the fastest**: k_x = 2π/(300 km), vertical mode 1 (w has no zero in the bulk of the column).
+   - *Reference:* `evp_g6.py` (numpy/scipy, kept outside snapy, sha256 c719bcc0682649f625e2656eb3ff8d66fc3bab4d34732a6397e40a12c98bc376; jihenghu/snapy branch `data/280-jupiter-gcm-faces`, commit `711e33eef282a8b6a6d4b3a3836ec6c1cdf5f2f5`, blob `711dcab9f267c9d484a789476a71a93124d5784b`). It has two independent solvers, a shooting solve of the two-point BVP in (w, p′/p₀) and Chebyshev collocation, which agree to ≤ 4e−13.
+     - Reference values at the seed (shooting, rtol 1e−13): σ₁(i) = **1.361112242990126e−3** s⁻¹ and σ₁(ii) = **9.551947818189110e−4** s⁻¹.
+     - Modes 2 and 3 at the seed: (i) σ₂ = 1.071984272e−3, σ₃ = 8.60427201e−4, so (σ₁−σ₂)/σ₁ = 0.2124; (ii) σ₂ = 6.070083879e−4, σ₃ = 4.236239303e−4, so (σ₁−σ₂)/σ₁ = 0.3645. This gap is why σ is measured by adjoint projection.
+   - *Seed and measurement:*
+     - Initialise the four mode-1 fields (ρ′, u, w, p′) as cell averages. The amplitude is a₀ such that max|w| = 1e−6·c_s(bottom) ≈ 1.8e−3 m/s, so that after e⁸ ≈ 3.0e3 of growth at the end of the fit it is ≈ 5.4 m/s ≈ 3e−3·c_s (linear regime [H]).
+     - Measure â(t) = ⟨y₁, x̂_k(t)⟩, the k_x Fourier coefficient projected onto the EVP's left (adjoint) eigenvector. Take σ as the least-squares slope of ln|â| over t ∈ [3, 8]/σ₁.
+     - *Window self-check:* refit over [4, 9]/σ₁ on the finest uniform control; if σ moves by more than T/10, move the window later.
+     - *x2 self-check:* run the finest uniform control at nx2 = 64 and 128 per wavelength; if σ moves by more than T/10, raise nx2 for every run.
+   - *Thresholds* (table B4) are T(grid) = max(\|E_FD2(grid)\|, C·N^−p, 10·max eps-bound):
+     - E_FD2 is the error of a consistent second-order staggered discretisation of the same operator on **the same faces**;
+     - C·N^−p is its asymptotic model from the two finest levels of each family;
+     - the eps-bound is κ·eps·‖A‖/σ₁ of the discrete eigenproblem (max 9.6e−9, so the floor is 9.63e−8).
+
+     The gate therefore requires the route-A scheme to be at least as accurate as consistent second order on the actual grid, and to converge at least as fast.
+
+   **Table B4 — FD2 on the gate grids, and the derived thresholds** (Jiheng, offline):
+
+   | column | grid | N | E_FD2 | model C·N^−p | **T(grid)** |
+   |---|---|---|---|---|---|
+   | (i) | (j) n5 | 30 | +2.236e−2 | 3.108e−2 | **3.11e−2** |
+   | (i) | (j) n10 | 59 | +7.515e−3 | 8.067e−3 | **8.07e−3** |
+   | (i) | contract map | 118 | +2.001e−3 | 2.025e−3 | **2.02e−3** |
+   | (i) | uniform | 30 | −1.729e−2 | 1.260e−3 | **1.73e−2** |
+   | (i) | uniform | 59 | −7.691e−4 | 3.679e−4 | **7.69e−4** |
+   | (i) | uniform | 118 | +5.549e−5 | 1.042e−4 | **1.04e−4** |
+   | (i) | uniform 100 (deck) | 100 | +3.185e−5 | 1.408e−4 | **1.41e−4** |
+   | (i) | uniform 77 (n5 at top) | 77 | −1.323e−4 | 2.266e−4 | **2.27e−4** |
+   | (i) | uniform 153 (n10 at top) | 153 | +5.308e−5 | 6.494e−5 | **6.49e−5** |
+   | (ii) | contract n5 | 24 | −7.437e−3 | 2.246e−2 | **2.25e−2** |
+   | (ii) | contract n10 | 48 | +4.717e−3 | 6.014e−3 | **6.01e−3** |
+   | (ii) | contract n20 | 95 | +1.643e−3 | 1.643e−3 | **1.64e−3** |
+   | (ii) | uniform | 24 | −1.784e−2 | 5.959e−3 | **1.78e−2** |
+   | (ii) | uniform | 48 | −1.703e−3 | 1.232e−3 | **1.70e−3** |
+   | (ii) | uniform | 95 | −2.610e−4 | 2.610e−4 | **2.61e−4** |
+
+   - *Model fits* from the two finest levels: (i) contract map 27.449·N^−1.994 (236/472), uniform 0.61497·N^−1.820 (236/472); (ii) contract map 9.4394·N^−1.901 (95/189), uniform 8.1883·N^−2.274 (95/189).
+   - *Observed FD2 orders on the contract ladder:* (i) 1.612, 1.909, 1.978, 1.994; (ii) 0.657, 1.545, 1.901.
+   - *Why a model at all:* the uniform FD2 error changes sign between N = 59 and 118 in (i), so its raw value near the crossing is an accident.
+   - *Floor:* 10·max eps-bound = 9.63e−8. It binds nowhere.
+
+   **Not gated, recorded:**
+   - At equal N, FD2 is far less accurate on the contract map than on a uniform grid for this box-scale mode: in (i) at N = 118 it is 2.0e−3 against 5.5e−5. The cause is the off-midpoint face in the staggered difference.
+   - [H] route A's per-face finite-volume coefficients do not share this defect, so snapy should beat T on the stretched grids by a wider margin than on uniform. Not tested. This is why the stretched/uniform ratio is recorded, not gated.
+
+   **Hypotheses [H], untested** (Jiheng):
+   1. Linearity holds up to max|w| ≈ 3e−3·c_s, so nonlinear corrections to σ stay below T/10.
+   2. With adjoint projection, the fit window [3, 8]/σ₁ leaves mode-2/3 contamination below T/10; the window self-check verifies it.
+   3. nx2 = 64 per wavelength makes the x2 error below T/10; the nx2 self-check verifies it.
+   4. For explicit RK3 at the deck CFL 0.45 (`examples/jupiter_gcm.yaml:110`), the time-discretisation error in σ is negligible (σ₁·dt ~ 1e−3). Implicit-9 is recorded, not gated, because the VIC solve is first order in time for the acoustic coupling (§6).
+   5. G4-level rest noise (≤ 3.1e−7 m/s at nx1 128 on main, §5) does not bias σ at a seed amplitude of ≈ 1.8e−3 m/s (ratio 1.7e−4).
+   6. The size of the anelastic difference against this compressible reference was not computed.
+   7. Cell-averaging the continuum eigenfunction onto the grid is accurate enough that the seeding transient is covered by hypothesis 2.
 
 **Kept consistent with the rest of the note:**
 - the real-grid `shock: true` rerun of §4.8, §7.5 and §7.7 is still **PENDING**, and no gate quotes a number from it;
@@ -837,7 +893,7 @@ Row 8 was re-read: the moments row now cites the helpers it calls and needs no e
 | G0 | review gate §8.1: independent re-derivation of R1–R4 from Shu's divided-difference form, then a term-by-term comparison at the head sha | UJ42UV0TW | requested (ts 1793657903) |
 | TXT | text edits for review items 2–14 (one patch on 918287c) | Linfeng (text); Tianhao commits after a hash and scope check | this patch |
 | G1–G10 | hard-gate tests of §8.2, written first and run on 2d9fa419 for their starting state; staged per the gate-to-stage table | implementer unassigned (review item 14 names none), after X1 | not started |
-| G6-EVP | G6 EVP reference: code, seeded mode or Ra, thresholds (SLOT G6); runs on the fitted `jupiter_gcm` profile and the varying-lapse column | Jiheng (accepted ts 1793694441) | running |
+| G6-EVP | G6 EVP reference: compressible inviscid linear EVP, seeded k_x = 2π/(300 km) vertical mode 1, adjoint projection, per-grid thresholds T(grid) from FD2 with an eps floor, stretched/uniform ratio recorded and not gated; columns (i) the jupiter_gcm dry linear fit and (ii) the varying-lapse column (§8.2 G6, §8.5 item 6) | Jiheng (accepted ts 1793694441) | **accepted as proposed (ts 1793695269)**; `evp_g6.py` cited by sha256 c719bcc0…; committed as jihenghu/snapy `data/280-jupiter-gcm-faces` 711e33eef282a8b6a6d4b3a3836ec6c1cdf5f2f5 |
 | B1 | review item 1: index binomial vs z-weighted vs none (isobaric entropy blob) | Xinyue (accepted ts 1793694442) | **closed (ts 1793694811):** smoother kept, (b) is the fallback, the test is gate G10 |
 | B2 | whether variant (a)'s blob measurement covers REF4's own filter F on the REF4 path (§8.3, Stage-1 reference, item 2) | Xinyue / Linfeng | open |
 | OM1 | 8–67× blob-error gap to the no-reference WENO5 control; σ = 8/16-cell check on uniform nx1 = 30/59 and n10 | Xinyue | **open measurement — not a gate, not a #280 work item** (ts 1793694811); SLOT OM1 |
