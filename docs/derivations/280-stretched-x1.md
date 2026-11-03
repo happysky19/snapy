@@ -514,13 +514,18 @@ Recorded as a factual comparison, **not** a verdict. Neither set of numbers is a
 - **In this note** [measured offline]: frozen-coefficient rates are 1.66–1.93 under a fixed map (§1 item 2). In the contract band, §4.8 gives frozen rates of 3.24 / 2.52 / **2.09** on the tracer, against route A at 4.07 / 4.73 / **4.95**, with route A **105×** better at n = 40. On the velocity through cp5 the frozen rates are 2.69 / 2.09 / 2.01 and route A is **329×** better at n = 40, but those cp5 columns are `shock: false` numbers and §4.8 forbids quoting them for `jupiter_gcm`.
 - **Xinyue's scoped figure: 195.6× at n = 40**, on the pressure deviation p − p_ref, through nonlinear WENO5, snapy's frozen coefficients against route A with Jiang–Shu weights, on the lapse column with dz = H/n. It is valid for **`shock: true` only** and must **not** be cited for `shock: false`, where that variable goes through cp5, which this does not measure. The ratio depends on n: **1.5× at n = 5, 26.5× at n = 20, 1570× at n = 80**. Like the 105× tracer figure, it is **not the same quantity** as the 329× velocity figure.
 
-### 8.0 Order of work and stop rule
+### 8.0 Two stages, order of work and stop rule
 
-1. **No code starts until Xi has seen this note** (UU9SW7MHU, ts 1793648649 and ts 1793657903). Phase 1 stays read-only until then.
-2. The **review gate (§8.1)** passes before any implementation PR is opened against chengcli/snapy.
-3. The **hard gates (§8.2)** are written as tests first and run on main at 2d9fa419 to record their starting state (RED where main is known to fail, for example G4 at nx1 = 128). After that, **any hard-gate failure on the implementation branch stops the work** until it is understood and fixed. A gate is not relaxed to get a pass.
-4. The **end-to-end runs (§8.3) start early**: as soon as the grid key (§2) and route A (§4) run end to end, not after the other gates are green.
-5. **Cost (§8.4) is measured in snapy,** not projected.
+**Plan (Xi, via UU9SW7MHU, ts 1793683393):** the work is split into **two stages, each with its own gates and its own PR** against chengcli/snapy.
+- **Stage 1 (§8.3) is Cartesian only.**
+- **Stage 2 (§8.4) is the cubed sphere,** and it starts **only after stage 1 has passed** its gates.
+
+1. **No code starts until Xi has seen this note** (UU9SW7MHU, ts 1793648649, ts 1793657903 and ts 1793683393). Phase 1 stays read-only until then.
+2. The **review gate (§8.1)** passes before the stage-1 PR is opened.
+3. The **hard gates (§8.2)** are written as tests first and run on main at 2d9fa419 to record their starting state (RED where main is known to fail, for example G4 at nx1 = 128). After that, **any hard-gate failure on an implementation branch stops the work** until it is understood and fixed. A gate is not relaxed to get a pass.
+4. **Stage 2 starts only when every stage-1 gate in the gate-to-stage table (§8.2) has passed** and the stage-1 PR is merged.
+5. Within each stage, the **end-to-end runs start early**: as soon as that stage's pieces run end to end, not after the other gates are green.
+6. **Cost is measured in snapy,** not projected: kernel and step cost in stage 1 (§8.3), step cost on E1 in stage 2 (§8.4).
 
 ### 8.1 Review gate: independent re-derivation (UJ42UV0TW)
 
@@ -539,7 +544,7 @@ Then UJ42UV0TW compares **term by term** with the note **at its head sha** (e61f
 |---|---|---|---|
 | R1–R4 | *PENDING (UJ42UV0TW)* | – | – |
 
-### 8.2 Hard gates in code — any failure stops the work
+### 8.2 Hard gates in code, and which stage runs them — any failure stops the work
 
 Every gate is a ctest in snapy. Every gate runs on CPU and CUDA, and on MPS where available, because route A changes all three backends (§4.3). The grids, unless a gate says otherwise:
 - (u) uniform;
@@ -547,21 +552,155 @@ Every gate is a ctest in snapy. Every gate runs on CPU and CUDA, and on MPS wher
 - (j) Jiheng's n = 5 and n = 10 face lists, read by sha256 (70e36e85… and 5eff3ab4…, thread ts 1793656155);
 - (r) one face list with an abrupt ratio jump (the junction case of §4.6 item 3).
 
+In stage 1 these are **Cartesian columns and 2-D Cartesian boxes** (stretched x1, uniform x2). In stage 2 they are a single cubed-sphere column and the `jupiter_gcm` deck.
+
 ε is snapy's shipped absolute 1e−6 throughout. §7.7 recommends no ε change, and the gates do not test one.
+
+**Gate-to-stage table.**
+
+| gate / run | stage 1 (Cartesian columns and 2-D boxes) | stage 2 (cubed sphere) |
+|---|---|---|
+| G0 review gate (§8.1) | **must pass before the stage-1 PR** | inherited; the coefficients do not change between stages |
+| G1 constants and linear data exact | **full gate** | **re-run** on gnomonic faces, to show the stage-2 fill does not change the coefficients built from `x1f` |
+| G2 fifth order under a fixed refined map | **full gate**, (a)–(c) | **re-run (c)** in a cubed-sphere column with reflecting walls |
+| G3 uniform bitwise | **full gate**, including the existing `jupiter_gcm` deck unchanged | **re-run**: the gnomonic fill change must leave a uniform deck bitwise identical |
+| G4 rest at round-off | **full gate**, uniform **and** stretched grids | **re-run** in a cubed-sphere column; rest on the sphere is [H] until then (§8.6 row 11) |
+| G5 mass/energy to round-off | **full gate** on closed Cartesian columns and boxes | **deck budgets**: uniform-deck baseline first (SLOT G5-B), then the stretched E1 runs |
+| G6 convective-onset growth-rate ladder vs EVP | **full gate** | – |
+| G7 1 vs N x1 blocks | **full gate** | not applicable: the cubed sphere never splits x1 (§8.6 row 9) |
+| G8 wall rows, separately | **full gate** | re-run at the cubed-sphere column's walls |
+| tall-column implicit test (§8.5 item 4) | `test_implicit_gravity_tall_column` (`tests/CMakeLists.txt:303`) | its cubed-sphere variant `test_implicit_gravity_tall_column_cubed` (`tests/CMakeLists.txt:306-307`) |
+| E2 shock tube | **stage 1** | – |
+| E3 gravity wave | **stage 1** | – |
+| E1 `jupiter_gcm` | – | **stage 2** |
+| C1 cost | **kernel and step**, Cartesian, CPU and CUDA | **step cost on E1**: stretched 30/59 against uniform 100 |
 
 | gate | test | tolerance | pass criterion |
 |---|---|---|---|
 | **G1 constants and linear data exact on any grid** | Feed the per-face coefficient builder and the WENO5 and cp5 kernels exact cell averages of u ≡ c and u = α + β(x − x_f) on (u), (g), (j) and (r), and check every face and both sides. Also check that each candidate row and the cp5 row sum to 1, and that d_r > 0 on every face (§4.2). WENO5's nonlinear combination of three exact candidates is exact for linear data whatever the weights, so the nonlinear path is held to the same bound. | \|face − exact\| ≤ 8·2.22e−16·max\|u\| over the stencil; \|Σw − 1\| ≤ 4·2.22e−16 [tolerances proposed; route A's free-stream error was 4.4e−16, §4.6 item 2] | all faces, all grids, all backends |
-| **G2 fifth order under a fixed stretching map, refined** | Criterion of §8 item 2 below: fix X(ξ) and refine by subdividing ξ. (a) The reconstruction operator on a smooth profile. (b) The §4.8 contract-band case on the **raw** tracer row, where route A is visible. ρ′ and p′ are reference-limited and route A is invisible on them (§4.8). (c) A running column with reflecting walls, to expose the ghost rule (§3). | observed order over the last two levels ≥ 4.5 [threshold proposed; offline route A reached 4.94 and 4.84 at N = 2048 (§8.5 item 2a) and 4.95 on the tracer at n = 40 (§4.8)] | (a), (b) and (c) all ≥ 4.5; (c) records the wall faces separately |
+| **G2 fifth order under a fixed stretching map, refined** | §8.5 item 2: fix X(ξ) and refine by subdividing ξ. (a) The reconstruction operator on a smooth profile. (b) The §4.8 contract-band case on the **raw** tracer row, where route A is visible. ρ′ and p′ are reference-limited and route A is invisible on them (§4.8). (c) A running column with reflecting walls, to expose the ghost rule (§3) — §8.5 item 2b. | observed order over the last two levels ≥ 4.5 [threshold proposed; offline route A reached 4.94 and 4.84 at N = 2048 (§8.5 item 2a) and 4.95 on the tracer at n = 40 (§4.8)] | (a), (b) and (c) all ≥ 4.5; (c) records the wall faces separately |
 | **G3 uniform grid bitwise identical** | A deck with neither `x1rat` nor `x1f` runs the uniform short-circuit (§4.5). The whole existing ctest suite, plus a fixed list of example decks for a fixed number of steps, compared with a build of 2d9fa419. | 0 bits: every output and restart tensor `torch.equal`, the same on CPU and CUDA | no difference anywhere |
-| **G4 resting column at round-off** | §8.5 item 1 below: isothermal and adiabatic columns on (g) at nx1 = 32, 64, 128 and on (j), explicit and implicit-9, initial condition projected by `balance_column` at its default rtol 1e−10, which must converge. The gate measures max\|v\|. It does not measure p − pref, which §7.4 shows is capped by the shipped top anchor (6e−4 relative, isothermal) without moving the fluid. | max\|v\|/c_s after 300 s within 10× of the uniform control at the same nx1 [threshold proposed] | every column and nx1. Main passes at 32 and fails at 128 (3.1e−7 m/s isothermal, §5) |
-| **G5 mass and energy conservation to round-off** | **Uniform baseline first (lead decision, Xi ts 1793681865).** Measure the mass and energy budgets of the deck as it runs today: `examples/jupiter_gcm.yaml` with `nx1: 100` (`:67`), at 2d9fa419, over the E1 run length (O5, §8.3). Those budgets are the baseline. Then measure the same budgets, the same way, on the stretched E1 runs (n = 5 and n = 10). Budgets: total mass Σ ρ_i V_i and total energy Σ (E_i + ρ_i Φ_i) V_i, with Φ = −g1·x1v, the E+PE that the gravity-work fixer books (`src/hydro/hydro_forward.cpp:949-950`, `:1144-1152`), and V_i the cubed-sphere `cell_volume` (§8.6). The deck sets no `gravity-work` key (`examples/jupiter_gcm.yaml:126-128`), so it runs the default `face` mode (`src/forcing/const_gravity.cpp:28`). The closed-column check (reflecting x1 walls, gravity only, a non-rest perturbation, on (g) and (j), explicit and implicit-9, each `gravity-work` mode, `src/forcing/const_gravity.cpp:28-36`) is kept as a unit-level companion. | **[SLOT G5-B — uniform-deck baseline, NOT MEASURED YET: mass drift = ____ and energy drift = ____ (relative), over ____ s of model time, mode `face`.]** The stretched runs must match the baseline: drift within 10× of it [factor proposed]. The closed column keeps mass ≤ 1e−13 relative per 1000 steps [proposed]. Whether main conserves E+PE to round-off is **[H]** until SLOT G5-B is filled. | the n = 5 and n = 10 drifts within the bound of the filled baseline, same mode; closed-column mass within bound on every grid |
+| **G4 resting column at round-off** | §8.5 item 1: isothermal and adiabatic columns on (u) and (g) at nx1 = 32, 64, 128 and on (j), explicit and implicit-9, initial condition projected by `balance_column` at its default rtol 1e−10, which must converge. The gate measures max\|v\|. It does not measure p − pref, which §7.4 shows is capped by the shipped top anchor (6e−4 relative, isothermal) without moving the fluid. | max\|v\|/c_s after 300 s within 10× of the uniform control at the same nx1 [threshold proposed] | every column and nx1. Main passes at 32 and fails at 128 (3.1e−7 m/s isothermal, §5) |
+| **G5 mass and energy conservation to round-off** | **Stage 1:** a closed Cartesian column and a closed 2-D Cartesian box (reflecting x1 walls, gravity only, no sedimentation, reactions or other forcing), with a non-rest perturbation, on (g) and (j), explicit and implicit-9, in each `gravity-work` mode (`src/forcing/const_gravity.cpp:28-36`). Track total mass Σ ρ_i V_i and total energy Σ (E_i + ρ_i Φ_i) V_i, with Φ = −g1·x1v, the E+PE that the gravity-work fixer books (`src/hydro/hydro_forward.cpp:949-950`, `:1144-1152`). Energy is first recorded the same way on the **uniform** Cartesian setup at 2d9fa419. **Stage 2:** the deck budgets of §8.4 (SLOT G5-B). | stage 1: mass relative drift ≤ 1e−13 per 1000 steps [proposed]; energy within 10× of the uniform Cartesian drift in the same mode [proposed]. Stage 2: see §8.4. Whether main conserves E+PE to round-off is **[H]** until those uniform baselines are measured. | stage 1: every grid and mode within bound; stage 2: as in §8.4 |
+| **G6 convective-onset growth rate vs linear EVP** | A convectively unstable stratification in a 2-D Cartesian box on a **fixed stretching map, refined** at nx1 = 32, 64, 128 (§8.5 item 2). Measure the growth rate of the most unstable mode and compare it with a linear eigenvalue problem (EVP) solved on the same stratification. | relative error of the growth rate at each nx1, and its observed order [thresholds to be proposed before running] | the relative error decreases with refinement at the proposed order on the stretched map, as it does on the uniform control |
+| **G7 1 vs N x1 blocks** | The same stretched column and box run on 1 block and split into N x1 blocks (explicit only: the implicit scheme refuses an x1 split, `src/hydro/hydro.cpp:428-431`). The seams must carry the reference consistently: the anchor relay (`src/hydro/hydro.cpp:524-548`, `:591-593`), the ghost-row exchange of pref/dref (`:595-654`) and the REF4 face pass after it (`:656-659`). | bitwise; or round-off with a **stated reason** (for example a reduction whose order changes across a seam) | identical, or the round-off difference and its reason are recorded |
+| **G8 wall rows, tested separately** | At reflecting walls, the rest acceleration of the wall rows as a function of dz, reported separately from the interior. The wall stencils are one-sided per face (§8.3, Stage-1 reference, item 4). The even mirror of the deviation (`src/hydro/hydro_forward.cpp:408-420`) is only O(dz) accurate at the wall (stated in the thread; not re-derived here), so the wall rows are not allowed to hide behind the interior's order. | wall-row residual reported against dz, with its observed order [threshold proposed before running] | wall rows converge under refinement and stay at round-off at rest (G4) |
 
-### 8.3 End-to-end runs, started early
+### 8.3 Stage 1 — Cartesian only (its own PR)
+
+**Scope (Xi, ts 1793683393).**
+- **Grid key:** `x1rat` or an explicit face list (§2.2). dx1f, dx1v and x1v are **built from x1f** (today: scalar fill, `src/coord/cartesian.cpp:23-28`).
+- **Route A:** WENO5/cp5 per-face coefficients on CPU and CUDA (§4.2–§4.3).
+- **The hydrostatic reference:** `SNAP_WB_REF4`'s own pairing, generalised to non-uniform x1 spacing, and nothing else (Xi, ts 1793685084). It is specified in the paragraph *Stage-1 reference* below.
+- **Cell-average states:** the REF4 cell pressure and the face density are cell-average constructions (the cubic's Gauss–Legendre cell average; the derivative of the quartic primitive), so the solver state and every gate's initial condition must be **cell averages**, not point values at x1v.
+- **Ghost widths:** the per-boundary rule of §3 (D2).
+- **Gates and runs:** G1–G8 on Cartesian columns and 2-D boxes (§8.2), plus a shock tube (E2) and a gravity wave (E3) on a stretched Cartesian grid, and the CUDA cost (C1).
+
+**Stage-1 reference (Xi, ts 1793685084): `SNAP_WB_REF4` generalised to non-uniform x1, nothing else.** `SNAP_WB_REF4` exists at 2d9fa419 (`src/hydro/wb_ref4.cpp`, `src/hydro/wb_ref4.hpp`) behind an environment switch that is off by default (`src/hydro/wb_ref4.cpp:83-95`). Stage 1 takes its pairing as the reference on stretched grids:
+1. **Cell pressure:** the cell average, by three-point Gauss–Legendre (exact for a cubic), of the cubic through the face pressures at faces i−1..i+2, built from the actual `x1f` (`src/hydro/wb_ref4.cpp:165-193`). The face pressures stay the hydrostatic scan's (`src/hydro/hydro_ref_x1_impl.h:42-59`). Xi's citation `:165-222` covers this block and the next; the cubic block ends at `:193`, not `:192`.
+2. **Cell density:** dref = pref·ρ/p, **unsmoothed**.
+   - Shipped REF4 multiplies pref by an index-space filter F = (−1, 4, 10, 4, −1)/16 of ρ/p (`src/hydro/wb_ref4.cpp:120-127`, applied at `:263-272`). The kernel uses the (1, 4, 6, 4, 1)/16 binomial instead (`src/hydro/hydro_ref_x1_impl.h:107`).
+   - Both are index-space smoothers. **Both are dropped on the stretched path**, which is the only departure from shipped REF4 and is Xi's specification.
+   - If unsmoothed dref fails a gate, the fallback is a smoother built in physical spacing, never an index-space one.
+3. **Face density:** the 4th-order face value of dref, as the derivative at the face of the quartic primitive through five faces (four cells), with weights from the actual spacing (`src/hydro/wb_ref4.cpp:195-221`; applied after the x1 seam exchange, `:276-286` and `src/hydro/hydro.cpp:656-659`).
+4. **Stencils clamped inside owned cells, one-sided at walls:**
+   - The cubic window is shifted inside the owned faces at a clamped wall (`src/hydro/wb_ref4.cpp:174-178`), and so is the quartic window (`:202-206`). The clamped stencils need four owned cells next to a wall (`:112-115`).
+   - The wall-side continuation is a one-sided extrapolation from owned cells (cubic rows `E`, `:126-127`).
+5. **Guards kept as shipped:**
+   - the cubic pressure must lie inside its cell's two face pressures, or the kernel's value stays (`:250-260`);
+   - the face density must lie inside its two neighbouring cells' dref (`:281-285`);
+   - cells with fewer than two cells per pressure scale height keep the kernel's values (`kMaxLogDrop`, `:25`, `:238-243`).
+   - Where a guard rejects, the kernel's non-uniform log-mean (`src/hydro/hydro_ref_x1_impl.h:181-186`) is what remains.
+6. **Uniform grids:** the new path engages only when the grid is classified non-uniform, as REF4 does today (`src/hydro/wb_ref4.cpp:169`, `:252`), so G3 (bitwise uniform) is untouched.
+
+**Measured for this reference** [measured offline, **single harness**]: Xinyue's harness (job-d434ee0e, the reconciliation report in this thread). Offline replica on Jiheng's n = 5 and n = 10 face lists, `shock: true`, variant-B ghosts (deviation mirror applied, §7.1). Against today's reference:
+
+| quantity | n = 5 | n = 10 |
+|---|---|---|
+| interior ρ′, REF4 generalised | 8.75e−5 | 2.20e−5 |
+| interior ρ′, today's reference | 4.76e−4 | 1.35e−4 |
+| ρ′ improvement | **5.4×** | **6.1×** |
+| p′ improvement | **199×** | **163×** |
+| wall rows | 2.6× or better (Xi's summary: 2.6–35×) | |
+| rest | ≤ 4.6e−15 | ≤ 5.6e−14 |
+
+These are one harness's numbers, not yet reproduced in a second harness or in snapy. They motivate the choice and are **not** acceptance evidence; the stage-1 gates are.
+
+**Closed (Xi, ts 1793685084), recorded and not reopened:**
+- the arithmetic-mean face density (Tianhao) is **dropped**: +4–8 % worse than today in Xinyue's harness;
+- the log-linear face density (Xinyue) is **dropped**: ~1.9× worse;
+- Tianhao's 3.2–5.0× improvement for the arithmetic-mean form was **not reproduced** in Xinyue's harness. It is a known closed item: there will be no per-face dump hunt.
+
+**Code sites in stage 1, at 2d9fa419** (each line re-read; the stage reason is given):
+
+| site | file:line | stage-1 reason |
+|---|---|---|
+| Cartesian dx fill | `src/coord/cartesian.cpp:23-28` | the fill to build from x1f |
+| shared ghost-face site | `src/coord/coordinate.cpp:322-324` (`linspace(gmin − nghost·dx, gmax + nghost·dx, …)`, sliced per block) | geometry-independent: the global face vector and its ghost rule (§3) are built here once for every geometry, so stage 2 inherits it |
+| its consumer: WB deviation ghosts | `src/hydro/hydro_forward.cpp:403-420` (even index mirror of p′, ρ′) | the index mirror is a geometric mirror only with mirrored ghost widths (§3, D2) |
+| its consumer: covariance velocity ghosts | `src/hydro/hydro_forward.cpp:443-451` (odd index mirror, opt-in `SNAP_X1_MASS_COVARIANCE`) | same reason |
+| its consumer: dead isentropic ghost revision | `src/hydro/hydro.cpp:488`, `:508` read `dx1v` in `_revise_x1inner/outer_ghost` | **no stage work:** the call is commented out (`src/hydro/hydro_forward.cpp:356-359`). Recorded so that a revival uses the real ghost widths |
+| x1 block offset and span | `ix1()` and `_offset(span, dx)` with scalar `dx1()` (`src/coord/coordinate.hpp:93`, `:126-128`); span check with `dx = (ghi − glo)/gnx` (`src/coord/coordinate.cpp:215-224`) | an x1 split exists only off the cubed sphere (`src/coord/coordinate.cpp:137`, `:264` set `lx1 = 0` there), so this is a stage-1 item (§2.2 index-based offsets) |
+| bottom heating / top cooling | `src/forcing/bot_heat.cpp:51-54`, `src/forcing/top_cool.cpp:51-54` (`flux/(dx1f[il or iu]·depth)`) | geometry-independent forcing code: divide by the summed widths, fixed once (F1) |
+| other inventory fixes | diffusion `centered_derivative` and `face_average` (`src/forcing/diffusion.cpp:70-84`, `:99-108`); dx²/12 curvature correction (`src/hydro/hydro_forward.cpp:1023-1047`) | Cartesian-path code (F1) |
+| index-space smoothers in the reference | kernel binomial (`src/hydro/hydro_ref_x1_impl.h:107`, face mean `:195-198`); REF4 filter F (`src/hydro/wb_ref4.cpp:120-127`, `:263-272`) | dropped on the stretched path (dref unsmoothed) |
+| REF4 stencils | cubic cell pressure (`src/hydro/wb_ref4.cpp:165-193`); face dref (`:195-221`, applied `:276-286`) | generalised and made the stretched-grid reference |
+| implicit face work | general `work_lo/hi` (`src/implicit/implicit_hydro.cpp:263-266`); Cartesian fast path gated at `:313-314`, ½ and ¼ exact for midpoint x1v (`src/implicit/vic_assemble_full_impl.h:101-108`) | no edit expected; exercised by the tall-column test |
+
+**E2 — shock tube on a stretched Cartesian grid.** A Sod-type Riemann problem along x1, no gravity, `shock: true`, on (u), (g) and (r). Compare against the exact solution: the L1 error in ρ, the positions of the shock and the contact, and the overshoot at the shock, against the uniform run at the same finest Δz. [Pass thresholds to be proposed by the implementer before running.] No ε or shock result exists in this note (§7.5), so E2 is new evidence, not a check of an existing number.
+
+**E3 — gravity wave on a stretched Cartesian grid.** A small-amplitude internal gravity wave in an isothermal or stably stratified Cartesian column or 2-D box on (g) and (j), explicit and implicit-9. Measure frequency, phase speed and amplitude decay against linear theory and against the uniform run. [Thresholds to be proposed before running.] This is the first non-rest test of the reference split (§5) and the ghost rule (§3) together.
+
+**C1 — cost, measured in snapy.** The **11–17 %** of §4.4 is a **projection** from a standalone kernel pair onto snapy's kernel. It is **not a measurement** and is to be **replaced** by one. On the stage-1 branch, measure in snapy:
+- the x1 reconstruction kernel time and the full step time, stretched against uniform at the same nx1;
+- on CPU and CUDA;
+- reporting the GPU model and its L2 size, including this machine's GTX 1080 Ti (smaller L2 than the RTX 5090, §4.4 caveat 2).
+
+This item has no pass threshold, but the measured numbers must be in this note before the stage-1 merge.
+
+**Open decision for Xi (stage 1), not answered here — XQ1: the YAML key or reviving the hook.**
+- §2.2 proposes new keys. They would have to pass `check_keys` at `src/coord/coordinate.cpp:70` (`geometry`) and `:125-126` (`geometry/cells`), which today reject anything else (`src/input/check_keys.cpp:26`).
+- The alternative is to revive `reset_coordinates(meshgens)` (`src/coord/coordinate.cpp:327-350`; Cartesian override `src/coord/cartesian.cpp:50-60`). Its only caller is `src/z.junk/initialize.cpp:163`, which is not compiled (`src/CMakeLists.txt:35-53`).
+
+This note records the question for Xi and does not choose.
+
+### 8.4 Stage 2 — cubed sphere (its own PR, only after stage 1 passes)
+
+**Scope (Xi, ts 1793683393; geometry decision O3, ts 1793681865).**
+- `GnomonicEquiangle` builds dx1f, dx1v and x1v **from x1f**, with `SphericalPolar` as the template (`src/coord/spherical_polar.cpp:59-62`). Today it uses the scalar fill: `dx = op->dx1()` at `src/coord/gnomonic_equiangle.cpp:33`, `dx1f` at `:35`, and `x1v`/`dx1v` at `:36-38`.
+- `cell_volume` and `face_area2/3` are made consistent with a stretched x1f (`src/coord/gnomonic_equiangle.cpp:211-227`).
+- Then the `jupiter_gcm` E1 runs.
+
+**Stage 2 inherits unchanged from stage 1:**
+- the grid key and the global face vector with its ghost rule (`src/coord/coordinate.cpp:322-324` site, §2.2, §3);
+- the route-A coefficient builder and coefficients (§4.2);
+- the CPU and CUDA kernels (§4.3);
+- the stage-1 reference: `SNAP_WB_REF4` generalised to non-uniform x1, with unsmoothed dref (§8.3);
+- the ghost widths;
+- the implicit kernels (§6).
+
+None of these are edited in stage 2.
+
+**Stage 2 re-verifies:** G1, G2 (c), G3, G4 and the tall-column cubed-sphere variant on the cubed sphere (gate-to-stage table, §8.2); the deck budgets (G5, below); and the step cost on E1.
+
+**Stage-2 edits and checks:** see the geometry table in §8.6.
+
+**Open decision for Xi (stage 2), not answered here — XQ2: x1v as the face midpoint or the r² centroid.**
+- Today gnomonic x1v is the **face midpoint** (`src/coord/gnomonic_equiangle.cpp:36-37`), and the gravity-work measure says so (`radial_mid`, `src/hydro/gravity_work_radial.hpp:17,23`, with its extra `x1_centroid_offset` diagonal, `:98-106`).
+- `SphericalPolar` uses the **r² centroid** (`radial_centers`, `src/coord/spherical_polar.cpp:17-21`, used at `:61`).
+- The choice also decides the form of `face_area2/3`. Today they are `x1v·dx1f`, which equals ½(rp² − rm²) only while x1v is the midpoint (comment at `src/coord/gnomonic_equiangle.cpp:230-233`).
+
+This note records the question for Xi and does not choose.
 
 **E1 — the real `jupiter_gcm` deck (lead decision O1, Xi ts 1793681865).** The **baseline is the deck as it runs today**: uniform, 100 levels (`examples/jupiter_gcm.yaml:67`). Compare it with **stretched n = 5** (30 levels, x1rat 1.058) and **stretched n = 10** (59 levels), all run to the same time (O5 below) to compare T(z), the winds, the energy budget and the redo counts. A **77-level uniform** run is **optional** and is quoted only as **"same n at the top"**: its Δz matches the stretched grid's finest cell (consistency table below). It is not the baseline.
 - **Compare:** horizontal-mean T(z); rms horizontal winds and max |w|; the E+PE budget and the gravity-work-fixer booking (`src/hydro/hydro_forward.cpp:949-950`); and the number of redone steps (`check_redo`, the halving at `src/mesh/meshblock.cpp:534`).
 - **Run length (lead decision O5, Xi ts 1793681865):** set by the uniform 100-level run's own spin-up. Run the baseline until its horizontal-mean T(z) and its global kinetic energy are both stationary, report that time, and run the n = 5 and n = 10 cases (and the optional 77-level case) to the **same** model time. **[SLOT O5 — NOT MEASURED YET: spin-up time = ____ s of model time; stationarity criterion used (window, tolerance on T(z) and KE) = ____.]** The criterion is stated together with the number when it is measured. It is not fixed here. The deck's own `tlim` (100.e5 s, `examples/jupiter_gcm.yaml:113`) is for reference only and is not the run length.
+- **G5 deck budgets (lead decision, Xi ts 1793681865): uniform baseline first.** Measure the mass and energy budgets of the deck as it runs today, `nx1: 100`, at 2d9fa419, over the O5 run length. Those budgets are the baseline. Then measure the same budgets, the same way, on the n = 5 and n = 10 runs.
+  - Budgets: Σ ρ_i V_i and Σ (E_i + ρ_i Φ_i) V_i, with Φ = −g1·x1v and V_i the cubed-sphere `cell_volume` (§8.6).
+  - The deck sets no `gravity-work` key (`examples/jupiter_gcm.yaml:126-128`), so it runs the default `face` mode (`src/forcing/const_gravity.cpp:28`).
+  - **[SLOT G5-B — uniform-deck baseline, NOT MEASURED YET: mass drift = ____ and energy drift = ____ (relative), over ____ s of model time, mode `face`.]**
+  - Pass: the n = 5 and n = 10 drifts are within 10× of the filled baseline in the same mode [factor proposed].
+- **C1 in stage 2:** step cost of the stretched n = 5 and n = 10 runs against the uniform 100-level baseline, CPU and CUDA.
 
 **The deck at 2d9fa419**, read only: gnomonic-equiangle on a cubed-sphere layout (`examples/jupiter_gcm.yaml:56,73`); x1 from 69 911 000 to 70 211 000 m, a 300 km span (`:59-60`); `nx1: 100` (`:67`), `nghost: 3` (`:70`); `vertical: {type: weno5, scale: true, shock: true}` (`:88`); HLLC (`:92`); reflecting x1 walls (`:101-102`); RK3 with `cfl: 0.45` and `implicit-scheme: 9` (`:109-111`); `grav1: -22.` (`:128`); `Ps: 100.e5`, `Ts: 600.`, `Tmin: 110.` (`:184-186`).
 
@@ -581,24 +720,10 @@ Jiheng's n = 5 list (30 cells, sha256 70e36e8503fb9651912faaf159bdfc51c22f985e59
 
 **Decided by the lead (Xi, ts 1793681865):**
 - **O1:** the uniform control is the deck's own 100 levels; 77 is optional, "same n at the top".
-- **O3:** the design covers x1 on the **cubed sphere**, the production geometry, not only Cartesian columns (§8.6).
+- **O3:** the design covers x1 on the **cubed sphere**, the production geometry, as stage 2 (§8.6).
 - **O5:** the run length is the baseline's spin-up time (SLOT O5 above).
 
 **Still open (O2, §9), not resolved by assumption:** whether E1's stretched runs use Jiheng's face lists (option B) or a geometric x1rat 1.058 (option A).
-
-**E2 — shock tube on the stretched grid.** A Sod-type Riemann problem along x1: Cartesian, no gravity, `shock: true`, on (u), (g) and (r). Compare the L1 error in ρ against the exact solution, the position of the shock and the contact, and the overshoot at the shock against the uniform run at the same finest Δz. [Pass thresholds to be proposed by the implementer before running.] No ε or shock result exists in this note (§7.5), so E2 is new evidence, not a check of an existing number.
-
-**E3 — gravity wave on the stretched grid.** A small-amplitude internal gravity wave in an isothermal or stably stratified column on (g) and (j), explicit and implicit-9. Measure frequency, phase speed and amplitude decay against linear theory and against the uniform run. [Thresholds to be proposed before running.] This is the first non-rest test of the reference split (§5) and the ghost rule (§3) together.
-
-### 8.4 Cost, measured in snapy
-
-The **11–17 %** of §4.4 is a **projection** from a standalone kernel pair onto snapy's kernel. It is **not a measurement** and is to be **replaced** by one. On the route-A branch, measure in snapy:
-- the x1 reconstruction kernel time and the full step time;
-- stretched against uniform at the same nx1, and the stretched n = 5 and n = 10 runs against the uniform 100-level E1 baseline;
-- on CPU and CUDA;
-- reporting the GPU model and its L2 size, including this machine's GTX 1080 Ti (smaller L2 than the RTX 5090, §4.4 caveat 2).
-
-This item has no pass threshold, but the measured numbers must be in this note before any merge.
 
 ### 8.5 Other acceptance criteria (unchanged in substance)
 
@@ -607,37 +732,48 @@ This item has no pass threshold, but the measured numbers must be in this note b
    - 2a: a smooth profile converges at ≥ 4.5 over the last two levels [threshold proposed; offline route A reaches 4.94 and 4.84 at N = 2048].
    - 2b: the same test in a running column with reflecting walls, to expose the ghost rule (§3).
 3. **Bitwise uniform** — the specification of G3. A deck without `x1rat`/`x1f` gives bitwise the same output as 2d9fa419 on CPU and CUDA, and the existing ctest suite passes unchanged.
-4. **Tall-column implicit test passes on a stretched grid,** through Courant 250 and including the new g·Δz_max/c_s² rung (§6).
-5. **Cost per step against uniform** — measured in snapy, §8.4.
+4. **Tall-column implicit test passes on a stretched grid,** through Courant 250 and including the new g·Δz_max/c_s² rung (§6). Stage 1 runs the Cartesian test; stage 2 runs its cubed-sphere variant (§8.2 table).
+5. **Cost per step against uniform** — measured in snapy: stage 1 under C1 (§8.3), stage 2 on E1 (§8.4).
 
 **Kept consistent with the rest of the note:**
 - the real-grid `shock: true` rerun of §4.8, §7.5 and §7.7 is still **PENDING**, and no gate quotes a number from it;
 - the ε results stay scoped by row and location (§7.7), so no gate changes ε;
+- the 105× (tracer) and 329× (velocity, `shock: false` only) figures of §4.8 and the scoped 195.6× above are quoted with their scopes;
+- the §7.1 smoother table (`max |ρ − dref|/ρ` with the shipped binomial) describes **today's** reference, which stage 1 replaces on stretched grids. It is not quoted as a stage-1 number, and no "scan alone" figure is quoted;
 - every threshold above marked [proposed] is a proposal for Xi and Cheng, not a measured value.
 
-### 8.6 Geometry scope: x1 on the cubed sphere (lead decision O3)
+### 8.6 Geometry: what differs for x1 on the cubed sphere, and which stage handles it
 
-**Decision (Xi, ts 1793681865):** the design covers the x1 direction on the **cubed sphere** (`gnomonic-equiangle` coordinates on a `cubed-sphere` layout), the production geometry of `examples/jupiter_gcm.yaml` (`:56`, `:73`), not only Cartesian columns. §1's "In scope: Cartesian x1 (vertical) columns" predates this decision and is superseded by it. §1 is outside this edit and should be updated by its owner in a separate commit.
+**Decision (Xi, ts 1793681865; staged ts 1793683393):** the design covers the x1 direction on the **cubed sphere** (`gnomonic-equiangle` coordinates on a `cubed-sphere` layout), the production geometry of `examples/jupiter_gcm.yaml` (`:56`, `:73`), **as stage 2**. §1's "In scope: Cartesian x1 (vertical) columns" predates this decision. Stage 1 now covers it, stage 2 extends it, and §1 is outside this edit, to be updated by its owner in a separate commit.
 
-**What differs by geometry in x1, at 2d9fa419** (each line re-read at that sha; Cartesian and spherical-polar given for contrast):
+**The table, at 2d9fa419** (each line re-read at that sha; folds in Tianhao's O3 inventory, thread ts 1793683205):
 
-| # | piece | cubed sphere (`gnomonic-equiangle`) | Cartesian / base class | consequence for the stretched grid |
+| # | piece | cubed sphere (`gnomonic-equiangle`) | Cartesian / base class | stage and action |
 |---|---|---|---|---|
-| 1 | dx1f / x1v / dx1v fill | scalar `op->dx1()` fill, x1v = face midpoint (`src/coord/gnomonic_equiangle.cpp:32-38`) | same scalar fill (`src/coord/cartesian.cpp:23-28`); spherical-polar derives all three from `x1f` (`src/coord/spherical_polar.cpp:59-62`) | the §2.2 dx fill must change in `gnomonic_equiangle.cpp` as well as `cartesian.cpp` |
-| 2 | `reset_coordinates` | **no override** (override list `src/coord/gnomonic_equiangle.hpp:36-68`), so only the base runs, which rewrites `x1f` alone (`src/coord/coordinate.cpp:327-350`) | Cartesian override refreshes `dx1f`/`x1v`/`dx1v[1:]` (`src/coord/cartesian.cpp:50-60`) | on the cubed sphere `dx1f`/`x1v`/`dx1v` would stay stale if `x1f` were rewritten later; build them from the stretched faces in `reset()` |
-| 3 | x1 width and centre distance | not overridden: base `center_width1` = `dx1f` and `center_distance1` = `dx1v` (`src/coord/coordinate.cpp:402-404`, `:414-416`); x2/x3 widths scale with x1v (`src/coord/gnomonic_equiangle.cpp:199-205`) | same base functions | CFL and diffusion read per-cell widths once the fill is right; horizontal widths follow the stretched x1v |
-| 4 | x1 face area | r² × solid angle: `(x1f * x1f) * solid_angle_kj` (`src/coord/gnomonic_equiangle.cpp:207-209`) | dx2f·dx3f (`src/coord/coordinate.cpp:452-456`) | per face from `x1f`: correct on any spacing |
-| 5 | x2/x3 face areas | `(x1v * dx1f) * arc` (`src/coord/gnomonic_equiangle.cpp:211-217`) | dx3f·dx1f, dx2f·dx1f (`src/coord/coordinate.cpp:458-468`) | correct once item 1 is |
-| 6 | cell volume | exact shell `dx1f (rp² + rp·rm + rm²)/3 × solid angle` (`src/coord/gnomonic_equiangle.cpp:219-227`) | dx1f·dx2f·dx3f (`src/coord/coordinate.cpp:470-475`) | per cell; it is also the V_i of the G5 budgets |
-| 7 | x1 face second moment / centroid shift | radial forms (`src/coord/gnomonic_equiangle.cpp:229-243`) | dx1f²/12 (`src/coord/coordinate.cpp:477-479`) | per cell from `x1f` |
-| 8 | geometric source and pressure-gradient correction | `forward()` (`src/coord/gnomonic_equiangle.cpp:415-460`): subtracts `(p_{i+1} − p_i)/dx1f_i` from the area-weighted pressure divergence (`:444-455`) | Cartesian has no geometric source | this pairs with the scan's per-cell `dx1f` (§5) for the rest balance on the sphere; per cell, so spacing-independent [H for rest on the sphere until G4 runs there] |
-| 9 | implicit face work | general `work_lo/hi` from `x1v − x1f` (`src/implicit/implicit_hydro.cpp:263-266`); the fixed ½/¼ fast path is Cartesian-only (`:313-314`) | Cartesian fast path (`src/implicit/vic_assemble_full_impl.h:101-108`) | per cell on the cubed sphere |
-| 10 | gravity-work measure | `radial_mid`: r² dr measure, x1v the face midpoint, not the r² centroid (`src/hydro/gravity_work_radial.hpp:17,23`); extra diagonal `x1_centroid_offset` (`:98-106`; used at `src/implicit/implicit_hydro.cpp:361-364`) | `plain` (`src/hydro/gravity_work_radial.hpp:15,21`) | from `x1f` per cell |
-| 11 | x1 decomposition | the cubed-sphere layout never splits x1: `lx1 = 0` (`src/coord/coordinate.cpp:137`, `:264`) | x1 split allowed | §2.2's index-based block offsets are not needed for the production geometry |
-| 12 | diffusion | the cubed-sphere diffusion path uses one scalar `h = op->dx1()` with index-space Lagrange weights (`src/forcing/diffusion_cubed_sphere.cpp:37-62`, `:191`) | `src/forcing/diffusion.cpp` per-cell widths, with the F1 caveats | uniform-only on the production geometry (F1) |
-| 13 | the deck | `type: gnomonic-equiangle` (`examples/jupiter_gcm.yaml:56`), `layout: cubed-sphere` (`:73`), `nx1: 100` (`:67`) | – | E1 runs this geometry |
+| 1 | dx1f / x1v / dx1v fill | scalar `dx = op->dx1()` (`src/coord/gnomonic_equiangle.cpp:33`); `dx1f = ones·dx` (`:35`); x1v = face midpoint and `dx1v = ones·dx` (`:36-38`) | scalar fill (`src/coord/cartesian.cpp:23-28`); spherical-polar derives all three from `x1f` (`src/coord/spherical_polar.cpp:59-62`) | Cartesian: **stage 1** edit. Gnomonic: **stage 2** edit, with spherical-polar as the template |
+| 2 | `reset_coordinates` | **no override** (`src/coord/gnomonic_equiangle.hpp:36-68`), so only the base runs, which rewrites `x1f` alone (`src/coord/coordinate.cpp:327-350`) | Cartesian override refreshes `dx1f`/`x1v`/`dx1v[1:]` (`src/coord/cartesian.cpp:50-60`) | **stage 1** decision XQ1 (§8.3); if the hook is revived, gnomonic needs an override in **stage 2** |
+| 3 | shared ghost faces | the same global `linspace` with uniform ghost extension (`src/coord/coordinate.cpp:322-324`) | same site | **stage 1** (geometry-independent); stage 2 inherits |
+| 4 | x1 width and centre distance | not overridden: base `center_width1` = `dx1f`, `center_distance1` = `dx1v` (`src/coord/coordinate.cpp:402-404`, `:414-416`); x2/x3 widths scale with x1v (`src/coord/gnomonic_equiangle.cpp:199-205`) | same base functions | base: **stage 1** (correct once the fill is); x2/x3 widths: **stage 2**, following x1v (XQ2) |
+| 5 | x1 face area (`face_area1`) | r² × solid angle, `(x1f * x1f) * solid_angle_kj` (`src/coord/gnomonic_equiangle.cpp:207-209`) | dx2f·dx3f (`src/coord/coordinate.cpp:452-456`) | **already safe:** per face from `x1f` on any spacing. Stage 2 re-verifies, no edit |
+| 6 | x2/x3 face areas (`face_area2/3`) | `(x1v * dx1f) * arc` (`src/coord/gnomonic_equiangle.cpp:211-217`) | dx3f·dx1f, dx2f·dx1f (`src/coord/coordinate.cpp:458-468`) | **stage 2 edit:** consistent with stretched x1f. The form depends on XQ2: `x1v·dx1f` = ½(rp² − rm²) only for midpoint x1v (`:230-233`) |
+| 7 | cell volume | `dx1f (rp² + rp·rm + rm²)/3 × solid angle`, rm and rp from `x1f` (`src/coord/gnomonic_equiangle.cpp:219-227`) | dx1f·dx2f·dx3f (`src/coord/coordinate.cpp:470-475`) | **stage 2:** consistent once `dx1f = rp − rm` comes from x1f (row 1); verify. It is also the V_i of the G5 deck budgets |
+| 8 | x1 face second moment / centroid shift | `face_moment2_x1` and `face_centroid_shift_x1` (`src/coord/gnomonic_equiangle.cpp:229-243`) only call the base helpers `radial_face_moment2_` (`src/coord/coordinate.cpp:481-494`) and `radial_face_centroid_shift_` (`:502-523`) | `dx1f²/12` (`src/coord/coordinate.cpp:477-479`); zero shift (`:496-500`) | **already safe, no edit:** both helpers compute h = rp − rm and r̄ = (rm + rp)/2 directly from `x1f` and never read the scalar fill. Stage 2 re-verifies |
+| 9 | x1 block offset | `lx1 = 0` on the cubed-sphere layout (`src/coord/coordinate.cpp:137`, `:264`), so x1 is never split | `ix1()` with scalar `dx1()` (`src/coord/coordinate.hpp:93`, `:126-128`); span check (`src/coord/coordinate.cpp:215-224`) | **stage 1** only (§8.3); nothing in stage 2 |
+| 10 | bottom heating / top cooling | `src/forcing/bot_heat.cpp:51-54`, `src/forcing/top_cool.cpp:51-54` | same code | **stage 1** (geometry-independent, F1); `jupiter_gcm` does not use them (`examples/jupiter_gcm.yaml:126-128` lists only `const-gravity`) |
+| 11 | geometric source and pressure-gradient correction | `forward()` (`src/coord/gnomonic_equiangle.cpp:415-460`) subtracts `(p_{i+1} − p_i)/dx1f_i` from the area-weighted pressure divergence (`:444-455`) | Cartesian has no geometric source | **stage 2** re-verify: pairs with the scan's per-cell `dx1f` (§5) for rest on the sphere [H until G4 runs there] |
+| 12 | implicit face work | general `work_lo/hi` from `x1v − x1f` (`src/implicit/implicit_hydro.cpp:263-266`); the ½/¼ fast path is Cartesian-only (`:313-314`) | Cartesian fast path (`src/implicit/vic_assemble_full_impl.h:101-108`) | no edit in either stage; stage 2 re-verifies via the cubed-sphere tall-column test |
+| 13 | gravity-work measure | `radial_mid`: r² dr measure, x1v the face midpoint (`src/hydro/gravity_work_radial.hpp:17,23`); `x1_centroid_offset` (`:98-106`; used at `src/implicit/implicit_hydro.cpp:361-364`) | `plain` (`src/hydro/gravity_work_radial.hpp:15,21`) | **stage 2**, tied to XQ2 |
+| 14 | diffusion | cubed-sphere path: one scalar `h = op->dx1()` with index-space Lagrange weights (`src/forcing/diffusion_cubed_sphere.cpp:37-62`, `:191`) | `src/forcing/diffusion.cpp` per-cell widths, with the F1 caveats | **stage 2** (F1) |
+| 15 | the deck | `type: gnomonic-equiangle` (`examples/jupiter_gcm.yaml:56`), `layout: cubed-sphere` (`:73`), `nx1: 100` (`:67`) | – | **stage 2**: E1 |
 
-**Reconciliation:** Tianhao is measuring an independent list of the geometry-dependent x1 pieces at 2d9fa419 (thread ts 1793682156). This table is to be reconciled against it, item by item, before the note goes to Xi. **[SLOT O3-R — reconciliation result: ____.]**
+**Reconciliation:** this table now folds in Tianhao's O3 inventory (ts 1793683205):
+- face_area1 split from face_area2/3;
+- the fill lines :33, :35 and :36-38;
+- the ghost-face site and its consumers;
+- `bot_heat`/`top_cool`;
+- `ix1()`/`dx1()` and the span check.
+
+Row 8 was re-read: the moments row now cites the helpers it calls and needs no edit. **[SLOT O3-R — item-by-item sign-off by Tianhao on this table: ____.]**
 
 ---
 
@@ -646,28 +782,34 @@ This item has no pass threshold, but the measured numbers must be in this note b
 | # | item | owner | state |
 |---|---|---|---|
 | X1 | **Xi sees this note before any code starts** (§8.0) | UU9SW7MHU takes it to Xi | open — blocks all code |
+| S1 | stage 1, Cartesian (§8.3), its own PR | implementer, after X1 and G0 | not started |
+| S2 | stage 2, cubed sphere (§8.4), its own PR, only after every stage-1 gate passes | implementer, after S1 | not started |
+| XQ1 | **for Xi (stage 1):** YAML key (`check_keys` at `src/coord/coordinate.cpp:70`, `:125-126`) or revive `reset_coordinates` (only caller in `src/z.junk/initialize.cpp:163`, not compiled) | Xi | **open — not answered by this note** |
+| XQ2 | **for Xi (stage 2):** gnomonic x1v as face midpoint (today) or r² centroid (as `SphericalPolar`); it also decides the `face_area2/3` form and the gravity-work measure (§8.4, §8.6 rows 6 and 13) | Xi | **open — not answered by this note** |
 | G0 | review gate §8.1: independent re-derivation of R1–R4 from Shu's divided-difference form, then a term-by-term comparison at the head sha | UJ42UV0TW | requested (ts 1793657903) |
-| G1–G5 | hard-gate tests of §8.2, written first and run on 2d9fa419 for their starting state | implementer, after X1 | not started |
-| E1 | `jupiter_gcm`: uniform 100-level baseline against stretched n = 5 (30 levels) and n = 10 (59 levels), early (§8.3) | to be assigned | blocked on O2, X1 and the face lists reaching the runner |
-| E2, E3 | shock tube and gravity wave on the stretched grid (§8.3) | to be assigned | not started; thresholds to be proposed first |
-| C1 | cost measured in snapy, CPU and CUDA, including a smaller-L2 GPU (§8.4); replaces the 11–17 % projection | Tianhao / Linfeng | not started (supersedes Q4) |
-| O1 | uniform control for E1: the deck as it runs today, 100 levels (`examples/jupiter_gcm.yaml:67`); 77 levels optional, quoted only as "same n at the top" (§8.3) | Xi | **decided (ts 1793681865)** |
-| O2 | E1 stretched grid: Jiheng's n = 5 face list (option B) or a geometric x1rat 1.058 (option A). A single ratio cannot satisfy n = 5 through an isothermal Tmin layer more than one cell thick (§8.3, §4.9) | Jiheng / Tianhao | **open — not checked; the CSV is not on this host** |
-| O3 | geometry scope: x1 on the cubed sphere, the production geometry (§8.6); §1's Cartesian-only scope line to be updated by its owner | Xi (decision); Linfeng + Tianhao reconcile the §8.6 list | **decided (ts 1793681865)**; reconciliation pending (SLOT O3-R) |
-| O4 | source of the "190× route A at n = 40" figure (ts 1793657903): not in this note (§4.8 has 105× tracer, 329× velocity `shock: false`) | UU9SW7MHU / Xinyue / Tianhao | open |
-| O5 | E1 run length = the uniform 100-level run's spin-up time (horizontal-mean T(z) and global KE stationary); stretched runs go to the same time (§8.3) | Xi (decision); measurement unassigned | **decided (ts 1793681865)**; number not measured (SLOT O5) |
-| G5-B | uniform-deck mass and energy budgets, measured first as the G5 baseline (§8.2) | Xi (decision); measurement unassigned | **decided (ts 1793681865)**; not measured (SLOT G5-B) |
-| P1 | real-grid `shock: true` rerun of §4.8, §7.5 and §7.7 on Jiheng's lists (posted ts 1793656155) | Tianhao | **PENDING** |
-| D1 | `x1rat` direction convention; whether to add option B (`x1f` list) in the first PR. §4.9 makes option B a contract requirement for realistic T(z) | Linfeng proposes; Xi/Cheng decide | open |
-| D2 | ghost-width rule per boundary type (§3) | Linfeng + Tianhao | proposed |
-| D3 | uniform classification from the grid key instead of the per-block probe | Linfeng + Xinyue | proposed |
-| D4 | route-A layout (CPU index, MPS, CUDA global rows), cp5 per-face rows | Tianhao | drafted; checked by G0 |
+| G1–G8 | hard-gate tests of §8.2, written first and run on 2d9fa419 for their starting state; staged per the gate-to-stage table | implementer, after X1 | not started |
+| REF | stage-1 reference = `SNAP_WB_REF4` generalised to non-uniform x1 (cubic cell p, unsmoothed dref, 4th-order face dref, one-sided walls) (§8.3) | Xi (decision) | **decided (ts 1793685084)** |
+| DEN | density-reference round: arithmetic-mean and log-linear face formulas dropped; Tianhao's 3.2–5.0× not reproduced and not chased | Xi | **closed (ts 1793685084)** |
+| E1 | stage 2: `jupiter_gcm` uniform 100-level baseline against stretched n = 5 (30 levels) and n = 10 (59 levels) (§8.4) | to be assigned | blocked on S1, O2 and the face lists reaching the runner |
+| E2, E3 | stage 1: shock tube and gravity wave on a stretched Cartesian grid (§8.3) | to be assigned | not started; thresholds to be proposed first |
+| C1 | cost measured in snapy: stage 1 kernel and step, CPU and CUDA, including a smaller-L2 GPU (§8.3); stage 2 step cost on E1 (§8.4); replaces the 11–17 % projection | Tianhao / Linfeng | not started (supersedes Q4) |
+| O1 | stage 2: uniform control for E1 is the deck as it runs today, 100 levels (`examples/jupiter_gcm.yaml:67`); 77 levels optional, quoted only as "same n at the top" (§8.4) | Xi | **decided (ts 1793681865)** |
+| O2 | E1 stretched grid: Jiheng's n = 5 face list (option B) or a geometric x1rat 1.058 (option A). A single ratio cannot satisfy n = 5 through an isothermal Tmin layer more than one cell thick (§8.4, §4.9) | Jiheng / Tianhao | **open — not checked; the CSV is not on this host** |
+| O3 | geometry scope: x1 on the cubed sphere as stage 2 (§8.6); §1's Cartesian-only scope line to be updated by its owner | Xi (decision); Linfeng + Tianhao reconcile the §8.6 table | **decided (ts 1793681865; staged ts 1793683393)**; Tianhao's inventory folded in, sign-off pending (SLOT O3-R) |
+| O4 | the unscoped "190× route A at n = 40" figure (ts 1793657903) | Xinyue / Tianhao | **closed:** §8 now cites Xinyue's scoped 195.6× (p − p_ref, WENO5, `shock: true` only, n = 40, n-dependent); the unscoped 190× is not used |
+| O5 | stage 2: E1 run length = the uniform 100-level run's spin-up time (horizontal-mean T(z) and global KE stationary); stretched runs go to the same time (§8.4) | Xi (decision); measurement unassigned | **decided (ts 1793681865)**; number not measured (SLOT O5) |
+| G5-B | stage 2: uniform-deck mass and energy budgets, measured first as the G5 deck baseline (§8.4) | Xi (decision); measurement unassigned | **decided (ts 1793681865)**; not measured (SLOT G5-B) |
+| P1 | real-grid `shock: true` rerun of §4.8, §7.5 and §7.7 on Jiheng's lists (posted ts 1793656155); informs both stages | Tianhao | **PENDING** |
+| D1 | `x1rat` direction convention; whether to add option B (`x1f` list) in the stage-1 PR. §4.9 makes option B a contract requirement for realistic T(z) | Linfeng proposes; Xi/Cheng decide | open |
+| D2 | ghost-width rule per boundary type (§3); stage 1 | Linfeng + Tianhao | proposed |
+| D3 | uniform classification from the grid key instead of the per-block probe; stage 1. REF4 engages on the same classification (§8.3, Stage-1 reference, item 6) | Linfeng + Xinyue | proposed |
+| D4 | route-A layout (CPU index, MPS, CUDA global rows), cp5 per-face rows; stage 1 | Tianhao | drafted; checked by G0 |
 | D5 | rung values; Courant defined on Δz_min or Δz_max | Jiheng | pending |
 | Q1 | §7: which variables WENO5 sees | Tianhao + Xinyue | answered at 2d9fa419 (§7.2); real-grid rerun is P1 |
-| Q2 | log1p Q in snapy (all three backends), and `SNAP_WB_REF4` round-off on thin cells | Xinyue (fix branch, after X1) | hypothesis |
+| Q2 | log1p form of the kernel's log-mean (§5) | Xinyue | **superseded** as the stage-1 cell pressure by REF (ts 1793685084); the log-mean remains only where REF4's guards reject (`src/hydro/wb_ref4.cpp:250-260`, `:238-243`). Whether its round-off matters there is [H] |
 | Q3 | Käppeli & Mishra equations with page/equation numbers | Xinyue | pending |
 | Q5 | Wang, Feng & Spiteri (2008) content; novelty not claimed | Tianhao | unread |
-| F1 | other uniform-spacing fixes from the inventory: diffusion `centered_derivative` (`src/forcing/diffusion.cpp:70-84`) and `face_average` (`:99-108`), cubed-sphere diffusion scalar h (`src/forcing/diffusion_cubed_sphere.cpp:191`), `bot_heat`/`top_cool` budgets (`src/forcing/bot_heat.cpp:52-54`, `src/forcing/top_cool.cpp:52-54`), the dx²/12 curvature correction (`src/hydro/hydro_forward.cpp:1023-1047`). The cubed-sphere diffusion item is in scope since O3 (§8.6, item 12) | unassigned | listed |
+| F1 | other uniform-spacing fixes from the inventory. **Stage 1:** diffusion `centered_derivative` (`src/forcing/diffusion.cpp:70-84`) and `face_average` (`:99-108`); `bot_heat`/`top_cool` budgets (`src/forcing/bot_heat.cpp:51-54`, `src/forcing/top_cool.cpp:51-54`); the dx²/12 curvature correction (`src/hydro/hydro_forward.cpp:1023-1047`). **Stage 2:** cubed-sphere diffusion scalar h (`src/forcing/diffusion_cubed_sphere.cpp:191`, §8.6 row 14) | unassigned | listed |
 | R1 | critic review of this note as a whole (distinct from G0) | UJ42UV0TW | after the note lands |
 | H1 | hosting: happysky19/snapy `doc/280-stretched-x1`; Tianhao's worker is the single pusher | Tianhao | hosted |
 
