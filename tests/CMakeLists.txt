@@ -403,6 +403,20 @@ snapy_add_python_test(test_flux_positivity_cubedsphere_moist TIMEOUT 300
                       LABELS "python;positivity;cubed-sphere")
 snapy_add_python_test(test_cubed_sphere_cell_volume TIMEOUT 120
                       LABELS "python;coordinate;cubed-sphere")
+# #280 stage 2 (tests only, refs #280): a stretched x1 on the cubed sphere. One ctest per
+# oracle; arms a-c are RED until gnomonic-equiangle accepts a stretched x1
+# (src/coord/coordinate.cpp:400-405) with face-built metrics (gnomonic_equiangle.cpp:31-38).
+snapy_add_python_test(test_stage2_cubed_rest SCRIPT test_stage2_cubed_stretched.py
+                      ARGS --arm rest TIMEOUT 600 LABELS "python;coordinate;cubed-sphere;stage2")
+snapy_add_python_test(test_stage2_cubed_volume SCRIPT test_stage2_cubed_stretched.py
+                      ARGS --arm volume TIMEOUT 300 LABELS "python;coordinate;cubed-sphere;stage2")
+snapy_add_python_test(test_stage2_cubed_freestream SCRIPT test_stage2_cubed_stretched.py
+                      ARGS --arm freestream TIMEOUT 300 LABELS "python;coordinate;cubed-sphere;stage2")
+# no-regression arm: uniform jupiter_gcm / jupiter_gcm_dry bitwise against 2d9fa419 digests;
+# 125 = no reference for this platform
+snapy_add_python_test(test_stage2_uniform_jupiter TIMEOUT 600
+                      LABELS "python;cubed-sphere;stage2;bitwise")
+set_tests_properties(test_stage2_uniform_jupiter_python PROPERTIES SKIP_RETURN_CODE 125)
 snapy_add_python_test(test_outflow_stale_ghosts TIMEOUT 120
                       LABELS "python;boundary;implicit;cubed-sphere")
 snapy_add_python_test(test_tracer_dry_convention TIMEOUT 120 LABELS "python;scalar;implicit;forcing")
