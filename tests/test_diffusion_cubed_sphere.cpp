@@ -469,6 +469,42 @@ TEST(CubedSphereDiffusion, kinematic_profiles_preserve_dynamic_products) {
   }
 }
 
+// #280 stage 2: stretched x1, T = A + B/r, k linear in r: flux 2 k(rf)/rf^2
+TEST(CubedSphereDiffusion, stretched_x1_conduction_is_exact_per_face) {
+  auto opts = MeshOptionsImpl::from_yaml("test_diffusion_cubed_sphere.yaml");
+  auto c0 = opts->block()->coord();  // width ratio 1.2; weno5 needs nghost 3
+  c0->x1f_interior() = {10., 10.18629, 10.40984, 10.67809, 11.};
+  c0->nghost() = 3;
+  opts->block()->hydro()->recon1()->interp()->type() = "weno5";
+  auto d = opts->block()->hydro()->diffusion();  // k = kappa rho cv
+  d->nu_iso(0.).dynamic(false).temperature_inner(300. + 2. / 10.);
+  d->temperature_outer(300. + 2. / 11.);  // walls at the exact T
+  auto mesh = Mesh(opts);
+  auto s = states(mesh, 2);
+  auto rho = [](torch::Tensor r) { return 1. + .1 * (r - 10.); };
+  for (size_t i = 0; i < s.size(); ++i)
+    s[i].w[IDN].copy_(rho(mesh->blocks[i]->pcoord->x1v).expand_as(s[i].w[0]));
+  auto du = apply_diffusion(mesh, s);
+  double worst = 0.;  // every cell, the panel-edge ring included
+  for (size_t i = 0; i < s.size(); ++i) {
+    auto b = mesh->blocks[i];
+    auto c = b->pcoord;
+    auto sl = interior(b);
+    auto f = torch::indexing::Slice(c->il(), c->iu() + 2);  // the x1 faces
+    auto rf = c->x1f.index({f});
+    auto cv = b->phydro->peos->specific_heat_cv(s[i].w, s[i].t).max();
+    auto flux = c->face_area1().index({sl[0], sl[1], f}) * .04 * cv * rho(rf) /
+                (rf * rf);
+    auto q = du[i][IPR].index(sl) * c->cell_volume().index(sl);
+    auto exact = flux.narrow(-1, 0, 4) - flux.narrow(-1, 1, 4);
+    worst = std::max(
+        worst, ((q - exact).abs().max() / exact.abs().max()).item<double>());
+  }
+  std::cout << "stretched x1 conduction, worst relative error " << worst
+            << "\n";
+  EXPECT_LT(worst, 1.e-8);  // uniform-face floor of this check 6.1e-10
+}
+
 TEST(CubedSphereDiffusion, cuda_operator_and_radial_solve_match_cpu) {
   if (!snapy_cuda_test_enabled()) GTEST_SKIP() << "CUDA is not available";
   torch::set_num_threads(1);
