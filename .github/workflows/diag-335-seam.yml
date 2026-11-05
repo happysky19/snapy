@@ -80,6 +80,7 @@ jobs:
         if: steps.isolated.outputs.passed == 'true'
         run: |
           cmake --build head-build --config Release --parallel 4
+          ln -s ../head-build head/build
           (cd head && pip install --no-build-isolation --no-deps .)
           set +e
           (cd head-build/tests && ctest --output-on-failure -E '^test_shallow_xy_decomp$') 2>&1 | tee head-full.log
