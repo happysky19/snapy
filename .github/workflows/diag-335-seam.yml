@@ -1,0 +1,77 @@
+name: PR 335 seam diagnosis
+
+on:
+  push:
+    branches: [diag/335-seam-gcc15]
+
+permissions:
+  contents: read
+
+jobs:
+  seam:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out diagnostic script
+        uses: actions/checkout@v4
+      - name: Check out pinned base
+        uses: actions/checkout@v4
+        with:
+          repository: chengcli/snapy
+          ref: 2d9fa419be56513159c695267b68753d5b223b31
+          path: base
+      - name: Check out pinned PR head
+        uses: actions/checkout@v4
+        with:
+          repository: happysky19/snapy
+          ref: 6041917593be231a6af489da9dbb65074da8fae5
+          path: head
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Python dependencies
+        run: |
+          pip install wheel numpy pyyaml pytest netcdf4
+          pip install 'torch==2.10.0'
+          pip install 'kintera==2.6.6'
+          pip install 'commux>=0.1.4' 'pinc>=0.2.0'
+          python -c 'import commux; commux.register(); print("commux import OK")'
+      - name: Install NetCDF and UCX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnetcdf-dev libucx-dev nco autoconf automake libtool pkg-config
+      - name: Verify pins and instrument disposable checkouts
+        run: |
+          test "$(git -C base rev-parse HEAD)" = 2d9fa419be56513159c695267b68753d5b223b31
+          test "$(git -C head rev-parse HEAD)" = 6041917593be231a6af489da9dbb65074da8fae5
+          cat /etc/os-release
+          g++ --version
+          python -c 'import torch,kintera; print(torch.__version__,kintera.__version__)'
+          python ci_diag/instrument.py base head
+      - name: Build only the two seam test targets
+        run: |
+          for rev in base head; do
+            cmake -S "$rev" -B "$rev-build" \
+              -DCMAKE_BUILD_TYPE=Release -DCUDA=OFF -DNETCDF=ON \
+              -DBUILD_TESTS=ON -DFULL_TESTS=OFF \
+              -DSNAPY_TEST_PYTHONPATH="$(python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
+            cmake --build "$rev-build" --config Release --parallel 4 --target test_x1_seam_split.release
+          done
+      - name: Run only the pinned seam case
+        run: |
+          for rev in base head; do
+            echo "PIN $rev $(git -C "$rev" rev-parse HEAD)"
+            set +e
+            (cd "$rev-build/tests" && env GTEST_FILTER=X1SeamSplit.radial_exact_split_gap SNAP_GRAVITY_WORK_RADIAL_EXACT=1 SNAPY_BUILD_CUDA=0 ./test_x1_seam_split.release) 2>&1 | tee "$rev-seam.log"
+            rc=${PIPESTATUS[0]}
+            set -e
+            echo "RESULT $rev exit=$rc"
+            grep -E '^FIRST|^switch ' "$rev-seam.log"
+          done
+      - name: Preserve diagnostic output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr335-seam-gcc15
+          path: '*-seam.log'
