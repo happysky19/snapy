@@ -1,56 +1,53 @@
 #!/usr/bin/env python3
 """#280 stage 2 (tests only): the UNIFORM jupiter_gcm and jupiter_gcm_dry decks stay bitwise
-identical to chengcli/snapy main 2d9fa419 (no-regression arm; expected GREEN today).
+identical to a BASE build made on the same machine (no-regression arm; GREEN today).
+
+Same approach as the G3 control (tests/g3_decks.cpp, tests/g3_compare.py): one driver is run
+by two builds with the same arguments, every tensor is dumped as raw little-endian float64
+with a manifest, and the two dumps are compared tensor by tensor with torch.equal
+(g3_compare.main). There are no stored digests: digests are not portable across machines.
+
+  base  the snapy install of the base commit (chengcli/snapy main 2d9fa419 for #280),
+        built on THIS machine, given by SNAPY_STAGE2_BASE_PYTHONPATH (CMake cache variable of
+        the same name, passed to the test's environment) or --base-pythonpath;
+  head  the snapy this test is run with (SNAPY_TEST_PYTHONPATH / PYTHONPATH).
+Each side runs in its own child process with only its own install on PYTHONPATH.
+
+No base install given -> exit 125 (SKIPPED, with a message saying how to supply one); a base
+that resolves to the head's own snapy -> FAIL (it would compare a build with itself).
 
 Each deck is read from examples/ and reduced to fit a CPU test, and nothing else is changed:
   * geometry/cells nx2 = nx3 = 8 per panel side (deck: 48); nx1 stays 100, the x1 bounds,
     nghost, physics, reconstruction, Riemann solver and implicit-scheme 9 are the deck's;
   * six panels in one process (Mesh API, blocks_per_process 6) instead of six ranks;
-  * NSTEPS = 5 cycles driven here (dt from mesh.max_time_step), no file outputs, no
-    kinetics (examples/run_hydro.cpp's kinetics step is a driver step, not part of Mesh);
+  * NSTEPS = 5 cycles driven here (dt from mesh.max_time_step), no file outputs, no kinetics
+    (examples/run_hydro.cpp's kinetics step is a driver step, not part of Mesh);
   * a deterministic initial state: an isothermal column projected by balance_column, fixed
-    vapour mass fractions and a fixed sin/cos horizontal wind (no random noise).
-The digest is the sha256 of every block's hydro_u (float64, block order) followed by the dt
-of every cycle. References are stored per platform in test_stage2_uniform_jupiter.json and
-were written by running this script with --write-reference against a build of 2d9fa419.
-No reference for this platform (or a CUDA run) -> exit 125 (skipped).
+    vapour mass fractions and a fixed sin/cos horizontal wind (no random numbers).
+Dumped per deck and block: hydro_u after every cycle, and every variable after the last.
 
-  python test_stage2_uniform_jupiter.py [--write-reference] [--device cpu|cuda]
+  python test_stage2_uniform_jupiter.py [--base-pythonpath PATH] [--device cpu|cuda]
 """
 import argparse
-import hashlib
-import json
 import math
 import os
-import platform
-import struct
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-import torch
-import yaml
-
 HERE = Path(__file__).resolve().parent
 EXAMPLES = HERE.parent / "examples"
-REF = HERE / "test_stage2_uniform_jupiter.json"
 DECKS = ("jupiter_gcm.yaml", "jupiter_gcm_dry.yaml")
 NX_PANEL = 8
 NSTEPS = 5
 P0, H0 = 1.0e6, 6.0e4
-
-
-def platform_key(device):
-    try:
-        from importlib.metadata import version
-        kv = version("kintera")
-    except Exception:
-        kv = "unknown"
-    return "%s-%s-%s-torch%s-kintera%s" % (platform.system(), platform.machine(), device,
-                                           torch.__version__.split("+")[0], kv)
+BASE_ENV = "SNAPY_STAGE2_BASE_PYTHONPATH"
 
 
 def reduced(deck):
+    import yaml
+
     with open(EXAMPLES / deck) as f:
         cfg = yaml.safe_load(f)
     cfg["geometry"]["cells"]["nx2"] = NX_PANEL
@@ -60,9 +57,22 @@ def reduced(deck):
     return cfg
 
 
-def digest(deck, device):
-    from snapy import Mesh, MeshOptions, kIDN, kIPR, kICY, kIV2, kIV3
+def dump_tensor(outdir, tag, man, blk, key, t):
+    """one tensor in g3_decks' format: raw <f8 file + 'blk key numel file hash' line"""
+    import zlib
+
+    a = t.detach().to("cpu").double().contiguous().numpy()
+    fn = "%s.%d.%s.bin" % (tag, blk, key)
+    a.astype("<f8").tofile(Path(outdir) / fn)
+    man.write("%d %s %d %s %d\n" % (blk, key, a.size, fn, zlib.crc32(a.tobytes())))
+
+
+def run_deck(deck, outdir, device):
+    """drive one reduced deck with the snapy on sys.path and dump it (child process)"""
+    import torch
+    import yaml
     import snapy
+    from snapy import Mesh, MeshOptions, kIDN, kIPR, kICY, kIV2, kIV3
 
     cfg = reduced(deck)
     with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False, dir=os.getcwd()) as f:
@@ -106,55 +116,85 @@ def digest(deck, device):
         mesh_vars.append({"hydro_w": w})
     mesh_vars, _ = mesh.initialize(mesh_vars)
     intg = blocks[0].module("intg")
-    dts = []
-    for cycle in range(1, NSTEPS + 1):
-        mesh.set_cycle(cycle)
-        dt = mesh.max_time_step(mesh_vars)
-        for stage in range(len(intg.stages)):
-            mesh.forward(mesh_vars, dt, stage)
-        if mesh.check_redo(mesh_vars) != 0:
-            raise RuntimeError("step rejected at cycle %d" % cycle)
-        dts.append(float(dt))
-    h = hashlib.sha256()
-    for mv in mesh_vars:
-        h.update(mv["hydro_u"].detach().to("cpu", torch.float64).contiguous().numpy().tobytes())
-    for dt in dts:
-        h.update(struct.pack("<d", dt))
-    return h.hexdigest(), dts
+    tag = Path(deck).stem
+    with open(Path(outdir) / (tag + ".manifest"), "w") as man:
+        for cycle in range(1, NSTEPS + 1):
+            mesh.set_cycle(cycle)
+            dt = mesh.max_time_step(mesh_vars)
+            for stage in range(len(intg.stages)):
+                mesh.forward(mesh_vars, dt, stage)
+            if mesh.check_redo(mesh_vars) != 0:
+                raise RuntimeError("%s: step rejected at cycle %d" % (deck, cycle))
+            for ib, mv in enumerate(mesh_vars):
+                dump_tensor(outdir, tag, man, ib, "c%d.hydro_u" % cycle, mv["hydro_u"])
+            dump_tensor(outdir, tag, man, 0, "c%d.dt" % cycle, torch.tensor([float(dt)]))
+        for ib, mv in enumerate(mesh_vars):
+            for key in sorted(mv):
+                if torch.is_tensor(mv[key]):
+                    dump_tensor(outdir, tag, man, ib, "final." + key, mv[key])
+    return snapy.__file__
+
+
+def child_main(outdir, device):
+    import snapy
+    print("SNAPY_FILE", snapy.__file__, getattr(snapy, "__version__", "?"), flush=True)
+    for deck in DECKS:
+        run_deck(deck, outdir, device)
+    return 0
+
+
+def run_side(pythonpath, outdir, device):
+    env = dict(os.environ)
+    env["PYTHONPATH"] = pythonpath
+    cmd = [sys.executable, str(Path(__file__).resolve()), "--child", outdir, "--device", device]
+    p = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=1800)
+    info = [l for l in p.stdout.splitlines() if l.startswith("SNAPY_FILE ")]
+    if p.returncode != 0 or not info:
+        print(p.stdout[-2000:])
+        print(p.stderr[-2000:])
+        raise SystemExit("FAIL: child run with PYTHONPATH=%s exited %d" % (pythonpath, p.returncode))
+    return info[-1].split()[1:]
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--device", default="cpu", choices=("cpu", "cuda"))
-    ap.add_argument("--write-reference", action="store_true",
-                    help="write this platform's digests (run against a build of 2d9fa419)")
+    ap.add_argument("--base-pythonpath", default=os.environ.get(BASE_ENV, ""))
+    ap.add_argument("--child", metavar="OUTDIR", help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
+    if args.child:
+        return child_main(args.child, args.device)
+
+    import torch
     if args.device == "cuda" and (os.environ.get("SNAPY_BUILD_CUDA", "1") == "0"
                                   or not torch.cuda.is_available()):
         print("SKIP: cuda requested but not available")
         return 125
-    key = platform_key(args.device)
-    refs = json.loads(REF.read_text()) if REF.exists() else {}
-    if not args.write_reference and key not in refs:
-        print("SKIP: no 2d9fa419 reference digests for platform %s" % key)
+    if not args.base_pythonpath:
+        print("SKIP: no base build. Build and install the base commit (chengcli/snapy main "
+              "2d9fa419 for #280) on this machine and pass its install path as "
+              "-D%s=<path> at configure time, or set %s / --base-pythonpath." % (BASE_ENV, BASE_ENV))
         return 125
+    head_path = os.environ.get("PYTHONPATH", "")
+    sys.path.insert(0, str(HERE))
+    import g3_compare
 
-    got = {}
-    for deck in DECKS:
-        d, dts = digest(deck, args.device)
-        got[deck] = d
-        print("%-22s %s  dt = %s" % (deck, d, ", ".join("%.6e" % x for x in dts)))
-    if args.write_reference:
-        refs[key] = got
-        REF.write_text(json.dumps(refs, indent=1, sort_keys=True) + "\n")
-        print("wrote %s for %s" % (REF.name, key))
-        return 0
-    bad = [d for d in DECKS if got[d] != refs[key].get(d)]
-    for d in bad:
-        print("FAIL: %s digest %s != 2d9fa419 reference %s" % (d, got[d], refs[key].get(d)))
-    if bad:
+    with tempfile.TemporaryDirectory() as tmp:
+        bdir, hdir = os.path.join(tmp, "base"), os.path.join(tmp, "head")
+        os.makedirs(bdir)
+        os.makedirs(hdir)
+        bfile = run_side(args.base_pythonpath, bdir, args.device)
+        hfile = run_side(head_path, hdir, args.device)
+        print("base snapy: %s (%s)" % (bfile[0], bfile[1] if len(bfile) > 1 else "?"))
+        print("head snapy: %s (%s)" % (hfile[0], hfile[1] if len(hfile) > 1 else "?"))
+        if os.path.realpath(bfile[0]) == os.path.realpath(hfile[0]):
+            print("FAIL: base and head resolve to the same snapy install; nothing is compared")
+            return 1
+        rc = g3_compare.main(bdir, hdir)
+    if rc != 0:
+        print("FAIL: uniform jupiter decks differ from the base build")
         return 1
-    print("### uniform jupiter decks bitwise equal to 2d9fa419 (%s). ###" % key)
+    print("### uniform jupiter decks bitwise equal to the base build. ###")
     return 0
 
 
