@@ -398,8 +398,7 @@ CoordinateImpl::CoordinateImpl(const CoordinateOptions& options_,
   // the geometric source coefficients amplify that ULP by ~7 orders. Sliced
   // from a global array, a face has one value whoever owns it.
   if (op->stretched_x1()) {
-    // #280: the Cartesian (stage 1) and gnomonic-equiangle (stage 2) x1
-    // metrics are built from the faces
+    // #280: only these geometries build their x1 metrics from the faces
     TORCH_CHECK(op->type() == "cartesian" || op->type() == "gnomonic-equiangle",
                 "a stretched x1 (geometry/x1f or cells/x1rat) is supported "
                 "only on a cartesian geometry or a gnomonic-equiangle one "

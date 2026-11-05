@@ -32,8 +32,7 @@ void GnomonicEquiangleImpl::reset() {
   // Global cell width, not this block's own; see dx1() in coordinate.hpp.
   auto dx = op->dx1();
   if (op->stretched_x1()) {
-    // #280 stage 2: the radial metrics (face areas, volumes, the metric
-    // terms and the radial source) read dx1f, so it is built from the faces
+    // #280: the radial metrics read dx1f, so it comes from the faces
     auto [df, xv, dv] = stretched_x1_metrics_();
     dx1f = register_buffer("dx1f", df);
     x1v = register_buffer("x1v", xv);
