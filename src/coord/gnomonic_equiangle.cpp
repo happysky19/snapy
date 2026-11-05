@@ -31,11 +31,21 @@ void GnomonicEquiangleImpl::reset() {
   // dimension 1
   // Global cell width, not this block's own; see dx1() in coordinate.hpp.
   auto dx = op->dx1();
-
-  dx1f = register_buffer("dx1f", torch::ones(op->nc1(), torch::kFloat64) * dx);
-  x1v = register_buffer("x1v", 0.5 * (x1f.slice(0, 0, op->nc1()) +
-                                      x1f.slice(0, 1, op->nc1() + 1)));
-  dx1v = register_buffer("dx1v", torch::ones(op->nc1(), torch::kFloat64) * dx);
+  if (op->stretched_x1()) {
+    // #280 stage 2: the radial metrics (face areas, volumes, the metric
+    // terms and the radial source) read dx1f, so it is built from the faces
+    auto [df, xv, dv] = stretched_x1_metrics_();
+    dx1f = register_buffer("dx1f", df);
+    x1v = register_buffer("x1v", xv);
+    dx1v = register_buffer("dx1v", dv);
+  } else {
+    dx1f =
+        register_buffer("dx1f", torch::ones(op->nc1(), torch::kFloat64) * dx);
+    x1v = register_buffer("x1v", 0.5 * (x1f.slice(0, 0, op->nc1()) +
+                                        x1f.slice(0, 1, op->nc1() + 1)));
+    dx1v =
+        register_buffer("dx1v", torch::ones(op->nc1(), torch::kFloat64) * dx);
+  }
 
   // dimension 2
   dx = op->dx2();

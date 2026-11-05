@@ -284,9 +284,17 @@ TEST(StretchedX1Ref, refuses_spherical_polar) {
           "reflecting", "spherical-polar");
 }
 
-TEST(StretchedX1Ref, refuses_gnomonic_equiangle) {
-  refuses("is supported only on a cartesian geometry", "}", "reflecting",
-          "reflecting", "gnomonic-equiangle");
+// #280 stage 2 lifts the geometry refusal for gnomonic-equiangle: the stretched
+// card may still fail as a one-cell-wide gnomonic deck, but not on the geometry
+TEST(StretchedX1Ref, accepts_gnomonic_equiangle) {
+  try {
+    build_and_step(
+        card(true, "}", "reflecting", "reflecting", "gnomonic-equiangle"));
+  } catch (c10::Error const& e) {
+    EXPECT_EQ(std::string(e.what()).find("is supported only on a cartesian"),
+              std::string::npos)
+        << e.what();
+  }
 }
 
 // ctest test_stretched_x1_ref_wb_ref4 runs this with SNAP_WB_REF4=1, and

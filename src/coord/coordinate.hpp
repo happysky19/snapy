@@ -230,6 +230,11 @@ class CoordinateImpl {
   static torch::Tensor block_faces_(double gmin, double gmax, int gnx, int nx,
                                     int ix, int nghost);
 
+  //! dx1f, x1v and dx1v of a stretched x1 (#280), from the block's `x1f` and
+  //! the global face vector: dx1f = diff(x1f), x1v the face midpoint, and the
+  //! mirrored face below the block's first ghost defines dx1v[0]
+  std::array<torch::Tensor, 3> stretched_x1_metrics_() const;
+
   //! module methods
   virtual torch::Tensor center_width1() const;
   virtual torch::Tensor center_width1(int is, int ie) const {
