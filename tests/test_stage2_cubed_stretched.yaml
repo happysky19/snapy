@@ -1,7 +1,6 @@
 # #280 stage 2 (tests only): six cubed-sphere panels in one process on the jupiter_gcm
 # shell (examples/jupiter_gcm.yaml:59-60), dry ideal gas, closed reflecting x1 walls.
-# test_stage2_cubed_stretched.py injects geometry/x1f (the n5/n10 contract lists) or keeps
-# the uniform grid for the control, and sets nx1, gravity and implicit-scheme per arm.
+# test_stage2_cubed_stretched.py injects the n5 face list and selects each arm.
 reference-state: {Tref: 300., Pref: 1.e5}
 species:
   - name: dry
@@ -10,7 +9,7 @@ species:
 geometry:
   type: gnomonic-equiangle
   bounds: {x1min: 69911000., x1max: 70211000., x2min_pi: -0.25, x2max_pi: 0.25, x3min_pi: -0.25, x3max_pi: 0.25}
-  cells: {nx1: 30, nx2: 8, nx3: 8, nghost: 3}
+  cells: {nx1: 30, nx2: 24, nx3: 24, nghost: 3}
 distribute:
   layout: cubed-sphere
   nb2: 1
@@ -39,7 +38,7 @@ integration:
   type: rk3
   cfl: 0.45
   implicit-scheme: 0
-  nlim: 20
+  nlim: 100
   tlim: 1.e12
   ncycle_out: 0
 forcing:
