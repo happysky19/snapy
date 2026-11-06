@@ -327,11 +327,6 @@ TEST(StretchedX1Ref, refuses_spherical_polar) {
           "reflecting", "spherical-polar");
 }
 
-TEST(StretchedX1Ref, refuses_gnomonic_equiangle) {
-  refuses("is supported only on a cartesian geometry", "}", "reflecting",
-          "reflecting", "gnomonic-equiangle");
-}
-
 // ctest test_stretched_x1_ref_wb_ref4 runs this with SNAP_WB_REF4=1, and
 // test_stretched_x1_ref_x1_centroid with SNAP_X1_CENTROID_EXACT=1
 TEST(StretchedX1Ref, wb_ref4_switch_runs) {

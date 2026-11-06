@@ -397,6 +397,18 @@ snapy_add_python_test(test_flux_positivity_cubedsphere_moist TIMEOUT 300
                       LABELS "python;positivity;cubed-sphere")
 snapy_add_python_test(test_cubed_sphere_cell_volume TIMEOUT 120
                       LABELS "python;coordinate;cubed-sphere")
+set(_stage2_device cpu)
+if(CUDA)
+  set(_stage2_device cuda)
+endif()
+foreach(_arm widths rest tracer conduction)
+  snapy_add_python_test(test_stage2_${_arm} SCRIPT test_stage2_cubed_stretched.py
+                        ARGS --arm ${_arm} --device ${_stage2_device} TIMEOUT 3600
+                        LABELS "python;coordinate;cubed-sphere;stage2")
+endforeach()
+snapy_add_python_test(test_stage2_rest_implicit SCRIPT test_stage2_cubed_stretched.py
+                      ARGS --arm rest --implicit --device ${_stage2_device} TIMEOUT 3600
+                      LABELS "python;coordinate;cubed-sphere;stage2")
 snapy_add_python_test(test_outflow_stale_ghosts TIMEOUT 120
                       LABELS "python;boundary;implicit;cubed-sphere")
 snapy_add_python_test(test_tracer_dry_convention TIMEOUT 120 LABELS "python;scalar;implicit;forcing")
