@@ -31,23 +31,27 @@ setup_test(test_coordinate)
 setup_test(test_stretched_x1)
 setup_test(test_deck_x1_wiring)
 setup_test(test_stretched_x1_ref)
+# #280: the REF4 switch (or SNAP_X1_CENTROID_EXACT) on a stretched x1, read once
 foreach(_arm "wb_ref4;SNAP_WB_REF4=1" "x1_centroid;SNAP_X1_CENTROID_EXACT=1")
   list(GET _arm 0 _name)
   list(GET _arm 1 _env)
   add_test(NAME test_stretched_x1_ref_${_name}.${buildl}
            COMMAND test_stretched_x1_ref.${buildl}
-                   --gtest_filter=StretchedX1Ref.refuses_wb_ref4_switch:StretchedX1Ref.balance_column_refuses_wb_ref4)
+                   --gtest_filter=StretchedX1Ref.wb_ref4_switch_runs:StretchedX1Ref.balance_column_wb_ref4_runs)
   set_tests_properties(test_stretched_x1_ref_${_name}.${buildl}
                        PROPERTIES ENVIRONMENT "${_env}")
 endforeach()
+# with the radial-exact work off, gravity-work face keeps the dx^2/12
+# curvature correction, which a stretched x1 refuses
 add_test(NAME test_stretched_x1_ref_radial_exact_off.${buildl}
          COMMAND test_stretched_x1_ref.${buildl}
                  --gtest_filter=StretchedX1Ref.refuses_curvature_with_radial_exact_off)
 set_tests_properties(test_stretched_x1_ref_radial_exact_off.${buildl}
                      PROPERTIES ENVIRONMENT "SNAP_GRAVITY_WORK_RADIAL_EXACT=0")
+# #280: SNAP_X1_MASS_COVARIANCE on a stretched x1; the regex fails a skipped arm
 add_test(NAME test_stretched_x1_ref_x1_mass_covariance.${buildl}
          COMMAND test_stretched_x1_ref.${buildl}
-                 --gtest_filter=StretchedX1Ref.refuses_x1_mass_covariance_switch)
+                 --gtest_filter=StretchedX1Ref.x1_mass_covariance_switch_runs)
 set_tests_properties(
   test_stretched_x1_ref_x1_mass_covariance.${buildl}
   PROPERTIES ENVIRONMENT "SNAP_X1_MASS_COVARIANCE=1"
@@ -90,6 +94,13 @@ set_tests_properties(test_yamlcpp_cstdint_patch PROPERTIES
 setup_test(test_sedimentation_guards)
 setup_test(test_balance_column)
 setup_test(test_hydro_ref_x1)
+# snapy#280: the ONLY registered coverage of the kX1RefStretched arm of
+# hydro_ref_x1_cell_impl on a GPU.  test_hydro_ref_x1's own `cuda_matches_cpu`
+# goes through a `dispatch()` helper whose `rows` argument is hard-coded
+# undefined, so rows_ptr is nullptr on both sides and the branch #280 adds
+# never executes there.  Named separately so it can be selected and so a skip
+# is visible: the body gates on snapy_cuda_test_enabled() and SKIPS, it does
+# not fail, when no GPU is present.
 add_test(NAME test_hydro_ref_x1_stretched_cuda.${buildl}
          COMMAND test_hydro_ref_x1.${buildl}
                  --gtest_filter=HydroRefX1Dispatch.cuda_matches_cpu_on_the_stretched_rows)
@@ -480,8 +491,15 @@ set_tests_properties(test_python_import_path_python PROPERTIES
   SKIP_RETURN_CODE 125
 )
 
+# run_hydro's initial column on a stretched x1 against the analytic adiabat (#280).
+# Registered HERE, above the SNAPY_TEST_PYTHONPATH block, because that block snapshots
+# SNAPY_PYTHON_TESTS once: an arm added after it silently imports whatever snapy is on
+# the interpreter's path, so its verdict would not constrain this branch (#280).
 snapy_add_python_test(test_example_ic_stretched TIMEOUT 120 LABELS "python;examples"
   ARGS --exe ${CMAKE_BINARY_DIR}/bin/run_hydro.${buildl})
+# The arm needs the run_hydro example binary, checked at run time rather than at
+# configure time: tests/ is added before examples/ so the target does not exist yet,
+# and BUILD_EXAMPLES does not track it (its guard is commented out).
 set_tests_properties(test_example_ic_stretched_python PROPERTIES
                      SKIP_RETURN_CODE 125)
 
@@ -723,6 +741,12 @@ if(NOT CUDA)
   endforeach()
 endif()
 
+# ---------------------------------------------------------------------------
+# G3 control driver (snapy#280 stage 1).  Built on demand, NOT registered as a
+# ctest test: it takes a deck, a step count and an output directory on the
+# command line.  The same file is built in a tree at the base commit and the
+# two dumps are compared tensor by tensor; it uses no API newer than 2d9fa419.
+# ---------------------------------------------------------------------------
 add_executable(g3_decks.${buildl} EXCLUDE_FROM_ALL g3_decks.cpp)
 set_target_properties(g3_decks.${buildl}
                       PROPERTIES COMPILE_FLAGS ${CMAKE_CXX_FLAGS_${buildu}})
