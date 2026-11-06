@@ -148,17 +148,71 @@ TEST(CubedSphereDiffusion, harmonic_convergence_and_heat_conservation) {
 }
 TEST(CubedSphereDiffusion, radial_conductive_equilibrium) {
   torch::set_num_threads(1);
-  auto mesh = make_mesh();
-  for (auto b : mesh->blocks) {
-    b->phydro->pdiffusion->options->temperature_inner() = 300. + 2. / 10.;
-    b->phydro->pdiffusion->options->temperature_outer() = 300. + 2. / 11.;
+  std::vector<double> n5{69911000, 69930977.4797, 69949866.161973, 69967725.387618, 69984611.263319,
+      70000576.837792, 70015672.268661, 70029944.979784, 70043439.810495, 70056199.156122,
+      70068263.10155, 70079669.547048, 70090454.327011, 70100658.510093, 70110415.975697,
+      70119720.955822, 70128543.604437, 70136883.597024, 70144758.463395, 70152191.362733,
+      70159207.735084, 70165829.227491, 70172077.358426, 70177972.882107, 70183535.429079,
+      70188790.795936, 70193761.536893, 70198454.425545, 70202882.006108, 70207058.311479, 70211000};
+  for (bool gpu : {false, true}) {
+    if (gpu && !snapy_cuda_test_enabled()) continue;
+    for (bool stretched : {false, true}) {
+      double coarse = 0.;
+      for (int n : {30, 60}) {
+        std::vector<double> f;
+        for (int i = 0; i < n; ++i) f.push_back(stretched ?
+            (n == 30 ? n5[i] : (i % 2 ? (n5[i/2]+n5[i/2+1])/2 : n5[i/2])) :
+            n5.front()+(n5.back()-n5.front())*i/n);
+        f.push_back(n5.back());
+        auto op = MeshOptionsImpl::from_yaml("test_diffusion_cubed_sphere.yaml");
+        auto c = op->block()->coord();
+        c->nx1(n).global_nx1(n).nx2(24).global_nx2(24).nx3(24).global_nx3(24)
+            .nghost(3).x1min(f.front()).x1max(f.back())
+            .global_x1min(f.front()).global_x1max(f.back());
+        if (stretched) c->x1f_interior(f);
+        op->block()->hydro()->recon1()->interp()->type("weno5");
+        op->block()->hydro()->diffusion()->nu_iso(0.).kappa_iso(1.e9).dynamic(true)
+            .temperature_inner(300.).temperature_outer(310.);
+        op->blocks_per_process(6);
+        auto mesh = Mesh(op);
+        auto s = states(mesh, 0);
+        double bcoef=-10./(1./f.front()-1./f.back());
+        double acoef=300.-bcoef/f.front(), error=0.;
+        for (size_t ib=0; ib<s.size(); ++ib) {
+          auto block=mesh->blocks[ib]; auto coord=block->pcoord;
+          s[ib].t.copy_(acoef+bcoef/coord->x1v.view({1,1,-1}));
+          double gas=block->phydro->peos->species_cv_ref()*(block->phydro->peos->options->gammad()-1.);
+          s[ib].w[IPR].copy_(gas*s[ib].t);
+        }
+        if (gpu) {
+          for (auto block:mesh->blocks) block->get_layout()->options->device("cuda");
+          mesh->to(torch::Device(torch::kCUDA));
+          for (auto &v:s) { v.w=v.w.cuda(); v.t=v.t.cuda(); }
+        }
+        auto du=apply_diffusion(mesh,s);
+        for(size_t ib=0;ib<s.size();++ib) {
+          auto block=mesh->blocks[ib]; auto coord=block->pcoord;
+          auto rm=coord->x1f.slice(0,coord->il(),coord->iu()+1);
+          auto rp=coord->x1f.slice(0,coord->il()+1,coord->iu()+2);
+          auto exact=acoef+1.5*bcoef*(rp+rm)/(rp.square()+rp*rm+rm.square());
+          error=std::max(error,(s[ib].t.index(interior(block))-exact.view({1,1,-1})).abs().max().item<double>());
+          EXPECT_LT((du[ib][IPR].index(interior(block)) /
+                     block->phydro->peos->species_cv_ref()).abs().max().item<double>(),1.e-12);
+        }
+        for (size_t ib=0;ib<s.size();++ib) {
+          auto block=mesh->blocks[ib];
+          s[ib].t.select(-1,block->pcoord->il()).add_(0.1);
+          s[ib].w[IPR].select(-1,block->pcoord->il()).add_(0.1*
+              block->phydro->peos->species_cv_ref()*(block->phydro->peos->options->gammad()-1.));
+        }
+        auto response=apply_diffusion(mesh,s);
+        EXPECT_GT((response[0][IPR].index(interior(mesh->blocks[0])) /
+                   mesh->blocks[0]->phydro->peos->species_cv_ref()).abs().max().item<double>(),1.e-6);
+        if(n==60) EXPECT_LT(error,coarse/3.8); else coarse=error;
+        std::cout << "steady conduction " << (stretched?"n5":"uniform") << " n=" << n << " gpu=" << gpu << " error K=" << error << std::endl;
+      }
+    }
   }
-  auto s = states(mesh, 2);
-  auto du = apply_diffusion(mesh, s);
-  for (size_t i = 0; i < s.size(); ++i)
-    EXPECT_LT(
-        du[i][IPR].index(interior(mesh->blocks[i])).abs().max().item<double>(),
-        2.e-11);
 }
 TEST(CubedSphereDiffusion, viscous_energy_conservation_and_dissipation) {
   torch::set_num_threads(1);
