@@ -372,7 +372,7 @@ spacing counts as uniform and a $10^{-6}$ stretching does not.
 the kernels being the same at the pin; deck: the check itself.[^ch05-ref-chk] At the pin
 `test_hydro_ref_x1.release` (6 passed, `cuda_matches_cpu` skipped) and `test_hydro_options.release` (11 passed, the
 `_cuda` case skipped) pass.[^ch05-ref-run]
-At 68f4e066 `test_stretched_x1_ref.release` (18 passed, 4 skipped that need a switch, run by the `_wb_ref4`,
+At the pin `test_stretched_x1_ref.release` (18 passed, 4 skipped that need a switch, run by the `_wb_ref4`,
 `_x1_centroid`, `_x1_mass_covariance` and `_radial_exact_off` variants, all passed) and
 `test_hydro_ref_x1_rf_wall.release` (4 passed) pass; `keyed_column_balances_to_1e13` prints a residual of
 $7.25\times10^{-15}$ after 20 sweeps at $n_1=128$, ratio 1.02.[^ch05-ref-run68]

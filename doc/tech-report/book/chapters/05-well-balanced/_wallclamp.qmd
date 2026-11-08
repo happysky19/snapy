@@ -306,7 +306,7 @@ cells by index, so the second-order argument for faces 0-2 is not carried over; 
 :::
 
 1. **Stretched grids.** The step of @eq-ch05-wallclamp-steps is tested for its values
-   (`test_hydro_ref_x1_rf_wall.release`, 4 passed at 68f4e066[^ch05-wall-run68]); the order of the face density
+   (`test_hydro_ref_x1_rf_wall.release`, 4 passed at the pin[^ch05-wall-run68]); the order of the face density
    reference at a stretched wall is not measured. A non-uniform grid without the keys continues by index.
 2. **MPS.** The tensor path implements the same rule and is compared with the CPU path only when run on CPU.
 3. **Straka at CFL 1.6.** `test_straka_redo` is a robustness test past the stability limit. The derivation note's

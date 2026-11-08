@@ -169,8 +169,11 @@ ladder.
 
 1. **One limiter.** The harmonic mean is the only slope; `interp_simple.hpp` also defines `minmod`, `superbee`,
    `vanleer` and an MC limiter, which no production path calls.
-2. **Uniform-grid slope.** @eq-ch04-plm-slope takes raw differences; on a stretched grid it is not the limited
-   slope of the underlying linear fit.
+2. **Uniform-grid slope.** @eq-ch04-plm-slope takes raw differences, so it is the limited slope of the underlying
+   linear fit only on equal widths. A deck that *declares* a stretched $x_1$ cannot reach that state: `plm` has no
+   per-face $x_1$ route and setup refuses it there, as it refuses every interpolant but `weno5` and `cp5`
+   ({{< code src/recon/interpolation.hpp InterpImpl::set_x1_coeffs >}}; @sec-ch04-x1volume). The slope is still the
+   raw-difference one on $x_2$ and $x_3$, and on an undeclared non-uniform grid.
 3. **No measured order.** Second order away from extrema is derived (steps 1 to 3) and not measured on a ladder.
 
 <!-- reader glossary notes -->

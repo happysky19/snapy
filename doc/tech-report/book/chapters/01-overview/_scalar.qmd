@@ -34,21 +34,22 @@ mixing ratio per unit dry mass (`scalar_r`).
 
 ### Derivation
 
-Write $\mathcal R$[^rg-17fdbadd9e74] for the face reconstruction of the scalar block, applied to cell averages along one axis, and
-$\hat q_f = \mathcal R[q]_f$ for its value at face $f$. The scalar block forms the face ratio from two
+Write $\mathcal W$ (the reconstruction operator, appendix A, notation group 3) for the face reconstruction of the
+scalar block, applied to cell averages along one axis, and
+$\hat q_f = \mathcal W[q]_f$ for its value at face $f$. The scalar block forms the face ratio from two
 reconstructions, one of the scalar density and one of the dry density
 ({{< code src/scalar/scalar.cpp ScalarImpl::forward >}}, `face_r`):
 
 $$
-r_{n,f} = \begin{cases} \mathcal R[\rho_n]_f\,/\,\mathcal R[\rho_{\mathrm d}]_f, & \mathcal R[\rho_{\mathrm d}]_f > 0,\\
+r_{n,f} = \begin{cases} \mathcal W[\rho_n]_f\,/\,\mathcal W[\rho_{\mathrm d}]_f, & \mathcal W[\rho_{\mathrm d}]_f > 0,\\
 \rho_{n,i}/\rho_{\mathrm d,i}, & \text{otherwise, with } i \text{ the cell on that side of } f. \end{cases}
 $$ {#eq-ch01-scalar-face}
 
 1. *Uniform ratio.* `ScalarImpl::reset` sets `scale = true` on the interpolant it builds, whatever the card says
    ({{< code src/scalar/scalar.cpp ScalarImpl::reset >}}). With `scale`[^rg-21be26a14922] on, the nonlinear weights see the stencil
-   values divided by their own magnitude, so the interpolant is homogeneous of degree one: $\mathcal R[c\,q] =
-   c\,\mathcal R[q]$ for a constant $c > 0$. A uniform ratio $r$ gives $\rho_n = r\rho_{\mathrm d}$ cell by cell, so
-   $\mathcal R[\rho_n]_f = r\,\mathcal R[\rho_{\mathrm d}]_f$ and @eq-ch01-scalar-face returns $r$[^rg-adc74081119b] on every face.
+   values divided by their own magnitude, so the interpolant is homogeneous of degree one: $\mathcal W[c\,q] =
+   c\,\mathcal W[q]$ for a constant $c > 0$. A uniform ratio $r_n$ gives $\rho_n = r_n\rho_{\mathrm d}$ cell by cell, so
+   $\mathcal W[\rho_n]_f = r_n\,\mathcal W[\rho_{\mathrm d}]_f$ and @eq-ch01-scalar-face returns $r_n$ on every face.
 2. *Order.* Each reconstruction of a smooth density is accurate to the order $p$ of the interpolant, so the
    quotient is $r_n(x_f) + O(\Delta x^p)$ wherever $\rho_{\mathrm d}$[^rg-c3e134f8e620] is bounded away from zero. Reconstructing the
    ratio of cell averages, $\overline{\rho_n}/\overline{\rho_{\mathrm d}}$, would not be: that quotient differs from the
@@ -180,7 +181,7 @@ flux.
 The assertions are {{< code tests/test_scalar.cpp DeviceTest.initialize_and_transport_scalar >}} and
 {{< code tests/test_scalar.cpp DeviceTest.scalar_upper_bound_holds_both_sides >}}.
 
-The C++ ctest runs on CPU and, through the shared device list, on CUDA when the build has it. At 68f4e066 all four
+The C++ ctest runs on CPU and, through the shared device list, on CUDA when the build has it. At the pin all four
 pass on CPU; `test_scalar_stratified_python` fits orders 4.99 and 5.00 (`cp5`, $n_1$ 40 to 80 and 80 to 160) and
 5.09 and 4.99 (`weno5`), and no non-finite face ratio at either contact.[^sca-run68] The CUDA cases were not run. No
 report check exists for this section.
@@ -203,11 +204,7 @@ established by the cited tests. The upper-bound and positivity mechanisms are do
 <!-- reader glossary notes -->
 [^rg-0d8fe044c8ef]: $\rho_n$ — density of passive scalar $n$, $\rho_{\mathrm d} r_n$ (`scalar_s`)
 
-[^rg-17fdbadd9e74]: $\mathcal R$ — universal gas constant [J mol$^{-1}$ K$^{-1}$]; the only molar quantity in this table
-
 [^rg-21be26a14922]: scale — scaling in the enclosing component: a reconstruction switch or values of a thermal-transport profile
-
-[^rg-adc74081119b]: $r$ — $x_1$ on a spherical-polar grid (radius) [m]
 
 [^rg-c3e134f8e620]: $\rho_{\mathrm{d}}$ — dry-air density [kg m$^{-3}$]
 

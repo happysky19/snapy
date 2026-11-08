@@ -349,7 +349,7 @@ terms. They were not run for this chapter at the pin (missing evidence).
 - The $m_2$ and $m_3$ angular-momentum terms are untested: no test at the pin checks them (read from the tests).
 - `nx2` = 1 uses a midpoint for `x2v`, not the polar centroid.
 - A stretched $x_1$ is refused on a grid whose $x_2$ bounds reach a pole; `test_stretched_x1_ref.release`
-  (`refuses_spherical_polar`, `refuses_the_off_pole_block_of_a_pole_deck`) passes at 68f4e066 on CPU (@sec-ch03-globalgrid).
+  (`refuses_spherical_polar`, `refuses_the_off_pole_block_of_a_pole_deck`) passes at the pin on CPU (@sec-ch03-globalgrid).
 :::
 
 A hypothesis from reading the code, not measured: the angular-momentum terms of `forward` multiply `coord_src2_i`,

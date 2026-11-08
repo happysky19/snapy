@@ -30,7 +30,7 @@ default is off. The key `scale` makes the weights independent of the units of th
 **Evidence.** @tbl-ch04-weno-tests; `test_weno.release`, `derivation_check.py` `[C5]`–`[C7]`, `[C17]`, `recon_check.py` `[C4]`.
 :::
 
-Local symbols: $\mathcal W_\ell$ candidate $\ell$'s value at the face and $Q_\ell$ its polynomial (a candidate of the reconstruction operator $\mathcal W$, appendix A, notation group 4); $\beta_\ell$ its smoothness indicator
+Local symbols: $\mathcal W_\ell$ candidate $\ell$'s value at the face and $Q_\ell$ its polynomial (a candidate of the reconstruction operator $\mathcal W$, appendix A, notation group 3); $\beta_\ell$ its smoothness indicator
 [units of $q^2$, or dimensionless with `scale`]; $d_\ell$ the linear weights and $\omega_\ell$ the nonlinear ones [-];
 $\alpha_\ell$ the unnormalised weights; $\epsilon_{\mathrm W} = 10^{-6}$ the indicator floor [units of $q^2$ without
 `scale`]; $\mathcal A_q = \tfrac1{n_{\mathrm s}}\sum_l\lvert\bar q_{i+l}\rvert$ the stencil scale of `scale: true`; $\zeta_{\mathrm{ex}}$ the
@@ -215,5 +215,17 @@ are below the floor, so WENO3 must equal cp3.
 2. **Units decide the limiting when `scale` is off.** Data whose squared differences are below $10^{-6}$ in the
    deck's units are reconstructed by the linear polynomial, jumps included, and no warning is printed.
 3. **Only half the state is limited** with `shock: false`: velocity and pressure take cp3 or cp5 through a jump.
-4. **Uniform-grid rows.** Candidates and indicators assume equal cell widths.
-5. **WENO5 through critical points** is measured on one profile (5.62); no derivation covers it here.
+4. **Uniform-grid rows, except on a declared stretched $x_1$.** The candidates, the indicators and the linear
+   weights of this section are the equal-width rationals. `weno5` is one of the two interpolants that also carry a
+   per-face $x_1$ route: `Weno5InterpImpl::set_x1_coeffs` fills `cm_x1`/`cp_x1` from the $x_1$ faces, and
+   `left`/`right` take that branch when `has_x1_coeffs()`
+   ({{< code src/recon/weno5.cpp Weno5InterpImpl::set_x1_coeffs >}}; @sec-ch04-x1volume has the row construction
+   and its measured order). `weno3` has no such route. On that branch the *form* of @eq-ch04-weno-weights is
+   unchanged — the same $\tfrac{13}{12}$ and $\tfrac14$ in each $\beta_\ell$, the same $10^{-6}$ floor and the
+   same $\alpha_\ell=d_\ell/(\beta_\ell+\epsilon)^2$ — but all nine five-wide rows behind $p_\ell$ and $\beta_\ell$,
+   and the three $d_\ell$, are per-face instead of the rationals above
+   ({{< code src/recon/interp_impl_nu.h interp_weno5_nu_impl >}}). Neither the order nor the limiting of that
+   branch is measured in this section.
+5. **No stretched $x_1$ on MPS.** The non-uniform kernels refuse on the MPS backend, naming CPU or CUDA as the
+   two that carry it ({{< code src/recon/recon_dispatch_nu.cpp call_weno5_nu_mps >}}).
+6. **WENO5 through critical points** is measured on one profile (5.62); no derivation covers it here.

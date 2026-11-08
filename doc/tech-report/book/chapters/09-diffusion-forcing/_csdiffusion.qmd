@@ -224,8 +224,15 @@ $$
 $$ {#eq-ch09-csdiffusion-sdirk}
 
 with $\mathsf M$ the diagonal of $\rho c_v$ times the radial volume measure $\Delta r\,(r_+^2+r_+r_-+r_-^2)/3$,
-$\mathsf K$ the tridiagonal conductance matrix built from the face conductances $\bar K_{\mathrm c}\,r_lr_r/(r_r-r_l)$ of
-@eq-ch09-csdiffusion-radial, and $\mathbf S$ the wall source when a wall temperature is given. It is advanced by the
+$\mathsf K$ the tridiagonal conductance matrix built from the face conductances $K_{\mathrm c,f}\,r_lr_r/(r_r-r_l)$ in the
+geometry of @eq-ch09-csdiffusion-radial, and $\mathbf S$ the wall source when a wall temperature is given. This step
+does **not** reuse the explicit operator's width-weighted face coefficient: on an interior face it takes the plain
+mean $\tfrac12(K_{\mathrm c,l}+K_{\mathrm c,r})$ of the two cell conductivities, whatever the cell widths, and only its
+two wall faces use the width-weighted extrapolation $(1+g)K_{\mathrm c,0}-gK_{\mathrm c,1}$ of the wall-conductivity
+list above ({{< code src/forcing/diffusion_radial.cpp DiffusionImpl::radial_conduction_step >}}).
+The plain mean is $K_{\mathrm c}$ at the midpoint of the two centres, $(r_l+r_r)/2$. On equal widths that midpoint
+is the face, so the mean is the face value to $O(h^2)$; on a stretched $x_1$ it is offset from the face by
+$(r_l+r_r)/2-r_f$, which is first order in the cell width wherever $K_{\mathrm c}$ varies. It is advanced by the
 two-stage singly diagonally implicit Runge–Kutta method with $b_{\mathrm{SD}}=1-1/\sqrt2$ (`gamma` in
 `radial_conduction_step`, {{< code src/forcing/diffusion_radial.cpp DiffusionImpl::radial_conduction_step >}}):
 
@@ -268,7 +275,7 @@ make_fig()
 Where things live: the seven fields of the operator ($T$, the Cartesian velocity and the Cartesian position) are
 cell averages taken as centre values; face values, face derivatives and the face coefficient are point values at the
 face centre; fluxes are face-averaged by multiplication with the face area in `divergence`. The operator reads the
-interior cells of the block only. The face coefficient inside the block is the two-cell mean weighted by the $x_1$ widths,
+interior cells of the block only. The face coefficient of this explicit operator inside the block is the two-cell mean weighted by the $x_1$ widths,
 $(h_rq_l+h_lq_r)/(h_l+h_r)$ for the cells $l$[^rg-adf81aa699d0] and $r$ of a radial face, and the plain average on $x_2$ and $x_3$ faces.
 At every block edge it is the linear extrapolation $(1+g)q_0-gq_1$ from the two nearest cells with $g=h_0/(h_0+h_1)$,
 $\tfrac32q_0-\tfrac12q_1$ on equal widths, falling back to $q_0$ when the extrapolation is negative. Angular block edges are joined by `share_fluxes`, which calls the scalar block exchange
@@ -448,7 +455,12 @@ of the Cartesian bound. Conduction acts on $T$. The implicit radial step needs t
 5. **The implicit radial step** freezes density and uses the dry ideal-gas $c_v$ over the half step. It is split
    symmetrically, a half step before and a half step after the explicit step; the splitting error with the full
    solver is **not measured**.
-6. **Untested combinations.** With an implicit hydrodynamic scheme, sedimentation or species: not run by any ctest
+6. **The implicit step's interior face conductivity is the plain two-cell mean**, not the width-weighted
+   coefficient the explicit operator uses, so on a stretched $x_1$ the two operators do not see the same face
+   conductivity, and the implicit one is first order in the cell width where $K_{\mathrm c}$ varies (Derivation).
+   Only its two wall faces share the explicit operator's width-weighted extrapolation. No test measures the
+   difference.
+7. **Untested combinations.** With an implicit hydrodynamic scheme, sedimentation or species: not run by any ctest
    listed here; see @sec-ch12-matrix.
 
 <!-- reader glossary notes -->

@@ -191,7 +191,7 @@ of the correction; the reconstruction reads the corrected velocity and the last 
 : Tests of the $x_1$ mass-flux covariance. {#tbl-ch04-x1masscov-tests}
 
 `[C15]` holds symbolically; `covariance_check.py` gives the orders quoted in the derivation and an exact zero at
-rest.[^x1c-run] The three ctest entries pass at 68f4e066 on CPU.[^x1c-ctest68] No ctest measures the effect of the
+rest.[^x1c-run] The three ctest entries pass at the pin on CPU.[^x1c-ctest68] No ctest measures the effect of the
 correction on a flow.
 
 [^x1c-ctest68]: [sha: snapy@68f4e066974ede87e4379285c4fba895b970b7f1; deck: the tests' own columns; run:

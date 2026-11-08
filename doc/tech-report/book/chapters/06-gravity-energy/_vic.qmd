@@ -191,6 +191,7 @@ $\mathbf e_{m_1}$ coefficient of $[\mathsf A_i]_E$ in @eq-ch06-vic-rows. The row
 |---|---|---|---|
 | `test_implicit_face_work_operator_python` | rest column at rest, Courant 66-657 | $10^{-7}$ m s$^{-1}$ | `W_TOL` |
 | `test_implicit_face_work_operator_python` | $E_{\mathrm{tot}}+\mathrm{PE}_d$ drift | $10^{-11}$ rel. | `EPE_TOL` |
+| `test_implicit_face_work_operator_python` | with `implicit-scheme` 9, rk3s4 converges no slower than rk3 | none: a comparison of the two fitted rates against a Courant-1/32 rk3 reference | the assertion itself (@sec-ch07-vic-stage) |
 | `test_implicit_stratified_solid_python` | clamp energy, solids | $10^{-11}$ rel. | `EPE_TOL` |
 | `test_forcing.release` | energy under rk3 stage weights | $10^{-9}$ abs. | test threshold |
 
@@ -203,7 +204,10 @@ $E_{\mathrm{tot}}+\mathrm{PE}_d$ over a closed column.
 
 `test_implicit_face_work_operator` puts the tall column of the blow-up above into discrete balance and runs it with
 `gravity-work: face`, full and partial VIC, at acoustic Courant 65.6, 197 and 657, requiring `W_TOL` and `EPE_TOL`
-(module constants of {{< code tests/test_implicit_face_work_operator.py >}}). The plain arms run with
+(module constants of {{< code tests/test_implicit_face_work_operator.py >}}). At the pin the same `main` also runs
+a third assertion, with no tolerance constant: it fits the $w$ error of rk3 and of rk3s4 against an
+rk3 run at Courant $1/32$ and fails if rk3s4's rate is the lower of the two (@sec-ch07-vic-stage has the rk3s4
+weights and the measured orders). The plain arms run with
 `SNAP_GRAVITY_WORK_RADIAL_EXACT=0`; the `_radial_exact_python` entries run the same scripts with it on and measure
 $E_{\mathrm{tot}}+P$. `implicit_gravity_work_holds_under_rk3_stage_weighting` also has a CUDA case. Measured values at the pin are
 **missing evidence**.

@@ -197,7 +197,7 @@ two to agree to `TOL` $=10^{-12}$ relative after 10 steps, with the covariance o
 $x_1$ blocks to match one block to $10^{-13}$ ({{< code tests/test_scalar_cov_x1_split.py >}}).
 `test_stage_forcing_dry_tracer_python` and `test_flux_positivity_cubedsphere_python` (seams) are also registered.
 `test_scalar_upper_bound_donor_python` prints `upper-bound donor: min s 0.0`. Every ctest named here that the CPU build
-registers passed at 68f4e066 except `test_flux_positivity_cubedsphere_python`, which was not run for this
+registers passed at the pin except `test_flux_positivity_cubedsphere_python`, which was not run for this
 section;[^trc-run68] the CUDA and Gloo arms are not registered in that build and were not run.
 
 [^trc-run68]: [sha: snapy@68f4e066974ede87e4379285c4fba895b970b7f1; deck: the tests' own cards; run:

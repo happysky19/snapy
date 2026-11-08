@@ -155,10 +155,20 @@ fits 3.02 and 5.02 on a monotone profile.[^cp-run] `test_weno.release` passes at
 
 1. **No limiter.** Across a discontinuity these interpolants overshoot; only the equation of state's floors
    stand between an overshoot and a negative density (@sec-ch08-reconfloors).
-2. **Uniform weights.** The rationals assume equal widths; the orders above are uniform-grid orders.
-3. **Test-only templates.** `interp_cp2`, `interp_cp4`, `interp_cp6` and the `bp` forms are compiled into the
+2. **Uniform weights, except on a declared stretched $x_1$.** The rationals assume equal widths, and the orders
+   above are uniform-grid orders. `cp5` is one of the two interpolants that also carry a per-face $x_1$ route:
+   `Center5InterpImpl::set_x1_coeffs` fills `cm_x1`/`cp_x1` from the $x_1$ faces, and `forward` takes that branch
+   when `has_x1_coeffs()` ({{< code src/recon/cp5.cpp Center5InterpImpl::set_x1_coeffs >}};
+   @sec-ch04-x1volume has the row construction and its measured order). `cp3` has no such route. On that branch
+   the face value is the plain dot product of the per-face row with the five cell averages
+   ({{< code src/recon/interp_impl_nu.h interp_poly5_nu_impl >}}); its order is not measured in this section.
+3. **No stretched $x_1$ on MPS[^rg-2460f4d54ccf].** The non-uniform kernels refuse on the MPS backend, naming CPU or CUDA as the
+   two that carry it ({{< code src/recon/recon_dispatch_nu.cpp call_poly5_nu_mps >}}).
+4. **Test-only templates.** `interp_cp2`, `interp_cp4`, `interp_cp6` and the `bp` forms are compiled into the
    tests; `interp_cp4` is also called by `src/diagnostics/`, which the build does not add.
 
 <!-- reader glossary notes -->
 [^rg-0de671f8a039]: $l$ — stencil offset index ($\bar\rho_{i+l}$); never $k$, which is the $x_3$ index
+
+[^rg-2460f4d54ccf]: MPS — Metal Performance Shaders
 <!-- end reader glossary notes -->

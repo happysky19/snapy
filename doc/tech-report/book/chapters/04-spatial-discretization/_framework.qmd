@@ -32,7 +32,7 @@ WENO type. The framework is always on; with no `reconstruct` block a deck gets d
 :::
 
 Local symbols: $q^{\mathrm L}_f, q^{\mathrm R}_f$ the left and right states of face $f$
-(appendix A, notation group 4); $\mathcal W$ the reconstruction operator (appendix A, notation group 4); $f = i - \tfrac12$ the face below cell $i$
+(appendix A, notation group 3); $\mathcal W$ the reconstruction operator (appendix A, notation group 3); $f = i - \tfrac12$ the face below cell $i$
 in the code's face numbering; $n_{\mathrm s}$ the stencil width of an interpolant (`stencils()`, count);
 $N_{\mathrm{var}}$ the number of rows of $\mathbf W$ (count).
 
@@ -117,8 +117,11 @@ rows at zero when the limiter is on and returns before the density and pressure 
 reconstruction, which has no hydro parent, clamps every row at zero whatever the limiter (@sec-ch08-reconfloors).
 
 **Order.** The framework adds no error of its own: the face value has the order of the interpolant
-(@sec-ch04-dc to @sec-ch04-weno), measured on a uniform grid. On a stretched $x_1$ grid the same uniform weights
-are applied, and the design order is not reached.
+(@sec-ch04-dc to @sec-ch04-weno), measured on a uniform grid. A deck that declares a stretched $x_1$ does **not**
+run those uniform weights on it: setup builds per-face coefficients for `weno5` and `cp5` and refuses every other
+interpolant on $x_1$ ({{< code src/recon/interpolation.hpp InterpImpl::set_x1_coeffs >}}; @sec-ch04-x1volume).
+Within a block the other axes keep the uniform weights, which is correct there because $x_2$ and $x_3$ are
+uniform.
 
 ### Code
 
@@ -239,8 +242,13 @@ caught only by an accuracy test.
 
 1. **Two sets of defaults.** A deck without a `reconstruct` block runs with `shock` on, one that names the block
    but not `shock` runs with it off. The two differ in which rows are limited and whether floors apply.
-2. **Uniform-grid weights.** Every interpolant uses fixed rational weights for equal cell widths; on a stretched
-   $x_1$ grid the design order is not reached and no warning is printed.
+2. **Uniform-grid weights, and the refusal that keeps them off a stretched $x_1$.** Every interpolant uses fixed
+   rational weights for equal cell widths. On a declared stretched $x_1$ only `weno5` and `cp5` have a per-face
+   route (@sec-ch04-x1volume); `InterpImpl::set_x1_coeffs` is a hard refusal in the base class, so any other
+   interpolant stops at setup rather than applying uniform-grid arithmetic silently
+   ({{< code src/recon/interpolation.hpp InterpImpl::set_x1_coeffs >}}). What is **not** covered is a grid that is
+   geometrically non-uniform without being declared: the refusal is reached only when `HydroImpl::reset` or
+   `ScalarImpl::reset` is given $x_1$ faces ({{< code src/hydro/hydro.cpp HydroImpl::reset >}}).
 3. **Dead option members.** `ReconstructOptionsImpl` carries `density_floor`, `pressure_floor`, `limiter`,
    `is_boundary_lower` and `is_boundary_upper`; `forward` reads none of them, and `report` prints them.
 4. **A disabled branch.** A block inside a comment in `forward` would narrow the range next to a physical
