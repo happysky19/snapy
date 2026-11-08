@@ -215,6 +215,9 @@ sections:
     - high-order reconstruction
   sec-ch04-x1masscov:
     - face averages, vertical mass flux correction: [SNAP_X1_MASS_COVARIANCE]
+  sec-ch04-x1volume:
+    - reconstruction on a curved grid, radial: [volume coordinate, r^2 dr average, radial order]
+    - reconstruction, per-face weights: [non-uniform weights, stretched vertical weights]
 
   # Chapter 5. Hydrostatic and well-balanced treatment
   sec-ch05-balcol:

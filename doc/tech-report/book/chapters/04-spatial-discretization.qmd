@@ -43,6 +43,7 @@ make_fig()
 | Centred cp3, cp5 (@sec-ch04-cp) | `type: cp3`, `cp5` | off | 3, 5 | `test_weno` |
 | WENO3[^rg-3932dce05489], WENO5[^rg-4f39d4ebe8f7] (@sec-ch04-weno) | `type: weno3`, `weno5`; `scale`[^rg-7d2149f881dd] | off | 3, 5; weno3 is 2 at a critical point | `test_weno` |
 | PPM (@sec-ch04-ppm) | `type: ppm` | off | none: the first stage throws | none |
+| Radial $x_1$ volume coordinate (@sec-ch04-x1volume) | none; curved grid with `weno5` or `cp5` in $x_1$ | automatic | 5 at the faces, against 2 without it | `test_radial_order_python` |
 | Riemann framework (@sec-ch04-riemann) | `riemann-solver/{type,dir}` | see @sec-ch04-riemann | — | `test_riemann` |
 | LMARS (@sec-ch04-lmars) | `type: lmars` | off | acoustic face state, upwind transport | `test_riemann` |
 | HLLC (@sec-ch04-hllc) | `type: hllc` | see @sec-ch04-riemann | three waves, exact contact | `test_riemann` |
@@ -104,6 +105,8 @@ the Riemann solvers are characterised by their wave structure instead. {#tbl-ch0
 {{< include 04-spatial-discretization/_weno.qmd >}}
 
 {{< include 04-spatial-discretization/_ppm.qmd >}}
+
+{{< include 04-spatial-discretization/_x1volume.qmd >}}
 
 {{< include 04-spatial-discretization/_riemann.qmd >}}
 
