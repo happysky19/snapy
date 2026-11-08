@@ -3,7 +3,8 @@
 <!-- PROVENANCE
 pin: snapy@68f4e066974ede87e4379285c4fba895b970b7f1 (code_pin.yml)
 sources: OUTLINE.md 6.2; docs/derivations/curved-gravity-work-weight.md@68f4e066974ede87e4379285c4fba895b970b7f1
-         sections 1-4, 8.3; sources/gw__GRAVITY_WORK_TECH_REPORT_draft.md sections 2.4, 3.4-3.5; code links below
+         sections 1-4, 8.3; sources/gw__GRAVITY_WORK_TECH_REPORT_draft.md sections 2.4, 3.4-3.5;
+         tests/test_stretched_x1_ref.cpp at the pin; code links below
 status: draft
 author: Linfeng Li
 reviewer:
@@ -25,7 +26,8 @@ implicit operator to carry it when an implicit scheme is on.
 
 **Placement.** Each stage, after the $x_1$ flux is final and after the forcings; replaces the cell work.
 
-**Activation.** `gravity-work: face` (the default) or `face-wallc`; turns the fixer off.
+**Activation.** `gravity-work: face` (the default) or `face-wallc`; turns the fixer off. $\mathcal K$ needs a
+uniform $x_1$: a deck that declares a stretched one is refused.
 
 **Guarantee / limits.** Plain `face`: $E_{\mathrm{tot}}+\mathrm{PE}_d$ exact to round-off; second order, fourth interior with $\mathcal K$.
 
@@ -56,7 +58,13 @@ $$
 $$ {#eq-ch06-face-energy}
 
 with $\mathcal K=0$ on every physical $x_1$ face, and $\mathcal K$ present only for cp3, cp5 and weno5 reconstructions in
-$x_1$ and only with the corrected-PE work of @sec-ch06-dwork off.
+$x_1$, only with the corrected-PE work of @sec-ch06-dwork off, and only on a uniform $x_1$ grid. The last
+condition is a refusal, not a degradation. @eq-ch06-face-energy writes $\mathcal K$ as a two-point difference
+whose divergence is the $\tfrac{h^2}{12}\partial_1^2$ correction when the two cells have the same width; the
+code states that no two-point form is exact on unequal cells and refuses the combination there rather than
+running a wrong $\mathcal K$ ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}). A deck that declares
+a stretched $x_1$ is told to use the corrected-PE work instead (the Code layer below). The report has not
+re-derived that non-existence.
 @eq-ch06-face-energy is booked as `gravity_energy_correction`
 ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}),
 with the curvature term from `curv_flux1`
@@ -154,6 +162,21 @@ SNAP_GRAVITY_WORK_RADIAL_EXACT=0 ./straka.release straka_single.yaml
 `gravity-work-fixer: true` is refused with `face` when $g_1\ne0$: the fixer repairs the cell form's defect, and the
 face form has none ({{< code src/forcing/const_gravity.cpp ConstGravityOptionsImpl::from_yaml >}}).
 
+One more refusal is raised by the stage itself rather than by the parser, the first time the $\mathcal K$ branch
+would run. With a `cp3`, `cp5` or `weno5` $x_1$ reconstruction, the corrected-PE work off, and a grid that
+declares a stretched $x_1$, the step throws "the dx^2/12 x1 curvature flux H of cp3/cp5/weno5 is a uniform-grid
+device: a stretched x1 uses option F, gravity-work: face with SNAP_GRAVITY_WORK_RADIAL_EXACT on (the default),
+fourth order there; or use gravity-work: cell"
+({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}). The message names the two ways out: leave
+`SNAP_GRAVITY_WORK_RADIAL_EXACT` at its default, so that the corrected-PE work of @sec-ch06-dwork takes over, or
+set `gravity-work: cell`. `face-wallc` is not a third: it reaches the same branch and is refused with it, which
+is the combination the test below uses. The "fourth order there" of the message is the code's claim for
+the corrected-PE work on a stretched grid; what this report has measured on a stretched grid is the fourth-order
+convergence of the corrected potential energy $P$ itself, not of the booked work (@sec-ch06-dwork, Limits).
+A deck that is merely curved, with equal radial widths, does not trip the refusal: `stretched_x1` is a property
+of the grid key ({{< code src/coord/coordinate.hpp CoordinateOptionsImpl::stretched_x1 >}}), not of the cell
+volumes, so $\mathcal K$ still runs there with the two-point form.
+
 **The code, mapped to @eq-ch06-dwork-face** ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}):
 
 ```cpp
@@ -184,7 +207,8 @@ and removes $W^{\mathrm{cell}}$, @eq-ch06-face-energy.
 2. Form the face and cell potentials and the two divergences in `potential_flux_div`
    ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}).
 3. Book the face work as `face_gravity_work` ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}).
-4. Subtract the curvature flux for cp3, cp5 and weno5, zeroed at physical faces, as `curv_flux1`
+4. Subtract the curvature flux for cp3, cp5 and weno5, zeroed at physical faces, as `curv_flux1`, after refusing
+   the combination on a declared stretched $x_1$
    ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}).
 5. Replace the cell work, keeping it in the wall cells under `face-wallc`, as `gravity_energy_correction`
    ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}).
@@ -200,6 +224,9 @@ implicit operator" (also for `face` with `implicit-scheme: 0`).
 | `test_forcing.release` | no horizontal mass divergence | $10^{-10}$ rel. | test threshold |
 | `test_gravity_work_fixer_python` | face-wallc arm, reported | n/a | reported only |
 | `test_implicit_face_work_operator_python` | rest column, Courant 66-657 | $10^{-11}$ | `EPE_TOL` |
+| `test_stretched_x1_ref.release`, `refuses_curvature_correction` and `refuses_curvature_correction_cp5` | a stretched `weno5` or `cp5` column with `gravity-work: face-wallc` throws with the message above, and the uniform twin of the same deck runs | exact (throws or not) | a setup contract |
+| `test_stretched_x1_ref_radial_exact_off.release` (`SNAP_GRAVITY_WORK_RADIAL_EXACT=0`) | the same refusal with the plain face form and the default `gravity-work` | exact (throws) | a setup contract |
+| same file, `uniform_and_stretched_reflecting_decks_run` | with the switch at its default, the stretched `weno5` column runs | exact (does not throw) | the way out named in the message |
 
 : Tests of the face form; assertions read from the test sources at the pin, not run. {#tbl-ch06-face-tests}
 
@@ -223,6 +250,9 @@ and a tall column then blows up at acoustic Courant about 66.[^ch06-face-283]
 [^ch06-face-283]: The tall-column blow-up is recorded in chengcli/snapy#283.
 
 - The work is $O(h^2)$ in every cell without $\mathcal K$, and first order in the wall cells with it.
+- $\mathcal K$ is a uniform-grid device. On a declared stretched $x_1$ it is refused; on a curved grid with equal
+  radial widths, where the cell measure is $r^2\,\mathrm{d}r$ and the cell volumes are unequal
+  (@sec-ch04-x1volume), it is not refused and its two-point form is not exact. That case is not measured.
 - `face-wallc` does not conserve $E_{\mathrm{tot}}+\mathrm{PE}_d$ in its two wall cells (`[C5]`).
 - The orders above use exact point fluxes; with the scheme's own fluxes the reconstruction and Riemann errors add.
 - Combinations with the study switches: @sec-ch12-matrix.

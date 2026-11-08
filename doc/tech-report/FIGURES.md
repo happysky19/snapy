@@ -84,6 +84,7 @@ Regenerate every figure: `python3 tools/render_figures.py` (to `build/figures/<c
 | `fig-ch04-sphsrc-order` | `04-spatial-discretization/_sphsrc.qmd` | `snapy_report/ch04/figures/fig_ch04_schemes.py` | - |
 | `fig-ch04-weno-scale` | `04-spatial-discretization/_weno.qmd` | `snapy_report/ch04/figures/fig_ch04_schemes.py` | - |
 | `fig-ch04-x1masscov-order` | `04-spatial-discretization/_x1masscov.qmd` | `snapy_report/ch04/figures/fig_x1cov_order.py` | `src/snapy_report/ch04/data/x1cov_orders.json` (`snapy_report/ch04/checks/covariance_check.py`) |
+| `fig-ch04-x1volume` | `04-spatial-discretization/_x1volume.qmd` | `snapy_report/ch04/figures/fig_x1_volume.py` | - |
 
 ## ch05
 

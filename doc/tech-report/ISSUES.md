@@ -137,6 +137,14 @@ remove that line when the symbol enters NOTATION.md.
   reference state); $\partial^{\mathrm h}_1$, $\partial^{\mathrm w}_1$ (centred and one-sided $x_1$ differences);
   $\sigma^2_{\mathrm A,i}$ (`face_moment2_x1`); $y_{\mathrm d}$; for the buoyancy ratio $y_{\mathrm v}, X_{\mathrm v},
   \mu_{\mathrm{mix}}, \alpha_{\mathrm v}, \Gamma, b, \Upsilon$ and the superscripts $\mathrm{ex}$, $\mathrm{err}$.
+- Radial $x_1$ reconstruction (`_x1volume.qmd`): $\mathcal X$ (the $x_1$ volume coordinate, $x_1^3/3$ on a radial
+  grid, whose face increments are appendix A's $V^{(1)}_i$), $\Delta\mathcal X_i$, $\hat{\mathcal X}$ (that coordinate
+  shifted to the target face and scaled by the target cell's increment) and $\mathbf c^{\mathrm L}_f,
+  \mathbf c^{\mathrm R}_f$ (the per-face coefficient rows). $\mathcal X$ is calligraphic because $V_i$ and
+  $V^{(1)}_i$ are the cell volume and its $x_1$ factor, and $v$ is a velocity. The candidate index $\ell$ and
+  $Q_\ell, \beta_\ell, d_\ell, \alpha_\ell, \epsilon_{\mathrm W}$ are reused from the WENO section unchanged.
+  NOTATION.md has no symbol for the volume coordinate; the editor owns whether it gains one in §1 next to
+  $V^{(1)}_i$, after which the local-symbol entry is deleted from the section.
 - Overlap for the editor: chapter 12 writes the same face moments as $\sigma^{2,\mathrm{face}}_i$ and
   $\delta^{\mathrm{face}}_i$, chapter 3 as `face_moment2_x1` and $x_{1,i} - x^{\mathrm A}_{1,i}$; chapter 4 follows chapter 3
   and writes the moment $\sigma^2_{\mathrm A,i}$. One form should enter NOTATION.md §1.

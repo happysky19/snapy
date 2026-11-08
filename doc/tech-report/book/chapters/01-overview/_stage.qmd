@@ -85,7 +85,7 @@ $$ {#eq-ch01-stage-upwind}
 
 the upwind tensor `P` of {{< code src/mesh/meshblock.cpp MeshBlockImpl::advance_local >}}. Each transfer is then
 capped by what its donor holds, the `donor_cap` sweep ({{< code src/implicit/implicit_dispatch.cpp donor_cap_cpu >}},
-{{< code src/implicit/implicit_dispatch.cu donor_cap_cuda >}}). Let $H_{n,i}$ [kg] be the tracer mass cell $i$[^rg-3f39479eeb50] holds
+{{< code src/implicit/implicit_dispatch.cu donor_cap_cuda >}}). Let $H_{n,i}$ [kg] be the tracer mass cell $i$ holds
 after the stage's explicit update, $V_i(\rho_{\mathrm d}r_n)_i$ with a negative value counted as zero. Up one column, from
 the lowest interior cell $i_l$:
 
@@ -271,8 +271,6 @@ multi-rank snapy run is claimed.
 [^rg-879841a906d0]: $\mathbf U$ — conserved state vector $(\rho_d, m_1, m_2, m_3, E, \rho_1..\rho_{N_y})$
 
 [^rg-e6248a941ab9]: $\Delta\mathbf U^{(0)}$ — the explicit stage increment handed to the implicit solve
-
-[^rg-3f39479eeb50]: $i, j, k$ — cell indices in $x_1, x_2, x_3$
 
 [^rg-828441330efe]: VIC — vertically implicit correction
 

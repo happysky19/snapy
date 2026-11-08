@@ -105,7 +105,6 @@ deck. A driver must supply an initial state compatible with these coordinates, t
 and dynamics options. Do not merge it into the Cartesian Straka deck. The construction checks are listed in
 @tbl-ch04-sphsrc-tests.
 
-<!-- reader glossary keys -->Keys in this fragment: `geometry`[^rg-1eb3f3589e93], `bounds`[^rg-5f77c9d78f87], `x1min`[^rg-8bc592b4ea85], `x1max`[^rg-48cff0df1ad0], `x2min`[^rg-5733a5de0bed], `x2max`[^rg-db18f3b302a1], `x3min`[^rg-3b20bda00b65], `x3max`[^rg-d2e0070fdb81].
 ```yaml
 geometry:
   type: spherical-polar
@@ -179,20 +178,4 @@ derivation checks are those of @sec-ch03-sphpolar.
 [^rg-3a64bd635b41]: $m_1, m_2, m_3$ — momentum density $\rho v_a$
 
 [^rg-c594ad958983]: $\theta$ — $x_2$ on a spherical-polar grid (colatitude) [rad]
-
-[^rg-1eb3f3589e93]: geometry — coordinate-system and grid options
-
-[^rg-5f77c9d78f87]: bounds — coordinate bounds
-
-[^rg-8bc592b4ea85]: x1min — lower bound of the first coordinate
-
-[^rg-48cff0df1ad0]: x1max — upper bound of the first coordinate
-
-[^rg-5733a5de0bed]: x2min — lower bound of the second coordinate
-
-[^rg-db18f3b302a1]: x2max — upper bound of the second coordinate
-
-[^rg-3b20bda00b65]: x3min — lower bound of the third coordinate
-
-[^rg-d2e0070fdb81]: x3max — upper bound of the third coordinate
 <!-- end reader glossary notes -->

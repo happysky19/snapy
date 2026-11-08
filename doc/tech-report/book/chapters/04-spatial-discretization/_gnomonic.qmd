@@ -53,7 +53,7 @@ None new: the metric and the sources are derived in @sec-ch03-gnomonic, and the 
 #### The sources the coordinate adds
 
 1. *Radial.* $\rho(v_2v_{\underline 2} + v_3v_{\underline 3})/r$ plus the pressure part, with $v_{\underline 2}, v_{\underline 3}$ the lowered
-   components and $r$[^rg-7f2dd536f238] the midpoint radius `x1v`. With face pressures the pressure part is the area-weighted face
+   components and $r$ the midpoint radius `x1v`. With face pressures the pressure part is the area-weighted face
    difference minus the face gradient, exactly as step 3 of @sec-ch04-sphsrc, so the net radial pressure force is
    the face difference; without them it is $2p/r$. There is no `SNAP_X1_CENTROID_EXACT` branch on this grid.
 2. *Tangential.* @eq-ch03-gnomonic-src2 for $m_2$ and its mirror for $m_3$, with the coefficients built once in
@@ -89,7 +89,7 @@ which the gravity work of @sec-ch06 accounts for.
 
 **A minimal input**, as in the six-panel rest test `tests/test_cubed_sphere_cell_volume.yaml`:
 
-<!-- reader glossary keys -->Keys in this fragment: `x2min_pi`[^rg-dcd40b4a7925], `x2max_pi`[^rg-278d80bda86c], `x3min_pi`[^rg-6ce3dfd25d2c], `x3max_pi`[^rg-13962d795d94], `cells`[^rg-3010836ee401], `nx1`[^rg-e8053e5ca6f8], `nx2`[^rg-165168259ab0], `nx3`[^rg-abc1498ae04e], `nb2`[^rg-61b2c4f498a2], `nb3`[^rg-c6a733c228f1].
+<!-- reader glossary keys -->Keys in this fragment: `x2min_pi`[^rg-dcd40b4a7925], `x2max_pi`[^rg-278d80bda86c], `x3min_pi`[^rg-6ce3dfd25d2c], `x3max_pi`[^rg-13962d795d94], `nb2`[^rg-61b2c4f498a2], `nb3`[^rg-c6a733c228f1].
 ```yaml
 geometry:
   type: gnomonic-equiangle
@@ -176,8 +176,6 @@ and `[C3]` the shell volume to $3.3\times10^{-16}$. The ctest entries pass at th
 <!-- reader glossary notes -->
 [^rg-955aee4632de]: $\xi, \eta$ — the two gnomonic-equiangle panel coordinates of a cubed-sphere block ($x_2, x_3$) [rad]; [source](https://github.com/chengcli/snapy/blob/68f4e066974ede87e4379285c4fba895b970b7f1/src/coord/gnomonic_equiangle.cpp#L56-L69)
 
-[^rg-7f2dd536f238]: $r$ — $x_1$ on a spherical-polar grid (radius) [m]
-
 [^rg-dcd40b4a7925]: x2min_pi — lower bound of the second coordinate in multiples of pi
 
 [^rg-278d80bda86c]: x2max_pi — upper bound of the second coordinate in multiples of pi
@@ -185,14 +183,6 @@ and `[C3]` the shell volume to $3.3\times10^{-16}$. The ctest entries pass at th
 [^rg-6ce3dfd25d2c]: x3min_pi — lower bound of the third coordinate in multiples of pi
 
 [^rg-13962d795d94]: x3max_pi — upper bound of the third coordinate in multiples of pi
-
-[^rg-3010836ee401]: cells — cell counts and ghost-width options
-
-[^rg-e8053e5ca6f8]: nx1 — number of cells in the first coordinate direction
-
-[^rg-165168259ab0]: nx2 — number of cells in the second coordinate direction
-
-[^rg-abc1498ae04e]: nx3 — number of cells in the third coordinate direction
 
 [^rg-61b2c4f498a2]: nb2 — number of blocks along the second coordinate direction
 

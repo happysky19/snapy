@@ -18,7 +18,7 @@ the parser defaults are stated in @sec-ch04-riemann.
 ::: {.callout-note title="At a glance"}
 **Purpose.** The star-region flux of @eq-ch04-hllc-flux, with contact speed and pressure from @eq-ch04-hllc-contact.
 
-**Data.** Reads $\mathbf W^{\mathrm L}_f, \mathbf W^{\mathrm R}_f$, $\rho e$, $\gamma$ and $c_s$[^rg-96c1ea134783] of each side; writes $\mathbf F_a$ and $p_f$.
+**Data.** Reads $\mathbf W^{\mathrm L}_f, \mathbf W^{\mathrm R}_f$, $\rho e$, $\gamma$ and $c_s$ of each side; writes $\mathbf F_a$ and $p_f$.
 
 **Placement.** The Riemann step of each direction (@sec-ch04-riemann), every stage.
 
@@ -204,7 +204,5 @@ no ctest asserts the contact property.
 4. **Contact exactness is measured on a port**, for a dry gas; no ctest asserts it.
 
 <!-- reader glossary notes -->
-[^rg-96c1ea134783]: $c_s$ — sound speed [m s$^{-1}$]
-
 [^rg-0c5aa43793e0]: $E$ — total energy density, internal plus kinetic, $\rho e + \tfrac12\rho\lvert\mathbf v\rvert^2$ [J m$^{-3}$]; excludes potential energy
 <!-- end reader glossary notes -->

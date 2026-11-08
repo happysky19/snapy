@@ -30,7 +30,7 @@ only on the well-balanced $x_1$ path, that is with gravity on.
 **Evidence.** @tbl-ch04-x1masscov-tests; `test_x1_seam_split_x1_mass_covariance.release`, `derivation_check.py` `[C15]`, `covariance_check.py` `[C4]`–`[C6]`.
 :::
 
-Local symbols: $h_i$[^rg-03001039acf8] the $x_1$ width of cell $i$ (`dx1f`, appendix A, notation group 1); $\partial^{\mathrm h}_1q$ the
+Local symbols: $h_i$ the $x_1$ width of cell $i$ (`dx1f`, appendix A, notation group 1); $\partial^{\mathrm h}_1q$ the
 centred difference over the centroids, as in @sec-ch04-fluxcov; $\partial^{\mathrm w}_1q$ the one-sided wall difference of
 step 2 below; $\langle\cdot\rangle$ a cell average (appendix A, notation group 4).
 
@@ -216,7 +216,5 @@ correction on a flow.
    come from the uniform derivation; on a stretched grid the corrected gap's order is not measured.
 
 <!-- reader glossary notes -->
-[^rg-03001039acf8]: $h_i$ — $x_1$ width of cell $i$, $x_{1,i+1/2}-x_{1,i-1/2}$; written $\Delta x_1$ where the direction must be explicit
-
 [^rg-1469a529515b]: $g_1, g_2, g_3$ — constant gravity components [m s$^{-2}$]; $g_1<0$ points to decreasing $x_1$
 <!-- end reader glossary notes -->

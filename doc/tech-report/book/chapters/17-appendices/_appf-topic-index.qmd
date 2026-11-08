@@ -1196,6 +1196,8 @@
 
 **non-hydrostatic model, what snapy solves**: How snapy differs from a hydrostatic primitive-equation core, @sec-ch02-pecore.
 
+*non-uniform weights*, see **reconstruction, per-face weights**.
+
 *notation*, see **symbols, coordinates and grids**.
 
 **notation index**: The notation index, @sec-appa-index.
@@ -1418,11 +1420,15 @@
 
 **$r$**: [1. Coordinates and grids](#sec-appa-1).
 
+*r^2 dr average*, see **reconstruction on a curved grid, radial**.
+
 **$R_{\mathrm{d}}$, $R_n$**: [2. State, thermodynamics and species](#sec-appa-2).
 
 **$r_n$**: [2. State, thermodynamics and species](#sec-appa-2).
 
 **$R_n = \mathcal R/\mu_n$**: [2a. Species thermodynamics, phase change and reactions](#sec-appa-2a).
+
+*radial order*, see **reconstruction on a curved grid, radial**.
 
 *radiating boundary*, see **boundary condition, open**.
 
@@ -1457,6 +1463,10 @@
 **reconstruction, choosing**: The reconstruction framework, @sec-ch04-framework.
 
 **reconstruction, donor cell**: Donor cell, @sec-ch04-dc.
+
+**reconstruction on a curved grid, radial**: The radial $x_1$ reconstruction on the volume coordinate (automatic on curved grids), @sec-ch04-x1volume.
+
+**reconstruction, per-face weights**: The radial $x_1$ reconstruction on the volume coordinate (automatic on curved grids), @sec-ch04-x1volume.
 
 **reconstruction, piecewise linear**: PLM, the van Leer harmonic-mean slope, @sec-ch04-plm.
 
@@ -1752,6 +1762,8 @@
 
 **stretched grid, reconstruction weights**: The reconstruction framework, @sec-ch04-framework.
 
+*stretched vertical weights*, see **reconstruction, per-face weights**.
+
 *subgrid model*, see **turbulence closure (not built)**.
 
 **supported combinations of options**: Switch-combination coverage matrix, @sec-ch12-matrix.
@@ -1845,6 +1857,8 @@
 **$\theta_v$**: [2. State, thermodynamics and species](#sec-appa-2).
 
 *thetamin*, see **positivity limiter, how much it acted**.
+
+**`thickness`**: Body heating, top cooling and bottom heating, @sec-ch09-heating.
 
 *Thomas algorithm*, see **implicit scheme, solve**.
 
@@ -2019,6 +2033,8 @@
 **viscosity, height-dependent profile**: x1 profiles of the diffusion coefficients and the mean-of-products face coefficient, @sec-ch09-x1profile.
 
 **`vm`**: Precipitation and evaporation kinetics in the example drivers (driver-level coupling), @sec-ch10-kinetics.
+
+*volume coordinate*, see **reconstruction on a curved grid, radial**.
 
 *vorticity*, see **diagnostics in output**.
 

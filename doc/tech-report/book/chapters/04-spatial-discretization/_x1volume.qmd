@@ -1,0 +1,420 @@
+## The radial $x_1$ reconstruction on the volume coordinate (automatic on curved grids) {#sec-ch04-x1volume}
+
+<!-- PROVENANCE
+pin: snapy@68f4e066974ede87e4379285c4fba895b970b7f1 (chengcli/snapy, code_pin.yml)
+sources: src/coord/coordinate.cpp, src/recon/x1_coeffs.cpp, src/recon/x1_coeffs.hpp, src/recon/weno5.cpp,
+         src/recon/cp5.cpp, src/recon/reconstruct.cpp, src/hydro/hydro.cpp, src/scalar/scalar.cpp,
+         tests/test_x1_coeffs.cpp, tests/test_radial_order.py, tests/test_deck_x1_wiring.cpp,
+         tests/test_stage2_cubed_stretched.py, tests/CMakeLists.txt at the pin (re-derived from the code)
+status: draft
+author: Tianhao Le
+reviewer:
+-->
+
+### Summary
+
+On a spherical-polar or a cubed-sphere grid the number a cell holds is an average over the cell's own volume, and
+the volume element in the radial direction is $r^2\,\mathrm{d}r$, not $\mathrm{d}r$. The reconstruction weights of
+@sec-ch04-cp and @sec-ch04-weno, on the other hand, are the fixed rational numbers that turn *equally spaced plain*
+averages into a face value. Feeding volume averages to them loses three orders: a fifth-order scheme becomes
+second order, and it does so on a grid whose radial cells all have the same width, so nothing in the deck looks
+unusual. snapy removes the mismatch by a change of variable. It builds the five-cell weights once per face from
+the volume coordinate $\mathcal X=r^3/3$, in which a volume average *is* a plain average, and uses those weights
+instead of the shipped ones for the $x_1$ direction.
+
+::: {.callout-note title="At a glance"}
+**Purpose.** Reconstructs in $\mathcal X=r^3/3$ instead of $r$[^rg-7f2dd536f238], so that the fifth-order weights act on the averages they
+assume, @eq-ch04-x1volume-average.
+
+**Data.** Reads the block's $x_1$ face radii `x1f` with ghosts; writes one coefficient row per computed $x_1$ face
+into the buffers `cm_x1`, `cp_x1` of the two $x_1$ interpolants, once at construction.
+
+**Placement.** Block construction, inside `HydroImpl::reset` and `ScalarImpl::reset`; afterwards every $x_1$
+reconstruction of every stage uses the rows.
+
+**Activation.** Automatic, no key: `geometry/type` `spherical-polar` or `gnomonic-equiangle`, more than one $x_1$
+cell, and `dynamics/reconstruct/vertical/type` `weno5` or `cp5`. `SNAP_X1_CENTROID_EXACT` takes the hydro rows off
+this route on spherical-polar; the passive scalar stays on it.
+
+**Guarantee / limits.** Fifth order at the faces on radial volume averages, against second order without it;
+exact for polynomials of degree 4 in $\mathcal X$; only `weno5` and `cp5` have the rows.
+
+**Evidence.** @tbl-ch04-x1volume-tests; `test_radial_order_python`, `test_x1_coeffs.release`, the check
+`x1volume_check.py` `[C1]`–`[C7]`.
+:::
+
+Local symbols: $\mathcal X(x_1)$ [m$^3$] the $x_1$ volume coordinate, $\mathcal X=x_1^3/3$ on a radial grid and
+$\mathcal X=x_1$ on a Cartesian one, so that $\mathcal X_{i+1/2}-\mathcal X_{i-1/2}=V^{(1)}_i$, appendix A's $x_1$
+factor of the cell volume; $\Delta\mathcal X_i$ that increment; $\hat{\mathcal X}$ [-] the local coordinate of a
+window, $\mathcal X$ shifted to the target face and divided by $\Delta\mathcal X$ of the target cell;
+$\mathbf c^{\mathrm L}_f$, $\mathbf c^{\mathrm R}_f$ the coefficient rows that build the two states of face $f$. The
+WENO5 candidate index $\ell\in\{0,1,2\}$ and its $Q_\ell$, $\beta_\ell$, $d_\ell$, $\alpha_\ell$,
+$\epsilon_{\mathrm W}$ are @sec-ch04-weno's, carried here with a face subscript where a face must be named. Every other symbol is appendix A's
+($V^{(1)}_i$[^rg-aec49c6157b4], $\bar q_i$, $\langle q\rangle_{V_i}$[^rg-e2902a1873a5], $q^{\mathrm L}_f$, $q^{\mathrm R}_f$, $h_i$[^rg-03001039acf8]).
+
+The default vertical reconstruction of a deck that names no `reconstruct` block is donor cell, which has no rows
+and needs none. Every shipped curved deck names `weno5`; the shallow-water ones have a single $x_1$ cell, which
+fails the "more than one $x_1$ cell" test and leaves them, correctly, with no rows at all. The rows are the same
+machinery that carries a stretched Cartesian $x_1$ (@sec-ch04-framework), applied to a coordinate the user never
+writes down.
+
+### Derivation
+
+#### What a radial cell holds
+
+1. *The cell volume factors.* On both curved grids the cell volume is an $x_1$ factor times a horizontal factor,
+   $V_{ijk}=\varpi_{jk}V^{(1)}_i$ with $V^{(1)}_i=\tfrac13(x_{1,i+1/2}^3-x_{1,i-1/2}^3)$ (@sec-ch03-sphpolar,
+   @sec-ch03-gnomonic). The horizontal factor does not depend on $i$.
+2. *So the stored value is a radial average against $r^2\,\mathrm{d}r$.* For a field that has already been averaged
+   over the cell's $x_2$ and $x_3$ extent, $\varpi_{jk}$[^rg-5cf4b88ae6fa] cancels and
+
+   $$
+   \bar q_i \;=\; \langle q\rangle_{V_i} \;=\; \frac{\int_{x_{1,i-1/2}}^{x_{1,i+1/2}} q\,x_1^2\,\mathrm{d}x_1}
+                                                   {\int_{x_{1,i-1/2}}^{x_{1,i+1/2}} x_1^2\,\mathrm{d}x_1}.
+   $$ {#eq-ch04-x1volume-average}
+
+   The measure is the grid's own, `cell_volume` ({{< code src/coord/coordinate.cpp CoordinateImpl::cell_volume >}}),
+   built from the face radii in `reset` ({{< code src/coord/spherical_polar.cpp SphericalPolarImpl::reset >}},
+   {{< code src/coord/gnomonic_equiangle.cpp GnomonicEquiangleImpl::reset >}}).
+
+3. *Substitute $\mathcal X=x_1^3/3$.* Then $\mathrm{d}\mathcal X=x_1^2\,\mathrm{d}x_1$ and @eq-ch04-x1volume-average
+   becomes
+
+   $$
+   \bar q_i \;=\; \frac{1}{\Delta\mathcal X_i}\int_{\mathcal X_{i-1/2}}^{\mathcal X_{i+1/2}} q\,\mathrm{d}\mathcal X,
+   \qquad \Delta\mathcal X_i = V^{(1)}_i,
+   $$ {#eq-ch04-x1volume-plain}
+
+   a *plain* cell average on the grid whose faces are $\mathcal X_{i\pm1/2}$. The change of variable is exact, not
+   an expansion: nothing is dropped, and the code applies it by handing the reconstruction $\mathcal X$ in place
+   of the radii, `x1_row_faces` ({{< code src/coord/coordinate.cpp CoordinateImpl::x1_row_faces >}}).
+4. *And that grid is not uniform.* Write $h_i$ for the radial width and $x^{\mathrm m}_{1,i}$[^rg-c6d6c0a00a4a] for the cell
+   midpoint, appendix A's $r^{\mathrm m}_i$ on a radial grid. Expanding
+   $\tfrac13[(x^{\mathrm m}_{1,i}+\tfrac{h_i}2)^3-(x^{\mathrm m}_{1,i}-\tfrac{h_i}2)^3]$ gives the increment the
+   code forms as `x1f.pow(3) / 3.` ({{< code src/coord/coordinate.cpp CoordinateImpl::x1_row_faces >}}),
+
+   $$
+   \Delta\mathcal X_i \;=\; \bigl(x^{\mathrm m}_{1,i}\bigr)^{2}h_i + \frac{h_i^3}{12},
+   $$ {#eq-ch04-x1volume-width}
+
+   so neighbouring increments differ by about $(1+h_i/x^{\mathrm m}_{1,i})^2$ even when every $h_i$ is the same. On $r\in[1,2]$ with
+   twelve equal radial cells the widest $\Delta\mathcal X$ is 3.53 times the narrowest and neighbours differ by 1.091
+   to 1.166 (`[C5]`). A uniform radial grid is therefore a *stretched* grid in the variable the reconstruction must
+   work in, and the fixed uniform weights are wrong on it at second order. The same algebra appears in appendix A's
+   $\sigma^2_i$ and in the exact volumes of @sec-ch03-gnomonic; what is new here is using it as the reconstruction's
+   abscissa.
+
+#### The per-face rows
+
+Let $f$ be a face, and let $\mathcal X_{f-3},\dots,\mathcal X_{f+2}$ be the six face values of $\mathcal X$ that bound
+the five cells of the stencil. Write $\hat{\mathcal X} = (\mathcal X-\mathcal X_f)/\Delta\mathcal X$ with $\Delta\mathcal X$ the
+increment of the cell whose upper face is $f$, so that $\hat{\mathcal X}=0$ at the target face. The construction is the
+classical one, carried out in $\hat{\mathcal X}$ instead of in a cell index.
+
+1. *The five-cell polynomial.* There is exactly one quartic $P$[^rg-8185c9cafa62] with
+   $\tfrac{1}{\Delta\mathcal X_k}\int_{I_k}P\,\mathrm{d}\mathcal X=\bar q_k$ on each of the five cells. Its value at
+   $\hat{\mathcal X}=0$ is a fixed linear combination of the five averages. The code builds that combination from the
+   derivative of the Lagrange basis of the primitive of $P$ at the six nodes, which is `primitive_row`
+   ({{< code src/recon/x1_coeffs.cpp primitive_row >}}); for equal widths it returns the shipped `cp5` numbers
+   $(-\tfrac1{20},\tfrac9{20},\tfrac{47}{60},-\tfrac{13}{60},\tfrac1{30})$ (`[C1]`).
+2. *Three quadratic candidates.* For each $\ell$ the same step on three consecutive cells gives the quadratic
+   $Q_{\ell,f}$ and its value at $\hat{\mathcal X}=0$: three rows of three numbers each, written into columns $\ell$,
+   $\ell+1$, $\ell+2$ of the table, in `ptype_row` ({{< code src/recon/x1_coeffs.cpp ptype_row >}}).
+3. *The smoothness indicators.* Writing $Q_{\ell,f}(\hat{\mathcal X})=a_0+a_1\hat{\mathcal X}+a_2\hat{\mathcal X}^2$, the
+   three cell averages determine $a_1$ and $a_2$ through the inverse of the $3\times3$ matrix whose rows are the
+   cell averages of $1,\hat{\mathcal X},\hat{\mathcal X}^2$ — `quad_inv_rows`
+   ({{< code src/recon/x1_coeffs.cpp quad_inv_rows >}}), whose row $k$[^rg-06994dde5c75] is
+   $(1,\tfrac12(\hat{\mathcal X}_k+\hat{\mathcal X}_{k+1}),\tfrac13(\hat{\mathcal X}_k^2+\hat{\mathcal X}_k\hat{\mathcal X}_{k+1}+\hat{\mathcal X}_{k+1}^2))$,
+   the exact averages of those three monomials over cell $k$. The code then stores the two rows $2a_2$ and
+   $\pm(2a_2-2a_1)$, which are $Q_{\ell,f}''$ and $Q_{\ell,f}''-2Q_{\ell,f}'(0)$, and forms
+
+   $$
+   \beta_{\ell,f} \;=\; \tfrac{13}{12}\,\bigl(Q_{\ell,f}''\bigr)^2 \;+\; \tfrac14\,\bigl(Q_{\ell,f}''-2Q_{\ell,f}'(0)\bigr)^2 .
+   $$ {#eq-ch04-x1volume-beta}
+
+   The two rows are stored by `ptype_row` ({{< code src/recon/x1_coeffs.cpp ptype_row >}}) and squared and
+   combined into $\beta_{\ell,f}$ at run time by `interp_weno5_nu_impl`
+   ({{< code src/recon/interp_impl_nu.h interp_weno5_nu_impl >}}).
+   @eq-ch04-x1volume-beta is the Jiang–Shu form written in $\hat{\mathcal X}$; on equal increments the six rows return the shipped
+   three-column numbers $(1,-2,1)$ and $(1,-4,3)$, or their reverses, exactly (`[C1]`). The sign in front of the second row is $-1$ for the
+   stencil furthest from the face; because $\beta$ squares it, the sign only fixes which of the two shipped rows
+   each one reduces to. Scaling by $\Delta\mathcal X$ makes $\beta$ independent of the units of $\mathcal X$
+   ({{< code tests/test_x1_coeffs.cpp X1Coeffs.beta_is_scale_free >}}).
+4. *The optimal weights.* The three $d_{\ell,f}$ that make $\sum_\ell d_{\ell,f}Q_{\ell,f}(0)=P(0)$ are written in
+   closed form from the four distances
+   $-\hat{\mathcal X}_{f-3},-\hat{\mathcal X}_{f-2},\hat{\mathcal X}_{f+1},\hat{\mathcal X}_{f+2}$
+   ({{< code src/recon/x1_coeffs.cpp ptype_row >}}). On equal increments they are $(0.3,0.6,0.1)$ (`[C1]`); on any
+   grid they are positive and sum to one (`[C2]`), so no negative-weight splitting is needed, and combining the
+   three candidate rows with them reproduces the five-cell row of step 1 to $5.7\times10^{-16}$ over width ratios
+   $0.8$ to $1.6$ per cell (`[C3]`, `combine_optimal`,
+   {{< code src/recon/x1_coeffs.cpp combine_optimal >}}).
+5. *Hence the two rows per face.* `cp5` keeps only the five-cell row; `weno5` keeps all 48 numbers (three candidate
+   rows, six smoothness rows, three optimal weights) and combines them at run time with the usual
+   $\alpha_\ell=d_\ell/(\beta_\ell+\epsilon_{\mathrm W})^2$ (@sec-ch04-weno). The left and right states of a face need different rows, so
+   each face gets two. $\mathbf c^{\mathrm L}_f$, the state the cell below the face offers, comes from the window
+   taken as it stands; $\mathbf c^{\mathrm R}_f$, the state the cell above it offers, comes from the same window
+   reflected about the face, which is why `window_weno5` runs the same routine on $-\mathcal X$ reversed and then
+   reverses the columns ({{< code src/recon/x1_coeffs.cpp window_weno5 >}}). The code calls the two `cp` and `cm`,
+   and `_apply_inplace` writes them into the right and the left state array respectively, one index apart
+   (@sec-ch04-framework).
+
+*What is exact and what is truncated.* The `cp5` row reproduces the face value of any polynomial of degree $\le4$
+in $\mathcal X$ from exact cell averages, and not of degree 5: the measured relative face error on eighteen cells of
+width ratio 1.1 is below $4.4\times10^{-16}$ up to degree 4 and $1.9\times10^{-5}$ at degree 5 (`[C4]`). On a smooth
+field the remainder is therefore $O(\Delta\mathcal X^5)$, that is $O(h^5)$ in the radial width at fixed $r$.
+Measured on exact $r^2\,\mathrm{d}r$ averages of a smooth profile on $r\in[1,2]$ with equal radial widths, the rows
+converge at order 5.01 while the shipped uniform weights stall at 2.00 (`[C6]`, and the same conclusion through the
+solver in `test_radial_order_python`). The fifth order is the order of the *face value*; the order of the stage is
+still set by the Riemann solver and the divergence (@sec-ch04-divergence).
+
+#### The wall closure
+
+A physical $x_1$ wall is a boundary of the domain, so there is no radius past it to cube. The code mirrors
+$\mathcal X$ instead of $r$: each of the `nghost` ghost face values is the reflection of its interior partner in the
+wall face, $\mathcal X_{\mathrm{wall}-k}=2\mathcal X_{\mathrm{wall}}-\mathcal X_{\mathrm{wall}+k}$.
+
+1. *The ghost increments are the interior ones reversed.* Reflection preserves differences, so
+   $\Delta\mathcal X_{-1-k}=\Delta\mathcal X_{k}$ for $k<$ `nghost`.
+2. *The two windows at the wall face are each other's mirror.* The reflection maps the six faces of the window
+   that builds $q^{\mathrm L}$ onto the six that build $q^{\mathrm R}$, so one row is the other reversed, bit for bit
+   (`[C7]`).
+3. *Hence the wall face closes.* With reflecting ghosts the density and pressure rows are even about the wall and
+   the $x_1$ velocity odd. Step 2 then gives $q^{\mathrm L}_f=q^{\mathrm R}_f$ for an even row and
+   $q^{\mathrm L}_f=-q^{\mathrm R}_f$ for the velocity, measured at $0$ and $2.9\times10^{-17}$ (`[C7]`), so the wall
+   face carries no mass. Cubing the mirrored radii instead would break both, because $r\mapsto r^3/3$ does not
+   commute with reflection.
+
+### Numerical method
+
+```{python}
+#| label: fig-ch04-x1volume
+#| fig-cap: "The volume coordinate and its wall closure. (a) Twelve cells of equal radial width on r in [1, 2] (top row) and the same cells drawn against the volume coordinate v = r^3/3 (bottom row), both normalised to the same span: in v the widest cell is 3.53 times the narrowest, so the uniform-grid weights do not apply. (b) Three ghost volumes (hatched, reddish purple) at an inner wall (thick black line): each is the reflection in v of its interior partner, so the bracketed increments match in pairs and the two one-sided reconstructions meet on the wall face."
+#| fig-alt: "Left: two rows of twelve cell boxes, the upper with equal widths and the lower with widths growing to the right. Right: a row of cells with three hatched ghost cells left of a thick wall line, and three pairs of brackets below marking matching widths on the two sides."
+#| echo: false
+from snapy_report.ch04.figures.fig_x1_volume import make_fig
+make_fig()
+```
+
+**Which faces get rows, and when.** `CoordinateImpl::x1_row_faces` is asked once per block, with the name of the
+$x_1$ interpolant ({{< code src/coord/coordinate.cpp CoordinateImpl::x1_row_faces >}}). It returns $\mathcal X$ on
+a `spherical-polar` or `gnomonic-equiangle` block with more than one $x_1$ cell *and* a `weno5` or `cp5` $x_1$
+interpolant; on any other grid it returns the plain faces when the deck declares a stretched $x_1$, and nothing
+at all otherwise. "Nothing at all" is the uniform Cartesian case, where the shipped weights are already right and
+no buffer is allocated ({{< code tests/test_deck_x1_wiring.cpp DeckX1Wiring.uniform_deck_installs_nothing >}}).
+
+**Where each quantity lives.** The rows are a property of the grid, not of the state: they are built from faces
+only, in double precision on the CPU, and cast to the state's dtype and device on first use and cached
+({{< code src/recon/x1_coeffs.cpp x1_coeffs_for >}}). They never read `x1v`, so the difference between the stored
+cell centre and the volume centroid on a cubed-sphere block (@sec-ch03-gnomonic) does not enter.
+
+**Ghosts and seams.** The table covers the faces the interpolant can reach, four fewer than the number of $x_1$
+cells of the block with its ghosts, which is exactly
+the slice `_apply_inplace` writes (@sec-ch04-framework); a mismatch between the number of rows and the number of
+output faces is refused rather than wrapped
+({{< code src/recon/x1_coeffs.hpp x1_forward_nu >}}). Each block builds its own rows from its own face array,
+including the ghost faces it was given. The face arrays of two blocks that share an $x_1$ seam are slices of one
+global array, so the two sides build their windows from the same numbers and hold the same rows for the shared
+face; whether the two face values then agree bit for bit is not measured at the pin, and the seam average of
+@sec-ch04-seam is what makes the flux single-valued in any case. Only a *physical* wall is mirrored; a seam ghost
+keeps the neighbour's radii.
+
+**Order of accuracy.** Fifth order at interior faces (`[C6]`, `test_radial_order_python`). The wall cells are
+covered by the mirror of the previous subsection, which is exact for the reflected state but is not a measurement
+of the order there; no test fits an order in the wall cells, and `test_radial_order_python` excludes the three
+faces nearest each wall.
+
+**Which stage, which part.** None: the rows are built at construction and are constant for the run. The cost per
+stage is one extra multiply-accumulate pass over a per-face row instead of a broadcast constant row
+({{< code src/recon/interp_impl_nu.h interp_weno5_nu_impl >}}, {{< code src/recon/interp_impl_nu.h interp_poly5_nu_impl >}}).
+
+### Code
+
+**Construction fragment.** Nothing has to be asked for: a spherical-polar geometry with `weno5` in the vertical
+is already on this route. The two blocks below are the part of a deck that decides it; they are not a runnable
+deck on their own, and a driver must add the mesh, the state and the rest of the dynamics. Do not merge them into
+the Cartesian Straka deck.
+
+<!-- reader glossary keys -->Keys in this fragment: `geometry`[^rg-1eb3f3589e93], `bounds`[^rg-5f77c9d78f87], `x1min`[^rg-8bc592b4ea85], `x1max`[^rg-48cff0df1ad0], `x2min`[^rg-5733a5de0bed], `x2max`[^rg-db18f3b302a1], `x3min`[^rg-3b20bda00b65], `x3max`[^rg-d2e0070fdb81], `cells`[^rg-3010836ee401], `nx1`[^rg-e8053e5ca6f8], `nx2`[^rg-165168259ab0], `nx3`[^rg-abc1498ae04e].
+```yaml
+geometry:
+  type: spherical-polar
+  bounds: {x1min: 1.e7, x1max: 1.03e7, x2min: 1., x2max: 2., x3min: 0., x3max: 1.}
+  cells: {nx1: 64, nx2: 1, nx3: 1, nghost: 3}      # equal radial widths: the rows still differ per face
+dynamics:
+  reconstruct:
+    vertical:   {type: weno5, scale: false, shock: false}
+    horizontal: {type: weno5, scale: false, shock: false}
+```
+
+**What is refused, and why.**
+
+1. *An $x_1$ interpolant that is not `weno5` or `cp5`, on a deck that declares a stretched $x_1$*, with "[cp3] has
+   no stretched-x1 reconstruction: route A builds per-face coefficients for weno5 and cp5 only"
+   ({{< code src/recon/interpolation.hpp InterpImpl::set_x1_coeffs >}}): running the uniform weights on a
+   non-uniform $x_1$ would be silent. A *curved* grid with such an interpolant is not refused — it gets no rows and
+   keeps the uniform weights, which is the Limits layer's first item.
+2. *A face vector handed to the horizontal reconstruction*, with "route A covers the x1 dimension only"
+   ({{< code src/recon/x1_coeffs.hpp x1_forward_nu >}}), and a table whose row count does not match the number of
+   output faces, by the same check.
+3. *A face array that is not strictly increasing, is not one-dimensional, has a non-finite entry, or has fewer
+   than six entries*, in `check_faces` ({{< code src/recon/x1_coeffs.cpp check_faces >}}). Six faces are a
+   five-cell window plus one.
+
+**The code, mapped to @eq-ch04-x1volume-plain** ({{< code src/coord/coordinate.cpp CoordinateImpl::x1_row_faces >}}):
+
+```cpp
+  bool radial = (t == "spherical-polar" || t == "gnomonic-equiangle") &&
+                options->nx1() > 1;
+  if (!radial || (interp != "weno5" && interp != "cp5"))
+    return options->stretched_x1() ? x1f : torch::Tensor();
+  // ghost widths mirrored in V at a wall, so mirrored ghosts keep its flux 0
+  auto v = x1f.pow(3) / 3.;
+  int ng = options->nghost(), n = v.size(0);
+  if (pmb && pmb->options->is_physical_boundary(0, 0, -1))
+    v.slice(0, 0, ng).copy_(2. * v[ng] - v.slice(0, ng + 1, 2 * ng + 1).flip(0));
+```
+
+`v` is $\mathcal X$ of @eq-ch04-x1volume-plain, `x1f.pow(3) / 3.` is $x_1^3/3$, and the `copy_` line is the wall
+reflection, with the mirror image at the outer wall in the lines that follow.
+
+| what | code link | symbol | switch |
+|---|---|---|---|
+| the abscissa and the wall mirror | {{< code src/coord/coordinate.cpp CoordinateImpl::x1_row_faces >}} | `x1_row_faces` | geometry type |
+| hydro asks for it | {{< code src/hydro/hydro.cpp HydroImpl::reset >}} | `set_x1_faces` | `SNAP_X1_CENTROID_EXACT` |
+| the passive scalar asks for it | {{< code src/scalar/scalar.cpp ScalarImpl::reset >}} | `precon1` | `scalar`[^rg-fca732804e45] |
+| both interpolants of the direction | {{< code src/recon/reconstruct.cpp ReconstructImpl::set_x1_faces >}} | `set_x1_faces` | |
+| the weno5 table, 48 per face | {{< code src/recon/weno5.cpp Weno5InterpImpl::set_x1_coeffs >}} | `weno5_x1_coeffs` | `type: weno5` |
+| the cp5 table, 5 per face | {{< code src/recon/cp5.cpp Center5InterpImpl::set_x1_coeffs >}} | `cp5_x1_coeffs` | `type: cp5` |
+| one window | {{< code src/recon/x1_coeffs.cpp ptype_row >}} | `ptype_row` | |
+| the face loop | {{< code src/recon/x1_coeffs.cpp weno5_x1_coeffs >}} | `weno5_x1_coeffs` | |
+| installing and clearing the buffers | {{< code src/recon/x1_coeffs.hpp x1_set_coeffs >}} | `cm_x1` | |
+| the run-time path | {{< code src/recon/weno5.cpp Weno5InterpImpl::left >}} | `has_x1_coeffs` | |
+
+: Code map of the volume-coordinate rows. {#tbl-ch04-x1volume-code}
+
+1. `CoordinateImpl::x1_row_faces` turns the block's face radii into $\mathcal X$ and mirrors the ghosts at a
+   physical wall ({{< code src/coord/coordinate.cpp CoordinateImpl::x1_row_faces >}}).
+2. `HydroImpl::reset` asks for it with the name of the $x_1$ interpolant and installs the result, unless
+   `SNAP_X1_CENTROID_EXACT` is on and the grid is spherical-polar, in which case the module is handed plain means
+   instead and gets the plain radii, or nothing on a uniform grid
+   ({{< code src/hydro/hydro.cpp HydroImpl::reset >}}). `ScalarImpl::reset` asks unconditionally and builds a
+   second reconstruction, `recon1`, for the $x_1$ direction when there are rows to install
+   ({{< code src/scalar/scalar.cpp ScalarImpl::reset >}}).
+3. `ReconstructImpl::set_x1_faces` passes the faces to both interpolants of that direction, so density and tracers
+   (`interp1`) and velocity and pressure (`interp2`) get the same abscissa
+   ({{< code src/recon/reconstruct.cpp ReconstructImpl::set_x1_faces >}}).
+4. `weno5_x1_coeffs` and `cp5_x1_coeffs` check the faces and run one window per output face
+   ({{< code src/recon/x1_coeffs.cpp weno5_x1_coeffs >}}, {{< code src/recon/x1_coeffs.cpp cp5_x1_coeffs >}}).
+5. `x1_set_coeffs` registers the rows as the buffers `cm_x1` and `cp_x1` and drops any cast copy, so a module that
+   is reset, cloned or moved to a device carries its rows
+   ({{< code src/recon/x1_coeffs.hpp x1_set_coeffs >}};
+   {{< code tests/test_uniform_module_tree.cpp UniformModuleTree.clone_keeps_the_installed_tables >}}).
+6. `left` and `right` take the per-face path whenever `has_x1_coeffs` is true and the shipped-constant path
+   otherwise ({{< code src/recon/weno5.cpp Weno5InterpImpl::left >}}).
+
+### Tests
+
+| test (ctest name) | what it asserts | tolerance | where the tolerance comes from |
+|---|---|---|---|
+| `test_x1_coeffs.release`, `uniform_matches_shipped_rows` | equal widths give the shipped `weno5` and `cp5` rows and $(0.3,0.6,0.1)$ | $10^{-14}$, $10^{-15}$ | a few units in the last place of a 48-entry row |
+| same, `row_sums` | every candidate row and the weights sum to one, weights positive, on uniform, $q=1.05$, $q=0.9408$, $q=1.2$ and a 1:4 jump | $10^{-15}$ | round-off of a five-term sum |
+| same, `cp5_row_matches_an_independent_derivation` | the `cp5` row equals a six-node primitive row built in the test | $10^{-13}$ | two $3\times3$ solves at ratios to $1.6^5$ |
+| same, `polynomial_exactness_and_face_index` | the rows are exact for cell averages to degree 4 and sit on the right face | per claim | stated in the test |
+| same, `cuda_matches_cpu_on_both_launch_paths` | the CUDA and CPU row paths agree | per claim | stated in the test |
+| `test_deck_x1_wiring.release` | a stretched deck installs the block's own faces on `recon1` and on the scalar's `recon1` and on neither `recon23`; a uniform Cartesian deck installs nothing | exact (`torch::equal`) | the rows are a pure function of the faces |
+| `test_radial_order_python`, `test_radial_order_cuda_python` | on a spherical-polar deck with equal radial widths, the `weno5` and `cp5` face error fitted over $n_1=64\to128$ falls at order $\ge4.5$ (the $32\to64$ order is printed, not asserted) | fitted order $\ge4.5$ | the test's own threshold |
+| `test_radial_order_x1_centroid_python` | the same deck with `SNAP_X1_CENTROID_EXACT` and a stretched $x_1$, on plain means, at order $\ge4$ | fitted order $\ge4$ | the test's own threshold |
+| `test_stage2_cubed_stretched_python`, `..._cuda_python` | a six-panel C24 cubed sphere with a declared `x1f` and `weno5` holds a hydrostatic rest and a uniform tracer for 100 cycles | $2\times10^{-12}$ of $c_s$[^rg-96c1ea134783]; $2\times10^{-13}$ on the tracer ratio | the test's own thresholds |
+| `x1volume_check.py` `[C1]`–`[C7]` (this report) | the seven claims of the Derivation layer | per claim | stated in the check |
+
+: Tests of the volume-coordinate rows. {#tbl-ch04-x1volume-tests}
+
+::: {.callout-important title="Check"}
+**Evidence.** The seven claims pass.[^ch04-x1volume-run] The ctest entries are read from the test sources at the
+pin: **pending a pinned ctest run** for every row of @tbl-ch04-x1volume-tests.
+
+**Coverage.** `test_x1_coeffs` and `test_deck_x1_wiring` run on CPU, with one CUDA case inside `test_x1_coeffs`;
+`test_radial_order` and `test_stage2_cubed_stretched` have registered CUDA arms that skip without a device, and a
+skip is not a pass. Every one of these decks is a single process; no test exercises the rows under an $x_1$ split
+of a curved grid.
+:::
+
+[^ch04-x1volume-run]: [sha: snapy@68f4e066974ede87e4379285c4fba895b970b7f1; deck: the check itself; run:
+    `python3 src/snapy_report/ch04/checks/x1volume_check.py`, output
+    `src/snapy_report/ch04/checks/x1volume_check.out`, CPU, double, 1 process; Python 3.12.11, numpy 2.4.6].
+    The check ports the row builder and the wall mirror and cites the lines it ports in its header.
+
+### Limits
+
+1. **Only `weno5` and `cp5`.** A curved deck with `dc`, `plm`, `cp3` or `weno3` in the vertical gets no rows and
+   keeps the uniform weights, which on radial volume averages is the second-order behaviour of `[C6]`. It is not
+   refused, and nothing warns. The refusal of `InterpImpl::set_x1_coeffs` fires only when the deck *also* declares a
+   stretched $x_1$.
+2. **The primitive variables are not all volume averages.** @eq-ch04-x1volume-average is the measure the code's
+   cell values are averages on; the velocity it reconstructs is $m_1/\rho$, which is not the volume average of
+   $v_1$ (@sec-ch04-x1masscov). The change of variable fixes the abscissa, not that ratio.
+3. **Two routes to one problem on spherical-polar.** `SNAP_X1_CENTROID_EXACT` converts the hydro $x_1$ inputs to
+   plain means first and then uses the plain radii, so on that path the rows are built on $r$, not on $\mathcal X$
+   ({{< code src/hydro/hydro.cpp HydroImpl::reset >}}). The passive scalar is not converted and stays on
+   $\mathcal X$ ({{< code src/scalar/scalar.cpp ScalarImpl::reset >}}), so with that switch on the two modules
+   reconstruct the same column against different measures. No test compares them.
+4. **No order measured in the wall cells.** The mirror is exact for a reflected state (`[C7]`), but
+   `test_radial_order_python` skips the three faces nearest each wall and no check fits an order there.
+5. **No width bound.** A deck that declares a stretched $x_1$ is refused when two neighbouring *declared*
+   widths differ by more than `kX1MaxWidthRatio`, which is 1.5
+   ({{< code src/coord/coordinate.hpp CoordinateOptionsImpl::kX1MaxWidthRatio >}}). That bound does not reach
+   $\mathcal X$: a radial grid passes it with every width equal and still gives increments in the ratio 3.53 over
+   twelve cells on $r\in[1,2]$ (`[C5]`), and more on a deeper shell. The row construction is tested to a 1:4 jump
+   (`row_sums`) but the WENO5 smoothness behaviour at such ratios is not measured.
+6. **Cost and memory.** Each $x_1$ face carries two rows, one per side: 48 doubles each for `weno5` and 5 each
+   for `cp5`, in each of the two interpolants of the direction, and again in the passive scalar's own $x_1$
+   reconstruction. The per-face path also reads a different row for every face instead of broadcasting one.
+   Neither the memory nor the time is measured here.
+7. **Untested combinations.** The switch coverage matrix is @sec-ch12-matrix; the rows under an $x_1$ block split
+   of a curved grid, and under an implicit scheme, have no test at the pin.
+
+<!-- reader glossary notes -->
+[^rg-7f2dd536f238]: $r$ — $x_1$ on a spherical-polar grid (radius) [m]
+
+[^rg-aec49c6157b4]: $V^{(1)}_i$ — the $x_1$ factor of the cell volume, $V_{ijk}=\varpi_{jk}V^{(1)}_i$: $\tfrac13(x_{1,i+1/2}^3-x_{1,i-1/2}^3)$ on spherical-polar, $h_i$ on Cartesian; [source](https://github.com/chengcli/snapy/blob/68f4e066974ede87e4379285c4fba895b970b7f1/src/coord/spherical_polar.cpp#L200-L211)
+
+[^rg-e2902a1873a5]: $\langle q\rangle_{V_i}$ — volume average of a function $q(x)$ over cell $i$ on its own measure, $\tfrac{1}{V_i}\int_{V_i}q\,dV$; notation only; see @sec-appa
+
+[^rg-03001039acf8]: $h_i$ — $x_1$ width of cell $i$, $x_{1,i+1/2}-x_{1,i-1/2}$; written $\Delta x_1$ where the direction must be explicit
+
+[^rg-5cf4b88ae6fa]: $\varpi_{jk}$ — horizontal factor of a cell volume, $V_{ijk}=\varpi_{jk}V^{(1)}_i$: the solid angle on spherical-polar ($V^{(1)}_i=\tfrac13(r_{+}^3-r_{-}^3)$), $\Delta x_2\Delta x_3$ on Cartesian ($V^{(1)}_i=h_i$); [source](https://github.com/chengcli/snapy/blob/68f4e066974ede87e4379285c4fba895b970b7f1/src/coord/spherical_polar.cpp#L200-L211)
+
+[^rg-c6d6c0a00a4a]: $x^{\mathrm{m}}_{1,i}$ — cell midpoint $\tfrac12(x_{1,i-1/2}+x_{1,i+1/2})$ ($r^{\mathrm{m}}_i$ on spherical-polar); it is not the cell average of $x_1$, which is the centroid $x_{1,i}$; [source](https://github.com/chengcli/snapy/blob/68f4e066974ede87e4379285c4fba895b970b7f1/src/coord/coordinate.cpp#L439)
+
+[^rg-8185c9cafa62]: $P$ — corrected discrete potential energy $\sum_iV_i[\rho_i\phi_i - g_1\sigma_i^2s_i[\rho]]$, exact to $O(h^4)$
+
+[^rg-06994dde5c75]: $k = 1..N_r$ — reaction index and the number of reactions; never the $x_3$ cell index $k$ (§1) — a chapter that needs both renames the reaction index to $\varkappa$ and says so
+
+[^rg-1eb3f3589e93]: geometry — coordinate-system and grid options
+
+[^rg-5f77c9d78f87]: bounds — coordinate bounds
+
+[^rg-8bc592b4ea85]: x1min — lower bound of the first coordinate
+
+[^rg-48cff0df1ad0]: x1max — upper bound of the first coordinate
+
+[^rg-5733a5de0bed]: x2min — lower bound of the second coordinate
+
+[^rg-db18f3b302a1]: x2max — upper bound of the second coordinate
+
+[^rg-3b20bda00b65]: x3min — lower bound of the third coordinate
+
+[^rg-d2e0070fdb81]: x3max — upper bound of the third coordinate
+
+[^rg-3010836ee401]: cells — cell counts and ghost-width options
+
+[^rg-e8053e5ca6f8]: nx1 — number of cells in the first coordinate direction
+
+[^rg-165168259ab0]: nx2 — number of cells in the second coordinate direction
+
+[^rg-abc1498ae04e]: nx3 — number of cells in the third coordinate direction
+
+[^rg-fca732804e45]: scalar — passive-scalar options
+
+[^rg-96c1ea134783]: $c_s$ — sound speed [m s$^{-1}$]
+<!-- end reader glossary notes -->

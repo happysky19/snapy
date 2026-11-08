@@ -3,7 +3,8 @@
 <!-- PROVENANCE
 pin: snapy@68f4e066974ede87e4379285c4fba895b970b7f1 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md entry 1.3; src/mesh/meshblock.cpp; src/mesh/mesh.cpp; src/output/restart.cpp; tests/test_scalar.cpp;
-         tests/test_mesh_multi_block.cpp
+         tests/test_mesh_multi_block.cpp; examples/run_hydro.cpp, examples/bryan.cpp,
+         examples/jupiter_evap_precip_1d.cpp and tests/test_example_ic_stretched.py at the pin
 status: draft
 author: Jiheng Hu
 reviewer:
@@ -181,6 +182,27 @@ Call from C++ `snap::balance_column`, or from Python `snapy.balance_column(w, dx
    ```
    This test state is uniform and has no gravity balance. It is a shape-and-call example, not an atmosphere at rest [I, from the four lines].
 3. **With `balance_column` (moist, C++).** `examples/bryan.cpp` `project` passes the interior x1 column, its `dx1f`, `wall_clamp=true` and the grid's `stretched_x1()` ([bryan.cpp#L204-L217](https://github.com/chengcli/snapy/blob/68f4e066974ede87e4379285c4fba895b970b7f1/examples/bryan.cpp#L204-L217)). `balance_ic` requires the whole x1 column in one block and the clamp on (#L222-L228). It is switched on by `problem/balance-ic: true` (#L372-L375) [S].
+4. **A column built by marching, and which spacing it steps by (C++).** The three moist example drivers do not
+   fill the column from a closed form: they put the surface state half a cell above the bottom face and then step
+   an adiabat from one cell centre to the next, writing each centre as they pass it
+   ({{< code examples/run_hydro.cpp main >}}, {{< code examples/bryan.cpp initialize_block >}},
+   {{< code examples/jupiter_evap_precip_1d.cpp initialize_block >}}). The step from centre $i$[^rg-3f39479eeb50] to centre $i+1$
+   must be the **centre spacing** `dx1v[i + 1]`, not the cell width `dx1f[i]`; the isothermal continuation above
+   the adiabat steps centre $i-1$ to centre $i$ and so takes `dx1v[i]`. The first half-step, from the bottom face
+   to the first centre, is `dx1f[il] / 2`, which is the midpoint offset of that cell.
+
+   On a grid whose $x_1$ cells are all the same width the two spacings are equal and the distinction does not
+   arise; on a stretched one they differ by half the change in width across the face, and using the cell width
+   accumulates that difference all the way up the column. `tests/test_example_ic_stretched.py` (ctest
+   `test_example_ic_stretched_python`) runs `run_hydro` for zero steps on a dry 300 km, 64-cell column with
+   $g=22$ $\mathrm{m\,s^{-2}}$, uniform and then with `cells/x1rat` $1/1.058$ and $1.058$, and compares the
+   initial pressure at every centre with the analytic dry adiabat: the stretched error must stay within six times
+   the uniform error of the same driver ({{< code tests/test_example_ic_stretched.py >}}). Its header records
+   that stepping by the cell width instead left the pressure at the top of that column off by about 35 %. The
+   ctest was not run for this report: **pending a pinned ctest run**.
+
+   Write your own builder the same way: march the centres with `dx1v`, and reserve `dx1f` for what the cell
+   contains rather than for how far the next centre is.
 
 In Python a restart goes through `block.initialize_from_restart(path)`; in C++ the path is the second argument of
 `initialize`. Both return the saved time instead of zero.
@@ -240,4 +262,6 @@ fresh-versus-restart ghost equivalence is measured here.
 [^rg-76103610383a]: grav1 — gravity component along the first coordinate
 
 [^rg-1c45304f6b95]: $T$ — temperature [K]
+
+[^rg-3f39479eeb50]: $i, j, k$ — cell indices in $x_1, x_2, x_3$
 <!-- end reader glossary notes -->

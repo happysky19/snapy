@@ -3,6 +3,7 @@
 <!-- PROVENANCE
 pin: snapy@68f4e066974ede87e4379285c4fba895b970b7f1 (code_pin.yml)
 sources: docs/derivations/curved-gravity-work-weight.md@68f4e066974ede87e4379285c4fba895b970b7f1 §§1-4, 7, 8, 10, 11, 12.1-12.10;
+         tests/test_stretched_x1_ref.cpp at the pin;
          sources/gw__NEXTPR_legD_REPORT.md; sources/gw__PR_BODIES_285-293.md;
          chengcli/snapy#303 PR body (items 1 and 5, Evidence, Limits);
          sources/gw__NEXTPR_indep_cartesian_gravity_work_weight.md (independent corroboration)
@@ -26,7 +27,7 @@ term is the work done by moving the mass of a cell whose density is not uniform 
 
 **Placement.** Each stage, in the gravity-work block of `HydroImpl::forward`; with an implicit scheme partly in the VIC.
 
-**Activation.** `SNAP_GRAVITY_WORK_RADIAL_EXACT` (on by default) with `gravity-work: face`, $g_1\ne0$, a grid with an $x_1$ measure.
+**Activation.** `SNAP_GRAVITY_WORK_RADIAL_EXACT` (on by default) with `gravity-work: face`, $g_1\ne0$, a grid with an $x_1$ measure. Required, not optional, on a declared stretched $x_1$.
 
 **Guarantee / limits.** $E_{\mathrm{tot}}+P$ to the bound below per stage and step; work $O(h^4)$; $E_{\mathrm{tot}}+\mathrm{PE}_d$ not conserved.
 
@@ -61,7 +62,10 @@ the reconstruction's and the Riemann solver's error.
 work gains the centroid-offset term of @eq-ch06-dwork-cs. Only on a grid with no $x_1$ measure for the scheme
 (cylindrical) does setup warn once and keep the plain face work. With it
 active the curvature flux $\mathcal K$ is turned off, because the scheme already removes the term $\mathcal K$
-removes and the two together are back to $O(h^2)$; it never meets the gravity-work fixer, which
+removes and the two together are back to $O(h^2)$. On a grid that declares a stretched $x_1$ the relation is
+stronger than a preference: $\mathcal K$ has no correct two-point form on unequal cells and is refused there, so
+with `gravity-work: face` this scheme is the only face form that runs, and switching it off turns a stretched
+`cp3`, `cp5` or `weno5` deck into a refusal rather than into the plain face form (@sec-ch06-face). It it never meets the gravity-work fixer, which
 runs only with `gravity-work: cell`; and with an implicit scheme part of it is booked inside the vertical
 implicit operator (the VIC gravity work). Under it the conserved invariant is $E_{\mathrm{tot}}+P$, the cycle diagnostics log $P$ as
 `pe=`, and every $E_{\mathrm{tot}}+\mathrm{PE}_d$ check measures the wrong quantity.
@@ -926,8 +930,13 @@ every $E_{\mathrm{tot}}+\mathrm{PE}_d$ check — including `gravity_work_defect(
 4. **Short blocks.** For $n_1<3$ cells in a block the slope is zero and nothing is booked beyond the face form.
 5. **Non-smooth $x_1$ grids.** The $O(h^2)$ accuracy of $s$ assumes that the cell-average offset
    $\tfrac12\partial_1^2\rho\,\sigma^2$ varies smoothly, i.e. that $h$ varies smoothly. Across a jump in $h$ the
-   slope error is $O(h)$ and $P$ drops to $O(h^3)$ locally. Conservation is unaffected. Not measured; nor is the
-   work on smoothly stretched grids.
+   slope error is $O(h)$ and $P$ drops to $O(h^3)$ locally. Conservation is unaffected. Not measured.
+   **The booked work on a smoothly stretched grid is not measured either**, and that gap is load-bearing: a
+   stretched deck has no other face form to fall back on, and the refusal that sends it here states a fourth
+   order that no test at the pin fits. What is measured on a stretched grid is $P$, at order 4.08 (`[C4]`,
+   @tbl-ch06-dwork-orders), and that a stretched `weno5` column runs with the switch at its default
+   ({{< code tests/test_stretched_x1_ref.cpp StretchedX1Ref.uniform_and_stretched_reflecting_decks_run >}}).
+   An order fit of $W^{\mathrm D}-g_1\langle F\rangle$ on a stretched column is the missing measurement.
 6. **Order of the energy equation.** The scheme makes the gravity work fourth-order consistent with the mass
    fluxes. The fluxes themselves keep the order of the reconstruction and the Riemann solver (@sec-ch04).
 7. **The end cells of the implicit solve.** The lumped slope $\tilde s$ is not a consistent slope in the two end

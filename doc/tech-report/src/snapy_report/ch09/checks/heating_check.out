@@ -1,3 +1,5 @@
 [C1] PASS uniform cells: the column loses exactly F per unit area: sum dE dz = -30.000000000000 W m^-2 for F = -30, depth 4
 [C2] PASS stretched cells: the delivered power is F times mean(dz)/dz_top: ratio 0.871713 for 10 % growth, depth 4 (= 0.871713)
 [C3] PASS body heat raises T by dTdt dt at fixed volume: dT = 2.000e-04 K for dTdt dt = 2.000e-04 K
+[C4] PASS thickness: the column receives exactly F dt on uniform and stretched cells: max |sum dE dz - F dt| = 8.9e-16 over three grids and thicknesses 230 m, 7 m and the whole column (F = -30, dt = 0.25, so F dt = -7.5); full-column totals uniform, 20 x 50 m: -7.500000000000; growing 10 % upward: -7.500000000000; shrinking 10 % upward: -7.500000000000; threshold 1e-13, round-off of a 20-term sum of order-1 numbers
+[C5] PASS thickness: a cell takes its own overlap with the layer and no more: a layer of half the top cell heats one cell (1 nonzero); a layer reaching a quarter into the next cell gives it -1.998430999e-02 against the exact -1.998430999e-02, and the cell below exactly zero

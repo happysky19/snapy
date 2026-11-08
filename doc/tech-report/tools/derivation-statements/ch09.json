@@ -20,5 +20,7 @@
  "eq-ch09-relax-face": "With `at-face`, the relaxation target is the temperature extrapolated to the bottom face, with a matching gain.",
  "eq-ch09-relax-velo": "Bottom velocity relaxation of covariant momentum towards the target velocity.",
  "eq-ch09-relax-comp": "Bottom composition relaxation towards the target mass fractions at fixed total density.",
- "eq-ch09-sponge-drag": "Sponge-layer Rayleigh drag with a $\\sin^2$ profile of the scaled distance."
+ "eq-ch09-sponge-drag": "Sponge-layer Rayleigh drag with a $\\sin^2$ profile of the scaled distance.",
+ "eq-ch09-heating-overlap": "The length of each cell that lies inside the forced layer, clamped to the layer and to zero.",
+ "eq-ch09-heating-layer": "With `thickness`, a cell receives the flux in one stage times its share of the layer, spread over its own width."
 }

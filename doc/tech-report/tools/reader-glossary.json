@@ -2073,6 +2073,13 @@
     },
     {
       "kind": "key",
+      "term": "thickness",
+      "meaning": "the layer next to an x1 domain end that boundary heating or cooling is spread over, in x1 length units; given instead of depth",
+      "section": "sec-ch09-heating",
+      "not_defined_here": false
+    },
+    {
+      "kind": "key",
       "term": "top-cool",
       "meaning": "top cooling options",
       "section": "sec-ch09-heating",

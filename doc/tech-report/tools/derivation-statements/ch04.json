@@ -19,5 +19,9 @@
  "eq-ch04-fluxcov-buoy": "A parcel's buoyancy from its temperature and vapour excess, with the vapour's density sensitivity from the ideal mixture.",
  "eq-ch04-fluxcov-err": "The uncorrected scheme's temperature and vapour errors share the factor $\\sigma^2_{\\mathrm A}\\partial_2\\partial_1v_\\perp$.",
  "eq-ch04-fluxcov-ratio": "The compositional-to-thermal buoyancy-error ratio depends only on the background: $\\alpha_{\\mathrm v}T\\partial_1y_{\\mathrm v}/\\partial_1T$.",
- "eq-ch04-x1masscov-nu": "On a keyed stretched $x_1$ the covariance slope is the three-point derivative of the quadratic through the centroids."
+ "eq-ch04-x1masscov-nu": "On a keyed stretched $x_1$ the covariance slope is the three-point derivative of the quadratic through the centroids.",
+ "eq-ch04-x1volume-average": "On a curved grid the stored $x_1$ cell value is the average of the field against the radial volume element $x_1^2\\,\\mathrm{d}x_1$, not against $\\mathrm{d}x_1$.",
+ "eq-ch04-x1volume-plain": "In the volume coordinate $\\mathcal X=x_1^3/3$ that same value is a plain cell average, with cell increments $\\Delta\\mathcal X_i=V^{(1)}_i$.",
+ "eq-ch04-x1volume-width": "The volume increment of a radial cell is $(x^{\\mathrm m}_{1,i})^2h_i+h_i^3/12$, so equal radial widths give unequal increments.",
+ "eq-ch04-x1volume-beta": "The WENO5 smoothness indicators in the volume coordinate, from the second derivative of each candidate quadratic and its value at the target face."
 }
