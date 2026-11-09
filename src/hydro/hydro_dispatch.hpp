@@ -28,6 +28,16 @@ enum X1RefGrid : int {
 //! wall face pressure p' + psf_lo, which goes negative by dz/H ~ 1.25) and
 //! leaves every deck in this tree on the polynomial path.
 //!
+//! The same bound also gates the x1 RECONSTRUCTION of the pressure
+//! perturbation in hydro_forward.cpp: past it the unlimited high-order
+//! reconstruction is unstable in the explicit path (measured growth per step
+//! e^(+4.9e-04) at dz/H = 0.75 rising to e^(+6.0e-03) at 1.5, against
+//! e^(-5.8e-05) at 0.5), so a cell past the bound takes a limited one. The
+//! two uses share a bound because they share a cause: a cell this thick
+//! carries a dz/H-sized share of its own reference, so neither a polynomial
+//! quadrature of its faces nor an unlimited stencil across them is trustworthy
+//! any more.
+//!
 //! The test is on p/rho, which balance_column holds FIXED per cell, so the
 //! branch taken cannot oscillate along its fixed-point iteration -- that is
 //! what makes the fixed point exist and be reachable.

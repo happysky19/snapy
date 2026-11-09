@@ -415,70 +415,65 @@ TEST(ThickCellRest, balance_column_returns_the_fixed_point_not_the_first_pass) {
 }
 
 // The end-to-end gate the brief asks for: from a converged projection, over
-// 10,000 steps, residual <= 1e-13 and max |w|/c <= 1e-12, in BOTH integration
-// paths, on cells up to three scale heights.
+// 10,000 steps, residual <= 1e-13 and max |w|/c <= 1e-12, on cells up to three
+// scale heights, in BOTH integration paths and on the tree's DEFAULT deck --
+// weno5 vertical reconstruction, lmars, rk3 at cfl 0.4.
 //
-// The explicit path runs with a monotone vertical reconstruction. That is not
-// a convenience: measured on this branch, from a seeded 1e-12 perturbation at
-// nx1 = 8, the WENO5 vertical reconstruction AMPLIFIES any perturbation on
-// cells of about a scale height and thicker -- e^(+4.9e-04) per step at
-// dz/H = 0.75, e^(+5.5e-04) at 1.0, e^(+2.9e-03) at 1.25, e^(+6.0e-03) at 1.5
-// -- while plm damps at every thickness tried (e^(-4.7e-03) at 1.0 and 1.5,
-// e^(-5.7e-04) at 3.0) and donor cell holds at 1e-16. Changing the Riemann
-// solver (hllc), the shock flag or the CFL does not change it. So the
-// amplifier is the unlimited high-order vertical reconstruction, a property of
-// the integrator and not of the rest state, and it is tracked separately
-// (happysky19/snapy#5). What this case asserts is the thing this test file
-// owns: the state balance_column returns IS a discrete rest state, and it
-// survives 10,000 steps wherever the integrator does not amplify.
+// Three things had to be true for this to hold and each is pinned elsewhere in
+// this file: the reference has a discrete rest state past one scale height
+// (the log-mean gate), balance_column returns its fixed point rather than the
+// first state under rtol (the case above), and a cell past the gate takes a
+// limited x1 reconstruction of the pressure perturbation. Without the last of
+// those the EXPLICIT weno5 arm measures 1.569e-03 at dz/H = 1.5, 1.988 at 2
+// and 9.134e-01 at 3 (and 5.931e-13 at 1, which squeaks under the bound), so
+// three of the six rungs fail.
 //
-// Measured here (nx1 = 5, max |w|/c over 10,000 steps):
+// 0.75 is in the list because it is the gate's own value, where the cell is
+// NOT past the bound and so still takes the unlimited reconstruction: its
+// number is bitwise the same with the guard and without it.
 //
-//   dz/H              0.3      1.0      1.5      2.0      3.0
-//   implicit, weno5   3.4e-16  2.3e-16  4.7e-16  1.0e-15  1.5e-14
-//   explicit, plm     2.7e-16  1.3e-16  6.8e-16  1.3e-15  7.2e-15
+// Measured here (nx1 = 5, max |w|/c over 10,000 steps, zero rejected steps):
 //
-// and at the base of this test file, where the a = 3 implicit run peaks at
-// 6.713e-12 on the transient and fails the same bound.
+//   dz/H              0.3      0.75     1.0      1.5      2.0      3.0
+//   explicit, weno5   8.0e-16  3.7e-15  4.6e-16  1.4e-15  1.2e-15  5.1e-15
+//   implicit, weno5   3.4e-16  4.3e-16  5.9e-16  4.2e-16  4.0e-16  4.0e-15
 TEST(ThickCellRest, a_projected_column_holds_for_ten_thousand_steps) {
   torch::set_num_threads(1);
-  for (double a : {0.3, 1.0, 1.5, 2.0, 3.0}) {
+  for (double a : {0.3, 0.75, 1.0, 1.5, 2.0, 3.0}) {
     double dz = a * scale_height();
     auto [w, dx1f] = isothermal_column(kSolverNx1, a);
     auto [wb, err, sweeps] = snap::balance_column(w, dx1f, kGrav, true, 1.e-13,
                                                   5000, "cartesian", false);
     ASSERT_LT(err, 1.e-13) << "a=" << a;
 
-    auto imp = drift(wb, kSolverNx1, dz, 1, kLongSteps);
-    std::cout << std::scientific << "a=" << a << " implicit weno5: max |w|/c "
-              << imp.mach << " over " << kLongSteps << " steps\n";
-    EXPECT_LT(imp.mach, 1.e-12) << "a=" << a << " implicit";
-
-    auto exp_ = drift(wb, kSolverNx1, dz, 0, kLongSteps, "plm");
-    std::cout << std::scientific << "a=" << a << " explicit plm:   max |w|/c "
-              << exp_.mach << " over " << kLongSteps << " steps\n";
-    EXPECT_LT(exp_.mach, 1.e-12) << "a=" << a << " explicit";
+    for (int imp : {0, 1}) {
+      auto d = drift(wb, kSolverNx1, dz, imp, kLongSteps);
+      std::cout << std::scientific << "a=" << a
+                << (imp ? " implicit" : " explicit") << " weno5: max |w|/c "
+                << d.mach << " over " << kLongSteps << " steps\n";
+      EXPECT_LT(d.mach, 1.e-12) << "a=" << a << " implicit-scheme=" << imp;
+    }
   }
 }
 
-// ...and the explicit path on the tree's own weno5 deck, over the same 10,000
-// steps, up to where the amplification above takes over. Measured here:
-// 1.5e-15 at dz/H = 0.25, 2.5e-15 at 0.5, 3.7e-15 at 0.75; past that the
-// standalone sweep gives 1.8e-12 at 1.0 and 4.2e-04 at 1.5. So the bound is
-// asserted below one scale height, which is also where the original report
-// saw the explicit path go.
-TEST(ThickCellRest, the_explicit_weno_path_holds_below_one_scale_height) {
+// The limited reconstruction past the gate is a STABILITY guard, not a
+// substitute for the rest state: a monotone deck from end to end has to clear
+// the same bar, or the case above could be passing on the limiter alone with a
+// broken projection underneath. plm at the thickest rung, both paths.
+TEST(ThickCellRest,
+     a_monotone_deck_holds_the_same_bound_at_three_scale_heights) {
   torch::set_num_threads(1);
-  for (double a : {0.25, 0.5, 0.75}) {
-    double dz = a * scale_height();
-    auto [w, dx1f] = isothermal_column(kSolverNx1, a);
-    auto [wb, err, sweeps] = snap::balance_column(w, dx1f, kGrav, true, 1.e-13,
-                                                  5000, "cartesian", false);
-    ASSERT_LT(err, 1.e-13) << "a=" << a;
-    auto d = drift(wb, kSolverNx1, dz, 0, kLongSteps);
-    std::cout << std::scientific << "a=" << a << " explicit weno5: max |w|/c "
+  double a = 3.0, dz = a * scale_height();
+  auto [w, dx1f] = isothermal_column(kSolverNx1, a);
+  auto [wb, err, sweeps] = snap::balance_column(w, dx1f, kGrav, true, 1.e-13,
+                                                5000, "cartesian", false);
+  ASSERT_LT(err, 1.e-13);
+  for (int imp : {0, 1}) {
+    auto d = drift(wb, kSolverNx1, dz, imp, kLongSteps, "plm");
+    std::cout << std::scientific << "a=" << a
+              << (imp ? " implicit" : " explicit") << " plm:   max |w|/c "
               << d.mach << " over " << kLongSteps << " steps\n";
-    EXPECT_LT(d.mach, 1.e-12) << "a=" << a << " explicit weno5";
+    EXPECT_LT(d.mach, 1.e-12) << "plm implicit-scheme=" << imp;
   }
 }
 

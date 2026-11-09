@@ -11,6 +11,7 @@
 #include "flux_positivity.hpp"
 #include "gravity_work_radial.hpp"
 #include "hydro.hpp"
+#include "hydro_dispatch.hpp"
 #include "x1_mass_covariance.hpp"
 
 namespace snap {
@@ -433,6 +434,73 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
       // floor=false: reconstruction-stage floors would clamp legitimately
       // negative perturbations.
       wtmp = precon1->forward(wx1, DIM1, /*floor=*/false);
+
+      // A cell past kX1RefMaxThickness takes a LIMITED x1 reconstruction of
+      // the pressure perturbation instead of the unlimited high-order one.
+      //
+      // Past that thickness the unlimited reconstruction does not just lose
+      // accuracy, it goes unstable in the explicit path. Measured on a
+      // projected isothermal column (nx1 = 8, explicit, lmars, cfl 0.4), the
+      // growth per step of a seeded 1e-12 perturbation is e^(-5.8e-05) at
+      // dz/H = 0.5 and then e^(+4.9e-04) at 0.75, e^(+5.5e-04) at 1.0,
+      // e^(+2.9e-03) at 1.25, e^(+6.0e-03) at 1.5; weno3 and ppm behave the
+      // same way, while plm and donor cell damp at every thickness tried up to
+      // 3. It is not the Riemann solver (hllc matches lmars to three digits),
+      // not the gravity-work variant, not the CFL (0.1 to 0.45 all grow, and
+      // non-monotonically, at dz/H >= 2), and not the reference gate added
+      // alongside it -- the same rates are there at the base commit.
+      //
+      // The reference is rebuilt from the evolving state every stage, and the
+      // hydrostatic scan carries a density perturbation into the face
+      // reference with weight g dz, i.e. g rho dz / p = dz/H times the cell's
+      // own pressure. So the quantity being reconstructed here, p - pref, owes
+      // a dz/H-sized share of itself to the neighbours' density, and that the
+      // loop this closes with an unlimited high-order stencil is the unstable
+      // one is a HYPOTHESIS: what is measured is the dependence on dz/H (onset
+      // between 0.5 and 0.75 at fixed column depth, and fixed-depth scans at
+      // 0.25 and 0.5 are neutral while 1.0 is not), and on the limiter.
+      //
+      // Only the pressure row is limited. The face velocity LMARS builds is
+      // driven by the pressure difference across the face, so limiting IPR is
+      // what closes the loop: adding IDN and IVX was measured to change
+      // nothing at rest and to damp a 1e-10 seed equally well (2.6e-16 against
+      // 4.8e-16 at dz/H = 3 after 4000 steps). Below the gate the mask is
+      // false everywhere and the face values are bitwise the ones above.
+      {
+        auto dxf1 = pmb->pcoord->dx1f.to(w.device(), w.scalar_type());
+        auto dxv1 = pmb->pcoord->dx1v.to(w.device(), w.scalar_type());
+        auto thick =
+            std::abs(options->grav()->grav1()) * density * dxf1 / pressure;
+        auto nx = thick.size(-1);
+        // t_{i-1} and t_{i+1}, replicated at the ends: the physical faces run
+        // il..iu+1 with il = nghost, so the replicated words are never read.
+        auto down = [&](torch::Tensor const& t) {
+          return torch::cat({t.narrow(-1, 0, 1), t.narrow(-1, 0, nx - 1)}, -1);
+        };
+        auto up = [&](torch::Tensor const& t) {
+          return torch::cat({t.narrow(-1, 1, nx - 1), t.narrow(-1, nx - 1, 1)},
+                            -1);
+        };
+        // the exact complement of the reference's own test, tolerance and
+        // all, so a deck written AT the bound takes the unlimited stencil on
+        // both sides of the split instead of flipping between them as the
+        // iterate's last bit wanders
+        auto past = thick > kX1RefMaxThickness * (1. + kX1RefThicknessTol);
+        auto gate = past.logical_or(down(past));  // either side of the face
+        auto cur = wx1[IPR];
+        // minmod of the two one-sided gradients; dx1v[i] is the centre
+        // distance i-1 -> i, so this is right on a stretched grid too
+        auto back = (cur - down(cur)) / dxv1;
+        auto fwd = up(back);
+        auto slope =
+            torch::where(back * fwd <= 0., torch::zeros_like(back),
+                         torch::where(back.abs() < fwd.abs(), back, fwd));
+        auto half = 0.5 * slope * dxf1;
+        // wtmp[ILT][i] is face i seen from cell i-1, wtmp[IRT][i] from cell i
+        wtmp[ILT][IPR].copy_(
+            torch::where(gate, down(cur + half), wtmp[ILT][IPR]));
+        wtmp[IRT][IPR].copy_(torch::where(gate, cur - half, wtmp[IRT][IPR]));
+      }
 
       wx1[IPR].copy_(pressure);
       wx1[IDN].copy_(density);
