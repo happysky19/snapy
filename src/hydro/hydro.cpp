@@ -219,6 +219,9 @@ void HydroImpl::reset() {
       register_buffer("positivity_severe", torch::zeros({1}, torch::kInt64));
   _positivity_min =
       register_buffer("positivity_min", torch::ones({1}, torch::kFloat64));
+  if (options->conversion_order() == 4)
+    _conv4_trips =
+        register_buffer("conversion_trips", torch::zeros({1}, torch::kInt64));
   _lim_cut = register_buffer("lim_cut", torch::zeros({1}, torch::kFloat64));
   _lim_flux = register_buffer("lim_flux", torch::zeros({1}, torch::kFloat64));
   _gwfix_d = register_buffer("gwfix_d", torch::zeros({1}, torch::kFloat64));

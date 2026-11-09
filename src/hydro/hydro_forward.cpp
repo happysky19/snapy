@@ -349,9 +349,24 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
       out.select(-1, n + 1) = (a.narrow(-1, n - 2, 4) * k[3]).sum(-1);
       return out;
     };
-    auto w2 = lap(w);
-    peos->forward(u - lap(u), w);
-    w.add_(w2);
+    // per cell, keep the second-order w where the fourth-order state is not
+    // admissible: rho or p not positive, or non-finite, in u - L u, in its
+    // primitives or in w (a 1:1000 jump makes u - L u negative next to it).
+    // Those cells hand u, not u - L u, to the EOS; trips are counted per cell
+    // and stage, x1 ghosts included
+    auto ok = [&](torch::Tensor const& a, bool p) {
+      auto good = torch::isfinite(a).all(0) & (a[IDN] > 0.);
+      return p && a.size(0) > IPR ? good & (a[IPR] > 0.) : good;
+    };
+    auto w0 = w.clone();
+    auto up = u - lap(u);
+    auto good = ok(up, false);
+    peos->forward(torch::where(good, up, u), w);
+    good &= ok(w, true);
+    w.add_(lap(w0));
+    good &= ok(w, true);
+    w.copy_(torch::where(good, w, w0));
+    _conv4_trips += good.logical_not().sum();
   }
   if (options->verbose()) {
     auto end = std::chrono::high_resolution_clock::now();

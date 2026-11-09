@@ -305,6 +305,9 @@ class HydroImpl : public torch::nn::Cloneable<HydroImpl> {
 
   torch::Tensor _flux1, _flux2, _flux3, _face_pressure1, _div, _forcing_dry;
   torch::Tensor _positivity_hits, _positivity_severe, _positivity_min;
+  //! conversion-order 4 cells that kept the second-order w (buffer
+  //! "conversion_trips", registered only with the key at 4)
+  torch::Tensor _conv4_trips;
   torch::Tensor _lim_cut, _lim_flux;
   //! this stage's x2 [0] / x3 [1] face states the covariance was built from
   //! and the dry-mass row it added (undefined when the switch is off)
