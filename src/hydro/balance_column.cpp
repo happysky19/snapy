@@ -77,6 +77,7 @@ std::tuple<torch::Tensor, double, int> balance_column(
   // check, then update: the residual therefore describes the state returned,
   // and a column already at the fixed point comes back after zero updates
   double err = std::numeric_limits<double>::infinity();
+  double prev = std::numeric_limits<double>::infinity();
   int sweeps = 0;
   for (; sweeps <= max_iter; ++sweeps) {
     at::native::call_hydro_ref_x1(wb.device().type(), wb, dxf, anchor, psf_lo,
@@ -86,8 +87,39 @@ std::tuple<torch::Tensor, double, int> balance_column(
     auto pp = prs - pref;
     auto c = pp.narrow(-1, nc1 - 1, 1);  // one gauge per column, at its top
     err = ((pp - c).abs() / (rho * wgt)).max().item<double>();
-    if (err < rtol || sweeps == max_iter) break;
-    prs.copy_(pref + c);
+    // Stop at the FIXED POINT, not at the first sweep that dips under rtol.
+    // The sweeps converge geometrically with a measured tail factor of 0.42 to
+    // 0.63 per sweep, so the first state under rtol sits two to three orders
+    // above the one a handful of sweeps later: at dz/H = 1, nx1 = 8, sweep 34
+    // gives 7.618e-14 and sweep 40 gives 2.481e-16, the floor. That gap is not
+    // cosmetic. The solver reconstructs p - pref, so whatever is left of
+    // p' - c is the per-step momentum the state injects into itself, and the
+    // explicit path AMPLIFIES it on cells of about a scale height and thicker
+    // (measured e^(+5.5e-04) per step at dz/H = 1 and e^(+2.9e-03) at 1.25,
+    // from a seeded perturbation; plm damps at every thickness, so the
+    // amplification is the WENO reconstruction's, not this iteration's).
+    // Returning the loosest admissible state hands that amplifier three extra
+    // orders to work on: over 10,000 steps at dz/H = 1 the drift goes from
+    // 1.159e-12 to 2.011e-14 purely from the extra sweeps below.
+    //
+    // So: keep sweeping while the residual is still being bought down, and
+    // stop when it is not. 0.9 sits above every measured tail factor and below
+    // the floor's, where the residual alternates between two neighbouring
+    // values (ratios 0.76 and 1.32 at dz/H = 1.5) and so is left within a
+    // sweep or two. `rtol` keeps its meaning as the tolerance that must be
+    // MET; it is no longer also the point at which the iteration gives up.
+    //
+    // The no-op test keeps the documented invariant above: a column handed
+    // back its own answer would otherwise spend one sweep discovering that the
+    // residual cannot improve, and return sweeps = 1 where it has always
+    // returned 0. At the fixed point the update reproduces the state bitwise,
+    // so this reads "nothing left to do" directly instead of inferring it.
+    auto next = pref + c;
+    if ((err < rtol && (!(err < 0.9 * prev) || torch::equal(prs, next))) ||
+        sweeps == max_iter)
+      break;
+    prev = err;
+    prs.copy_(next);
     rho.copy_(prs / rt);
     // a diverging column walks its top cells to vacuum, and once rho goes
     // negative the residual above goes negative with it and reads as converged
