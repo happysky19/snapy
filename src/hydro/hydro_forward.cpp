@@ -291,7 +291,8 @@ torch::Tensor HydroImpl::scalar_flux_covariance(torch::Tensor const& rl,
 // centred one is on a smooth grid. At an x1 block seam the cell that is the
 // neighbour's outermost ghost (2 ng - 1 below, n - 2 ng above) takes the same
 // one-sided cubic the neighbour uses for it, so both blocks hold the same w in
-// every cell either reads. k = {kp, km, lo, hi, seam lo, seam hi}.
+// every cell either reads. k = {kp, km, lo, hi, seam lo, seam hi}; one-sided
+// row k[2 + j] starts at cell s[j] and targets t[j].
 static void conv4_x1_weights(torch::Tensor x1f, int n, int ng,
                              torch::TensorOptions opts, torch::Tensor* k) {
   TORCH_CHECK(n >= 4 && x1f.size(0) == n + 1,
@@ -314,12 +315,10 @@ static void conv4_x1_weights(torch::Tensor x1f, int n, int ng,
                (xi.narrow(0, 1, 4) - xi.narrow(0, 0, 4)).unsqueeze(1);
     return torch::linalg_inv(avg)[2] / 12.;
   };
-  k[2] = side(0, 0);
-  k[3] = side(n - 4, n - 1);
-  if (ng >= 2 && n >= 4 * ng) {
-    k[4] = side(2 * ng - 4, 2 * ng - 1);
-    k[5] = side(n - 2 * ng, n - 2 * ng);
-  }
+  int s[4] = {0, n - 4, 2 * ng - 4, n - 2 * ng};
+  int t[4] = {0, n - 1, 2 * ng - 1, n - 2 * ng};
+  for (int j = 0; j < 4; ++j)
+    if (j < 2 || (ng >= 2 && n >= 4 * ng)) k[2 + j] = side(s[j], t[j]);
   for (int i = 0; i < 6; ++i)
     if (k[i].defined()) k[i] = k[i].to(opts);
 }
@@ -359,29 +358,24 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
     TORCH_CHECK(!(seam_lo || seam_hi) || k[4].defined(),
                 "dynamics/conversion-order 4 at an x1 block seam needs "
                 "nghost >= 2 and nx1 >= 2 nghost");
-    int n = u.size(DIM1) - 2;
+    int n = u.size(DIM1) - 2, s[4] = {0, n - 2, 2 * ng - 4, n + 2 - 2 * ng};
+    int t[4] = {0, n + 1, 2 * ng - 1, n + 2 - 2 * ng};
+    bool on[4] = {true, true, seam_lo, seam_hi};
     auto lap = [&](torch::Tensor const& a) {
       auto out = torch::empty_like(a);
       auto am = a.narrow(-1, 0, n), a0 = a.narrow(-1, 1, n);
       out.narrow(-1, 1, n) =
           k[0] * (a.narrow(-1, 2, n) - a0) - k[1] * (a0 - am);
-      out.select(-1, 0) = (a.narrow(-1, 0, 4) * k[2]).sum(-1);
-      out.select(-1, n + 1) = (a.narrow(-1, n - 2, 4) * k[3]).sum(-1);
-      if (seam_lo)
-        out.select(-1, 2 * ng - 1) =
-            (a.narrow(-1, 2 * ng - 4, 4) * k[4]).sum(-1);
-      if (seam_hi)
-        out.select(-1, n + 2 - 2 * ng) =
-            (a.narrow(-1, n + 2 - 2 * ng, 4) * k[5]).sum(-1);
+      for (int j = 0; j < 4; ++j)
+        if (on[j])
+          out.select(-1, t[j]) = (a.narrow(-1, s[j], 4) * k[2 + j]).sum(-1);
       return out;
     };
-    // per cell, keep the second-order w where the fourth-order state is not
-    // admissible: rho or p not above the floor (limiter on) or zero, or
-    // non-finite, in u - L u, in its primitives or in w, or a state the
-    // limiter would repair (a 1:1000 jump makes u - L u negative next to it).
-    // Those cells hand u, not u - L u, to the EOS; the limiter's redo marks
-    // and vapor failures from this call are dropped. Trips are counted per
-    // cell and stage, x1 ghosts included
+    // per cell, keep the second-order w where u - L u, its primitives or w is
+    // not admissible: non-finite, rho or p not above the floor (zero with the
+    // limiter off), or repaired by the limiter. Those cells hand u to the
+    // EOS; this call's redo marks and vapor failures are dropped. Trips count
+    // cells per stage, x1 ghosts included
     bool lim = peos->options->limiter();
     double df = lim ? peos->options->density_floor() : 0.;
     double pf = lim ? peos->options->pressure_floor() : 0.;
@@ -393,11 +387,11 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
     auto up = u - lap(u);
     auto good = ok(up, false);
     auto tmp = torch::where(good, up, u);
-    auto marks = peos->limiter_marks().defined() ? peos->limiter_marks().clone()
-                                                 : torch::Tensor();
-    auto fails = peos->vapor_failures().defined()
-                     ? peos->vapor_failures().clone()
-                     : torch::Tensor();
+    auto keep = [](torch::Tensor const& a) {
+      return a.defined() ? a.clone() : a;
+    };
+    auto marks = keep(peos->limiter_marks());
+    auto fails = keep(peos->vapor_failures());
     auto tmp0 = lim ? tmp.clone() : torch::Tensor();
     peos->forward(tmp, w);
     if (lim) {
