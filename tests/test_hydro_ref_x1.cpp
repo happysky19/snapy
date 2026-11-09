@@ -42,12 +42,15 @@ RefOutput tensor_reference(torch::Tensor const& w, torch::Tensor const& dx1f,
   auto rho = w[snap::IDN];
   auto dp = grav * rho * dx1f;
   auto cum = torch::cumsum(dp, -1);
+  // the average-consistent top face, as hydro_ref_x1_scan_impl builds it:
+  // A = dp_top / expm1(dp_top / p_top). This mirrors the kernel on purpose --
+  // the test compares the two implementations against each other -- so it has
+  // to track any change to that formula.
+  auto dp_top = grav * rho.select(-1, iu) * dx1f[iu];
   auto anchor =
       anchor_in.defined()
           ? anchor_in
-          : (w[snap::IPR].select(-1, iu) *
-             torch::exp(-grav * 0.5 * dx1f[iu] /
-                        (w[snap::IPR].select(-1, iu) / rho.select(-1, iu))))
+          : (dp_top / torch::expm1(dp_top / w[snap::IPR].select(-1, iu)))
                 .unsqueeze(-1);
 
   auto out = allocate_output(w);
@@ -56,8 +59,16 @@ RefOutput tensor_reference(torch::Tensor const& w, torch::Tensor const& dx1f,
   out.psf_lo.clamp_min_(std::numeric_limits<double>::min());
   out.psf_hi.clamp_min_(std::numeric_limits<double>::min());
 
+  // the cell value a rejected quadrature row falls back to, as
+  // hydro_ref_x1_cell_impl seeds it: the log-mean of the cell's own faces,
+  // with the arithmetic mean as its ratio -> 1 limit. Mirrors the kernel.
+  auto ratio_cell = out.psf_lo / out.psf_hi;
+  auto seed_pref =
+      torch::where((ratio_cell - 1.).abs() < 1.e-6,
+                   0.5 * (out.psf_lo + out.psf_hi), dp / torch::log(ratio_cell));
+
   if (uniform) {
-    out.pref.copy_(0.5 * (out.psf_lo + out.psf_hi));
+    out.pref.copy_(seed_pref);
     auto faces =
         torch::cat({out.psf_lo, out.psf_hi.narrow(-1, nc1 - 1, 1)}, -1);
     constexpr double w6[6] = {11. / 1440., -31. / 480., 401. / 720.,
