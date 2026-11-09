@@ -381,6 +381,8 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
     double pf = lim ? peos->options->pressure_floor() : 0.;
     auto ok = [&](torch::Tensor const& a, bool p) {
       auto good = torch::isfinite(a).all(0) & (a[IDN] > df);
+      if (lim && a.size(0) > ICY)
+        good &= (a.narrow(0, ICY, a.size(0) - ICY) >= 0.).all(0);
       return p && a.size(0) > IPR ? good & (a[IPR] > pf) : good;
     };
     auto w0 = w.clone();
