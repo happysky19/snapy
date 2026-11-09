@@ -12,48 +12,25 @@ enum X1RefGrid : int {
   kX1RefStretched = 2
 };
 
-//! Largest cell hydrostatic thickness, g rho dz / p = dz / H in scale heights,
-//! for which the x1 reference quadratures a cell from SIX FACE PRESSURES.
+//! Largest cell hydrostatic thickness, g rho dz / p = dz / H, that the x1
+//! reference quadratures from SIX FACE PRESSURES, and that hydro_forward.cpp
+//! reconstructs with the deck's unlimited stencil.
 //!
-//! Those six faces span exp(5 dz/H) in pressure while the cell's own bracket
-//! [psf_hi, psf_lo] is only exp(-dz/H) of its lower face, so the quadrature's
-//! cancellation error grows like exp(k dz/H) relative to the bracket that
-//! judges it: the one-sided wall rows leave the bracket near dz/H ~ 1.3 and
-//! the centred row near ~2.5. Past this bound the reference is the log-mean of
-//! the cell's two faces instead -- strictly inside the bracket, and the exact
-//! cell average of a hydrostatic isothermal column at ANY thickness, so it has
-//! a discrete rest state where the polynomial has none.
-//!
-//! 0.75 holds a 96% margin on the one quantity that bites first (the restored
-//! wall face pressure p' + psf_lo, which goes negative by dz/H ~ 1.25) and
-//! leaves every deck in this tree on the polynomial path.
-//!
-//! The same bound also gates the x1 RECONSTRUCTION of the pressure
-//! perturbation in hydro_forward.cpp: past it the unlimited high-order
-//! reconstruction is unstable in the explicit path (measured growth per step
-//! e^(+4.9e-04) at dz/H = 0.75 rising to e^(+6.0e-03) at 1.5, against
-//! e^(-5.8e-05) at 0.5), so a cell past the bound takes a limited one. The
-//! two uses share a bound because they share a cause: a cell this thick
-//! carries a dz/H-sized share of its own reference, so neither a polynomial
-//! quadrature of its faces nor an unlimited stencil across them is trustworthy
-//! any more.
-//!
-//! The test is on p/rho, which balance_column holds FIXED per cell, so the
-//! branch taken cannot oscillate along its fixed-point iteration -- that is
-//! what makes the fixed point exist and be reachable.
+//! Those six faces span exp(5 dz/H) while the cell's own [psf_hi, psf_lo]
+//! bracket is exp(-dz/H) of its lower face, so past this bound the quadrature
+//! leaves the bracket and the arithmetic mean it falls back to has no
+//! discrete rest state; the reference takes the log-mean there instead, and
+//! the reconstruction a limited slope. 0.75 keeps a 96% margin on the first
+//! quantity to bite, the restored wall face p' + psf_lo, and leaves every
+//! deck in this tree on the unchanged path (happysky19/snapy#5).
 constexpr double kX1RefMaxThickness = 0.75;
 
-//! Relative slack on the comparison against kX1RefMaxThickness.
+//! Relative slack on that comparison, so the BOUND ITSELF is on the <= side.
 //!
-//! balance_column holds p/rho fixed per cell only to ~1 ulp -- it recovers rho
-//! as p/rt from an iterate p that moves every sweep -- so the thickness the
-//! kernel reads back wobbles in the last bit. A column written EXACTLY at the
-//! bound then has cells on both sides of a strict comparison, flipping side
-//! between sweeps, and the iteration has no fixed point to reach: measured at
-//! dz/H = 0.75, nx1 = 8, the sweeps plateau at 1.6e-03 while 0.75 +/- 1e-09
-//! both converge below 1e-13. 1e-09 is seven orders above that wobble and
-//! seven below the margin the bound itself carries, so the deck at the bound
-//! takes the <= side the bound documents.
+//! balance_column holds p/rho fixed per cell only to ~1 ulp, so a column
+//! written exactly at the bound would otherwise have cells on both sides of a
+//! strict test and flip between sweeps: measured, dz/H = 0.75 then plateaus
+//! at 1.6e-03 while 0.75 +/- 1e-09 converge below 1e-13.
 constexpr double kX1RefThicknessTol = 1.e-9;
 
 torch::Tensor hydro_ref_x1_stretched_rows(torch::Tensor const& dx1f, int iu,

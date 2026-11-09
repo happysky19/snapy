@@ -165,9 +165,6 @@ CoordinateOptions CoordinateOptionsImpl::from_yaml(
     for (size_t k = 1; k + 1 < faces.size(); ++k) {
       double below = faces[k] - faces[k - 1], above = faces[k + 1] - faces[k];
       double ratio = std::max(above / below, below / above);
-      // inclusive to kX1MaxWidthRatioTol: the faces above are built from
-      // expm1, so a deck asking for exactly the bound differs from it by
-      // rounding alone (coordinate.hpp)
       TORCH_CHECK(
           ratio <= CoordinateOptionsImpl::kX1MaxWidthRatio *
                        (1. + CoordinateOptionsImpl::kX1MaxWidthRatioTol),

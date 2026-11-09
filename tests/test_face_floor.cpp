@@ -98,11 +98,8 @@ void face_floor_uses_adjacent_density(torch::Device device) {
 // overshoot is then floored to the adjacent density, as with the switch off:
 // the same flux in every arm (with the linear/ln wall continuation of rho/p)
 //
-// g dz rho/p = 1 here also puts every cell past kX1RefMaxThickness, so the
-// cell reference is the log-mean of its two faces rather than their arithmetic
-// mean. That moves this flux by 3.1%, from 2.83191e-8 to 2.92080e-8, in all
-// three arms. What the test asserts is unchanged: the floor still fires on an
-// unresolved column, and still fires identically whatever the switch.
+// g dz rho/p = 1 puts every cell past kX1RefMaxThickness, so the reference is
+// the log-mean of the cell's faces and the flux moved 3.1% from 2.83191e-8.
 void face_floor_fires_on_an_unresolved_column(torch::Device device) {
   auto block = dipped_column(device, 10.);
   int dipped = block->pcoord->iu() - 1;

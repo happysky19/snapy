@@ -68,9 +68,8 @@ namespace snap {
 //!
 //!  * the x1 boundaries really are physical, not periodic;
 //!  * every block the column is later split into has at least five x1 cells --
-//!    below that the reference falls back to the log-mean of the wall cell's
-//!    two faces, and the balance found here is not the one that block will
-//!    enforce;
+//!    below that the reference falls back to a two-point mean at the wall, and
+//!    the balance found here is not the one that block will enforce;
 //!  * the `uniform` classification below, which is made ONCE for the whole
 //!    column, is the same one every block will make for itself. The solver
 //!    classifies per block, so a grid that is uniform over part of the x1 range
@@ -103,22 +102,6 @@ namespace snap {
 //! cell pressure is the six-face degree-5 Lagrange cell average with per-cell
 //! rows (hydro_ref_x1_stretched_rows); a column of unequal widths takes them
 //! whatever the flag.
-//!
-//! A cell thicker than `kX1RefMaxThickness` scale heights (g rho dz / p, see
-//! hydro_dispatch.hpp) takes the log-mean of its two faces instead of the
-//! six-face quadrature, in the solver and here alike. That bound is what makes
-//! this iteration converge at all on a coarsely resolved deep column: the
-//! quadrature's error relative to the cell's own face bracket grows with
-//! thickness, and past it the guarded operator has NO self-consistent rest
-//! state, so the sweeps below plateau instead of converging. The test is on
-//! p/rho, which this holds fixed, so the branch cannot change between sweeps.
-//!
-//! Converging is still not the same as being usable. What the solver restores
-//! at a face is p' + psf_lo, and it floors a non-positive result back to the
-//! bare reference -- a finite jump of |p'| at a wall. The fixed point below is
-//! a free gauge p' == C, nothing here bounds C, and a reference that
-//! overestimates its cell drives C negative. A caller on a very deep or very
-//! coarse column should check min(C + psf_lo) > 0 on the returned state.
 //!
 //! Under SNAP_X1_CENTROID_EXACT a spherical-polar block's reference works on
 //! plain means converted from its r^2 means, which this column does not model:
