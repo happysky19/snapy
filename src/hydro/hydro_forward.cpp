@@ -375,7 +375,7 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
     // not admissible: non-finite, rho or p not above the floor (zero with the
     // limiter off), or repaired by the limiter. Those cells hand u to the
     // EOS; this call's redo marks and vapor failures are dropped. Trips count
-    // cells per stage, x1 ghosts included
+    // cells per stage, ghosts included
     bool lim = peos->options->limiter();
     double df = lim ? peos->options->density_floor() : 0.;
     double pf = lim ? peos->options->pressure_floor() : 0.;
