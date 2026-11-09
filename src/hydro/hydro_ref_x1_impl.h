@@ -75,6 +75,20 @@ inline DISPATCH_MACRO T hydro_ref_x1_wall_rop(T r0, T r1, T k) {
   return e > T(0) ? e : r0;
 }
 
+//! The cell average of the log-linear profile through the two face pressures,
+//! dp / ln(lo / hi) with dp = lo - hi = g rho dz, and the arithmetic mean as
+//! its ratio -> 1 limit. It lies STRICTLY inside [hi, lo] for any positive
+//! pair, so unlike a polynomial quadrature of six faces it cannot overshoot
+//! the cell it describes, and for an isothermal hydrostatic column it
+//! satisfies p_i == pref_i identically -- an exact discrete rest state at any
+//! cell thickness. `dp` is passed rather than recomputed as lo - hi so the
+//! kX1RefNonUniform branch keeps the value it has always returned.
+template <typename T>
+inline DISPATCH_MACRO T hydro_ref_x1_log_mean(T lo, T hi, T dp) {
+  T ratio = lo / hi;
+  return fabs(ratio - T(1)) < T(1.e-6) ? T(0.5) * (lo + hi) : dp / log(ratio);
+}
+
 template <typename T>
 inline DISPATCH_MACRO T hydro_ref_x1_wall_steps(T const* dx1f, int jw, int dir,
                                                 int k) {
@@ -176,9 +190,26 @@ inline DISPATCH_MACRO void hydro_ref_x1_cell_impl(
   bool clamp_out = wall_out && fits && !(thin && phys_in);
   T lo = psf_lo[flat + i];
   T hi = psf_hi[flat + i];
-  T cell_pref = T(0.5) * (lo + hi);
+  T dp = grav * w[IDN * ncells + flat + i] * dx1f[i];
+  // the cell's hydrostatic thickness in scale heights, g rho dz / p = dz / H.
+  // It is g dz / (p/rho), and balance_column holds p/rho fixed per cell, so
+  // the branch chosen below is invariant along its iteration.
+  T thick = dp / w[IPR * ncells + flat + i];
+  bool resolved = thick <= T(kX1RefMaxThickness);
+  // A cell too thick for a polynomial quadrature of its faces takes the
+  // log-mean, as kX1RefNonUniform always has. Everything else keeps the
+  // arithmetic mean it has always had: that is the seed the six-face rows
+  // below overwrite, and the value a cell keeps when its row is rejected by
+  // the bracket guard or when there is no row to take (a block thinner than
+  // five x1 cells, or an unclamped physical wall). Those cases are untouched
+  // here -- below this bound the guard does not fire on a hydrostatic column
+  // (its value sits mid-bracket, measured), so nothing in them bears on the
+  // rest state this bound exists to restore.
+  T cell_pref = (resolved && x1_grid != kX1RefNonUniform)
+                    ? T(0.5) * (lo + hi)
+                    : hydro_ref_x1_log_mean(lo, hi, dp);
 
-  if (uniform) {
+  if (uniform && resolved) {
     constexpr double w6[6] = {11. / 1440., -31. / 480., 401. / 720.,
                               401. / 720., -31. / 480., 11. / 1440.};
     T lower = lo < hi ? lo : hi;
@@ -219,7 +250,7 @@ inline DISPATCH_MACRO void hydro_ref_x1_cell_impl(
       int row = 4 - sigma;
       use_six_faces(nc1 - 5, w6e[row], true);
     }
-  } else if (x1_grid == kX1RefStretched) {
+  } else if (x1_grid == kX1RefStretched && resolved) {
     T lower = lo < hi ? lo : hi;
     T upper = lo > hi ? lo : hi;
     int start = static_cast<int>(rows[7 * i]);
@@ -231,12 +262,9 @@ inline DISPATCH_MACRO void hydro_ref_x1_cell_impl(
       }
       if (value >= lower && value <= upper) cell_pref = value;
     }
-  } else {
-    T dp = grav * w[IDN * ncells + flat + i] * dx1f[i];
-    T ratio = lo / hi;
-    cell_pref =
-        fabs(ratio - T(1)) < T(1.e-6) ? T(0.5) * (lo + hi) : dp / log(ratio);
   }
+  // kX1RefNonUniform, and any cell past kX1RefMaxThickness on either of the
+  // two branches above, keep the log-mean `cell_pref` set above.
 
   pref[flat + i] = cell_pref;
   int jlo = (wall_clamp && phys_in) ? il : 0;

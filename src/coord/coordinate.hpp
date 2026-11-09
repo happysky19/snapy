@@ -97,6 +97,18 @@ struct CoordinateOptionsImpl {
 
   static constexpr double kX1MaxWidthRatio = 1.5;
 
+  //! Relative slack on kX1MaxWidthRatio, so the BOUND ITSELF is admissible.
+  //!
+  //! cells/x1rat builds its faces from expm1, which reproduces a requested
+  //! ratio q only to rounding, so the differenced widths come out as
+  //! q (1 + O(eps)) and a strict `ratio <= kX1MaxWidthRatio` refuses
+  //! x1rat = 1.5 at every nx1: measured excess 1.1e-15 at nx1 = 5 rising to
+  //! 3.4e-13 at nx1 = 1588, which is as far as the construction stays
+  //! monotone. 1e-9 clears that by ~3000x and is still eight orders below any
+  //! violation a deck could mean, so a grid that genuinely exceeds the bound
+  //! is refused exactly as before.
+  static constexpr double kX1MaxWidthRatioTol = 1.e-9;
+
   int x1f_ghosts() const { return std::max(nghost(), 3) + 1; }
 
   torch::Tensor global_x1f() const;
