@@ -366,6 +366,46 @@ TEST(ThickCellRest, a_projected_thick_column_does_not_drift) {
   }
 }
 
+// The thickness gate is read off the ITERATE: g rho dz / p, with rho recovered
+// as p / rt. That is p/rho-invariant in exact arithmetic but only to ~1 ulp in
+// float64, so a column sitting EXACTLY at kX1RefMaxThickness has cells on both
+// sides of `thick <= bound` and flips side between sweeps: two operators, no
+// fixed point. Measured at dz/H = 0.75 with a strict comparison, nx1 = 8: the
+// sweeps plateau at 1.6e-03, while 0.75 +/- 1e-09 converge in 47 and 27
+// sweeps. Any value the bound takes is a deck someone writes -- 0.75 most of
+// all -- so the comparison carries a tolerance far above that wobble
+// (kX1RefThicknessTol) and the deck AT the bound deterministically takes the
+// <= side the bound documents.
+TEST(ThickCellRest, a_column_exactly_at_the_thickness_gate_still_converges) {
+  torch::set_num_threads(1);
+  const double a = snap::kX1RefMaxThickness;
+  for (int nx1 : {5, 8, 9}) {
+    auto [w, dx1f] = isothermal_column(nx1, a);
+    torch::Tensor wb;
+    double err = -1.;
+    int sweeps = -1;
+    ASSERT_NO_THROW(std::tie(wb, err, sweeps) = snap::balance_column(
+                        w, dx1f, kGrav, true, 1.e-13, 5000, "cartesian", false))
+        << "nx1=" << nx1 << " at the gate a=" << a;
+    std::cout << std::scientific << "gate a=" << a << " nx1=" << nx1
+              << ": balance " << err << " in " << sweeps << " sweeps\n";
+    EXPECT_LT(err, 1.e-13) << "nx1=" << nx1 << " at the gate a=" << a;
+  }
+  // and the column at the bound is still a rest state in both schemes
+  auto [w, dx1f] = isothermal_column(kSolverNx1, a);
+  auto [wb, err, sweeps] = snap::balance_column(w, dx1f, kGrav, true, 1.e-13,
+                                                5000, "cartesian", false);
+  ASSERT_LT(err, 1.e-13);
+  for (int imp : {0, 1}) {
+    auto d = drift(wb, kSolverNx1, a * scale_height(), imp, kSolverSteps);
+    std::cout << std::scientific << "gate a=" << a
+              << (imp ? " implicit" : " explicit") << ": max |w|/c " << d.mach
+              << ", one-step |a|/g " << d.force << '\n';
+    EXPECT_LT(d.mach, 1.e-12) << "implicit-scheme=" << imp;
+    EXPECT_LT(d.force, 1.e-10) << "implicit-scheme=" << imp;
+  }
+}
+
 // The control: the SAME end-to-end gate must see the defect it exists to
 // remove, or it could pass on a build where nothing is balanced at all. A
 // column marched through the continuum ODE satisfies the continuum balance,

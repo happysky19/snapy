@@ -192,10 +192,13 @@ inline DISPATCH_MACRO void hydro_ref_x1_cell_impl(
   T hi = psf_hi[flat + i];
   T dp = grav * w[IDN * ncells + flat + i] * dx1f[i];
   // the cell's hydrostatic thickness in scale heights, g rho dz / p = dz / H.
-  // It is g dz / (p/rho), and balance_column holds p/rho fixed per cell, so
-  // the branch chosen below is invariant along its iteration.
+  // It is g dz / (p/rho), and balance_column holds p/rho fixed per cell to
+  // ~1 ulp, so the branch chosen below is invariant along its iteration only
+  // as long as the comparison clears that wobble: hence the tolerance, which
+  // is what lets a deck written AT the bound reach a fixed point at all.
   T thick = dp / w[IPR * ncells + flat + i];
-  bool resolved = thick <= T(kX1RefMaxThickness);
+  bool resolved =
+      thick <= T(kX1RefMaxThickness) * (T(1) + T(kX1RefThicknessTol));
   // A cell too thick for a polynomial quadrature of its faces takes the
   // log-mean, as kX1RefNonUniform always has. Everything else keeps the
   // arithmetic mean it has always had: that is the seed the six-face rows

@@ -33,6 +33,19 @@ enum X1RefGrid : int {
 //! what makes the fixed point exist and be reachable.
 constexpr double kX1RefMaxThickness = 0.75;
 
+//! Relative slack on the comparison against kX1RefMaxThickness.
+//!
+//! balance_column holds p/rho fixed per cell only to ~1 ulp -- it recovers rho
+//! as p/rt from an iterate p that moves every sweep -- so the thickness the
+//! kernel reads back wobbles in the last bit. A column written EXACTLY at the
+//! bound then has cells on both sides of a strict comparison, flipping side
+//! between sweeps, and the iteration has no fixed point to reach: measured at
+//! dz/H = 0.75, nx1 = 8, the sweeps plateau at 1.6e-03 while 0.75 +/- 1e-09
+//! both converge below 1e-13. 1e-09 is seven orders above that wobble and
+//! seven below the margin the bound itself carries, so the deck at the bound
+//! takes the <= side the bound documents.
+constexpr double kX1RefThicknessTol = 1.e-9;
+
 torch::Tensor hydro_ref_x1_stretched_rows(torch::Tensor const& dx1f, int iu,
                                           bool phys_in, bool phys_out,
                                           bool wall_clamp);
