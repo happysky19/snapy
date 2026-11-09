@@ -12,9 +12,12 @@ mass     |dM|/M <= 1e-13 after 40 steps: two pulses against a reflecting wall (o
          the seam of two x1 blocks in one process.
 limiter  limiter on, 20 steps through the redo loop, no redo: a 4-cell dip whose u - L u is below the floor, and
          a moist column whose vapor steps to zero (u - L u has negative vapor there).
-seam     moist EOS, limiter on, two x1 blocks in one process, a vapor step (0.1 -> 0) with a cloud band 100 m
+seam     moist EOS, limiter on, two x1 blocks in one process, a vapor step (0.1 -> 0) with a cloud band 300 m
          above the seam: total mass (dry + vapor + cloud) within 1e-13 over 20 steps; the limiter must not make the
-         fallback differ between a block and its neighbour's ghost copy of the seam cells.
+         fallback differ between a block and its neighbour's ghost copy of the seam cells; and the converted
+         species stay >= 0 at every stage.
+floor    limiter on, a 4-cell pressure dip of 0.06 in p = rho = 1: a temperature floor (1e-4) that only the
+         point state crosses must not change the solution (bitwise equal to a floor of 1e-6).
 theta    a coarse Straka density current (32 x 128, dry, adiabatic, reflecting walls) to t = 900 s: theta' stays
          within its initial range +- 2 K (adiabatic flow carries theta).
 gravity  a column at rest with T = 1 - 0.8 z (g = 1, discretely balanced) and a density/pressure pulse at z = 0.5,
@@ -38,7 +41,7 @@ X, WQ = (torch.from_numpy(v) for v in np.polynomial.legendre.leggauss(8))
 
 
 def mesh(key, nx=64, geo="cartesian", x1f=None, nb1=1, limiter=False, moist=False, shock=False, tracer=False,
-         grav=0., straka=False):
+         grav=0., straka=False, tfloor=1.e-12):
     bounds = {"x1min": 0., "x1max": 1., "x2min": 0., "x2max": 1., "x3min": 0., "x3max": 1.}
     bounds.update({"spherical-polar": {"x1min": 1., "x1max": 2., "x2min": 1., "x2max": 2.},
                    "gnomonic-equiangle": {"x1min": 1., "x1max": 2., "x2min": -.05, "x2max": .05,
@@ -56,7 +59,7 @@ def mesh(key, nx=64, geo="cartesian", x1f=None, nb1=1, limiter=False, moist=Fals
            "integration": {"type": "rk3", "cfl": 0.4, "implicit-scheme": 0, "nlim": -1, "tlim": 1.e9}}
     if limiter:
         cfg["dynamics"]["equation-of-state"].update({"density-floor": 1.e-3, "pressure-floor": 1.e-3,
-                                                     "temperature-floor": 1.e-12})
+                                                     "temperature-floor": tfloor})
     if geo != "cartesian":
         cfg["boundary-condition"]["external"] = {"x1-inner": "reflecting", "x1-outer": "reflecting"}
     if x1f is not None:
@@ -231,19 +234,32 @@ def arm_mass(device):
 def arm_seam(device):
     def init(xf, z):
         p = 1.e5 * torch.exp(-z * 10. / (3900. * 320.))
-        return {kIDN: p / (3900. * 320.), kIPR: p, kICY: torch.where(z < 5.1e3, .1, 0.).double(),
-                kICY + 1: torch.where((z - 5.1e3).abs() < 300., 5.e-3, 0.).double()}
+        return {kIDN: p / (3900. * 320.), kIPR: p, kICY: torch.where(z < 5.3e3, .1, 0.).double(),
+                kICY + 1: torch.where((z - 5.3e3).abs() < 300., 5.e-3, 0.).double()}
     m = mesh(4, nb1=2, moist=True)
     state, blocks = start(m, init, device)
     dx = torch.cat([b.buffer("coord.dx1f").double().cpu()[NG:-NG] for b in blocks])
     mass = lambda: sum(float((interior(state, blocks, "hydro_u", r) * dx).sum()) for r in (kIDN, kICY, kICY + 1))
-    m0 = mass()
-    run(m, None, device, 20, state=state)
+    m0, qmin = mass(), 0.
+    for c in range(1, 21):
+        m.set_cycle(c)
+        h = m.max_time_step(state)
+        for st in range(3):
+            m.forward(state, h, st)
+            qmin = min([qmin] + [float(s["hydro_w"][kICY:].min()) for s in state])
+        assert m.check_redo(state) == 0
     drift = abs(mass() - m0) / m0
     trips = [int(b.buffer("hydro.conversion_trips")) for b in blocks]
-    print(f"seam key 4: |dM|/M {drift:.2e}, trips per block {trips}")
+    print(f"seam key 4: |dM|/M {drift:.2e}, trips per block {trips}, min converted species {qmin:.2e}")
     del m, state, blocks
-    return drift <= TOL
+    return drift <= TOL and qmin >= 0.
+
+
+def arm_floor(device):
+    init = lambda xf, x: {kIDN: 1. + 0. * x, kIPR: torch.where((x > .45) & (x < .45 + 4 / 64), .06, 1.).double()}
+    u = [run(mesh(4, limiter=True, tfloor=tf), init, device, 20)[0][0]["hydro_u"].cpu() for tf in (1.e-6, 1.e-4)]
+    print(f"floor key 4: max|u(Tf 1e-4) - u(Tf 1e-6)| {float((u[1] - u[0]).abs().max()):.2e}")
+    return torch.equal(*u)
 
 
 def arm_limiter(device):
@@ -314,14 +330,14 @@ def arm_gravity(device):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
-    ap.add_argument("--arms", default="order,radial,refused,shock,mass,seam,limiter,theta,gravity")
+    ap.add_argument("--arms", default="order,radial,refused,shock,mass,seam,floor,limiter,theta,gravity")
     a = ap.parse_args()
     if a.device == "cuda" and not torch.cuda.is_available():
         raise SystemExit(125)
     arms = {"order": lambda d: arm_order(d, 0.) and arm_order(d, .8), "radial": arm_radial, "refused": arm_refused,
             "shock": arm_shock, "mass": arm_mass, "limiter": arm_limiter,
             "theta": arm_theta, "gravity": arm_gravity,
-            "seam": arm_seam}
+            "seam": arm_seam, "floor": arm_floor}
     bad = []
     for name in a.arms.split(","):
         t0 = time.time()
