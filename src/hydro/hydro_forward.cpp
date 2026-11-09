@@ -443,6 +443,9 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
       // limit that one row there, with the slope recon/plm.cpp uses. The test
       // is the complement of the reference's, tolerance and all, so a deck
       // written AT the bound keeps the unlimited stencil on both sides.
+      // Pressure only: LMARS builds the face velocity from the pressure
+      // difference, and limiting IDN and IVX as well was measured to change
+      // nothing at rest and to damp a seeded perturbation no better.
       {
         // downward magnitude, as _hydro_ref_x1 takes it, so that the two
         // gates agree by sign as well as by value
@@ -459,6 +462,11 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
         auto half =
             torch::where(dw2 > 0., dw2 / (dwl + dwr), torch::zeros_like(dw2));
         auto pc = pp.narrow(-1, 1, n - 2), g = gate.narrow(-1, 1, n - 2);
+        // Both sides of every face, ghosts included. Narrowing this to the
+        // owned cells leaves one side of each WALL face unlimited and the
+        // other limited, and the asymmetry leaks mass through the wall:
+        // test_x1_seam_split_wb_ref4 then aborts on the gravity-work fixer
+        // with 8.80454e-08 kg across an x1 boundary face (measured).
         // wtmp[ILT][i] is face i seen from cell i-1, wtmp[IRT][i] from cell i
         auto lo = wtmp[IRT][IPR].narrow(-1, 1, n - 2);
         lo.copy_(torch::where(g, pc - half, lo));

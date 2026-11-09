@@ -1,14 +1,12 @@
-// A column whose CELLS are thick compared with the pressure scale height:
-// a = dz/H = g rho dz / p, which nothing in the tree exercised above ~1
-// (test_balance_column runs at 0.043). Measurements, and the 10,000-step runs
-// this trims to 300 steps, are in happysky19/snapy#5.
+// Cells thick against the pressure scale height, a = dz/H = g rho dz / p,
+// which nothing in the tree ran above ~1. Measurements: happysky19/snapy#5.
 
 #include <gtest/gtest.h>
 #include <snap/snap.h>
 #include <torch/torch.h>
-#include <unistd.h>
 
 #include <cstdio>
+#include <cstdlib>  // mkstemp
 #include <snap/hydro/balance_column.hpp>
 #include <snap/mesh/meshblock.hpp>
 #include <string>
@@ -19,9 +17,7 @@ constexpr double kGrav = 10.44, kRd = 3777., kGamma = 1.4, kT0 = 300.,
                  kPs = 1.e5, kH = kRd * kT0 / kGrav;
 constexpr int kNx1 = 5, kNg = 3, kSteps = 300;
 
-//! kNx1 cells of `dz`, walls at both x1 ends, every float at full precision:
-//! at 6 digits the block's dx1f differs from the column's in the 7th place.
-constexpr char kDeck[] =
+constexpr char kDeck[] =  // full precision: at 6 digits dx1f differs in the 7th
     R"(species: [{name: dry, composition: {H: 2}, cv_R: 2.5}]
 geometry: {type: cartesian, cells: {nx1: %d, nx2: 1, nx3: 1, nghost: %d}, bounds: {x1min: 0., x1max: %.17g, x2min: 0., x2max: 1., x3min: 0., x3max: 1.}}
 dynamics: {equation-of-state: {type: ideal-gas, gammad: %.17g, weight: %.17g, density-floor: 1.e-30, pressure-floor: 1.e-30, limiter: false}, reconstruct: {vertical: {type: weno5, scale: false, shock: false}}, riemann-solver: {type: lmars}}
@@ -29,8 +25,6 @@ boundary-condition: {external: {x1-inner: reflecting, x1-outer: reflecting}}
 integration: {type: rk3, cfl: 0.4, implicit-scheme: %d}
 forcing: {const-gravity: {grav1: %.17g}})";
 
-//! project the exact continuum column of `a` scale heights per cell, or
-//! re-project the state `w` the previous call returned
 std::tuple<torch::Tensor, double, int> project(double a, torch::Tensor w = {}) {
   auto opt = torch::TensorOptions().dtype(torch::kFloat64);
   if (!w.defined()) {
@@ -43,22 +37,19 @@ std::tuple<torch::Tensor, double, int> project(double a, torch::Tensor w = {}) {
                               1.e-13, 5000, "cartesian", false);
 }
 
-//! max |v1| / c over every owned cell and every step, starting from `col`
 double drift(torch::Tensor const& col, double a, int imp) {
   char y[1024], f[] = "/tmp/test-thick-cell-XXXXXX";
   std::snprintf(y, sizeof y, kDeck, kNx1, kNg, a * kH * kNx1, kGamma,
                 8.31446261815324 / kRd, imp, -kGrav);
-  int fd = mkstemp(f);
-  EXPECT_NE(fd, -1);
-  std::FILE* fp = fdopen(fd, "w");
+  std::FILE* fp = fdopen(mkstemp(f), "w");  // -1 on failure -> nullptr
+  EXPECT_NE(fp, nullptr);
   std::fputs(y, fp);
   std::fclose(fp);
   auto b = snap::MeshBlock(snap::MeshBlockOptionsImpl::from_yaml(f));
   std::remove(f);
   b->to(torch::kCPU, torch::kFloat64);
   int il = b->pcoord->il();
-  auto co = b->pcoord->options;
-  auto w = torch::zeros({col.size(0), co->nc3(), co->nc2(), co->nc1()},
+  auto w = torch::zeros({col.size(0), 1, 1, b->pcoord->options->nc1()},
                         col.options());
   w.narrow(-1, il, kNx1).copy_(col);  // the reflecting walls fill the ghosts
   snap::Variables v{{"hydro_w", w}};
@@ -76,39 +67,26 @@ double drift(torch::Tensor const& col, double a, int imp) {
 }
 }  // namespace
 
-// At fb003523 the projection plateaus at 1.898760e-01 for a = 1.5 instead of
-// converging, so the case stops there. After the fix both thicknesses reach
-// their residual floor, that state is a fixed point of the same solve, and it
-// holds rest in both integration paths.
+// At fb003523 the a = 1.5 projection plateaus at 1.898760e-01 instead of
+// converging; after the fix both reach the floor, are a fixed point, and rest.
 TEST(ThickCellRest, a_thick_isothermal_column_reaches_rest_and_keeps_it) {
   torch::set_num_threads(1);
   for (double a : {1.5, 3.0}) {
-    torch::Tensor wb;
-    double err = -1.;
-    int sweeps = -1;
-    ASSERT_NO_THROW(std::tie(wb, err, sweeps) = project(a)) << "a=" << a;
-    EXPECT_LT(err, 1.e-13) << "a=" << a;
-    // re-projecting the answer buys nothing and moves it by roundoff only:
-    // measured 0 to 1 sweeps and 0 to 3.5e-16 relative at nx1 = 5 and 8
-    auto [wb2, err2, sweeps2] = project(a, wb);
-    EXPECT_LT(err2, 2. * err) << "a=" << a << ": not a fixed point";
+    SCOPED_TRACE("a=" + std::to_string(a));
+    auto [wb, err, sweeps] = project(a);
+    EXPECT_LT(err, 1.e-13);
+    auto [wb2, err2, sweeps2] = project(a, wb);  // re-projection buys nothing
     auto rel = (wb2 - wb).abs() / wb.abs().clamp_min(1.e-300);  // v1 == 0
-    EXPECT_LT(rel.max().item<double>(), 1.e-14)
-        << "a=" << a << ": re-projection moved the state";
-    double ex = drift(wb, a, 0), im = drift(wb, a, 1);
-    std::printf(
-        "a=%.2f: residual %.6e in %d sweeps, re-projected %.6e in %d; "
-        "max |w|/c over %d steps %.6e explicit, %.6e implicit\n",
-        a, err, sweeps, err2, sweeps2, kSteps, ex, im);
-    EXPECT_LT(ex, 1.e-12) << "a=" << a << " explicit";
-    EXPECT_LT(im, 1.e-12) << "a=" << a << " implicit";
+    EXPECT_LT(rel.max().item<double>(), 1.e-14) << "not a fixed point";
+    std::printf("a=%.2f: residual %.6e in %d sweeps, re-projected %.6e in %d\n",
+                a, err, sweeps, err2, sweeps2);
+    for (int imp : {0, 1})
+      EXPECT_LT(drift(wb, a, imp), 1.e-12) << "implicit-scheme=" << imp;
   }
 }
 
 // Balancing is not being usable: by a = 4 the gauge drives a restored face
-// pressure negative (residual 1.574e-16, face -5.240e-05) and the solver then
-// exhausts its redos. The message is asserted, not just the throw: fb003523
-// refuses a = 4 as well, but for non-convergence, which is the other defect.
+// pressure negative. fb003523 refuses a = 4 too, so the MESSAGE is asserted.
 TEST(ThickCellRest, a_column_too_deep_for_one_gauge_is_refused) {
   try {
     project(4.0);

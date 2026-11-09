@@ -104,11 +104,15 @@ std::tuple<torch::Tensor, double, int> balance_column(
     // the state injects into itself. 0.9 is above every measured tail factor
     // and below the floor's, where the residual alternates. The no-op test
     // keeps the invariant above: a column handed its own answer back returns
-    // in zero sweeps, as the update reproduces it bitwise.
+    // in zero sweeps, as the update reproduces it bitwise. A thick column can
+    // now run to max_iter and still return, so it costs more sweeps than it
+    // did: 34 -> 41 at dz/H = 1, 98 -> 118 at 3.
     auto next = pref + c;
-    bool settled =
-        !thick_regime || !(err < 0.9 * prev) || torch::equal(prs, next);
-    if ((err < rtol && settled) || sweeps == max_iter) break;
+    // the tensor compare is last so it only runs on a sweep that can stop
+    if (sweeps == max_iter ||
+        (err < rtol &&
+         (!thick_regime || !(err < 0.9 * prev) || torch::equal(prs, next))))
+      break;
     prev = err;
     prs.copy_(next);
     rho.copy_(prs / rt);

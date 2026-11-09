@@ -98,8 +98,10 @@ void face_floor_uses_adjacent_density(torch::Device device) {
 // overshoot is then floored to the adjacent density, as with the switch off:
 // the same flux in every arm (with the linear/ln wall continuation of rho/p)
 //
-// g dz rho/p = 1 puts every cell past kX1RefMaxThickness, so the reference is
-// the log-mean of the cell's faces and the flux moved 3.1% from 2.83191e-8.
+// g dz rho/p = 1 puts every UNDIPPED cell past kX1RefMaxThickness, so their
+// reference is the log-mean of the cell's faces and the flux moved 3.1% from
+// 2.83191e-8. The dipped cell itself (1e-4) and the one below it (0.2) stay
+// well inside the bound and keep the six-face path.
 void face_floor_fires_on_an_unresolved_column(torch::Device device) {
   auto block = dipped_column(device, 10.);
   int dipped = block->pcoord->iu() - 1;
