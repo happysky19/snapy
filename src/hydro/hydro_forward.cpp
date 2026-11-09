@@ -284,16 +284,18 @@ torch::Tensor HydroImpl::scalar_flux_covariance(torch::Tensor const& rl,
 }
 
 // dynamics/conversion-order 4: the x1 weights of L a = h^2/24 q''(x_i), with q
-// the quadratic whose averages over cells i-1, i, i+1 are a (sketch of the
-// #280 follow-up). The first and last cell, which the 5-point x1 stencils read
-// but which have one x1 neighbour, take q as the cubic whose averages over
-// that cell and the next three inward are a: q'' is then O(h^2), so L a, like
-// the centred one on a smooth grid, is O(h^4). k = {kp, km, lo, hi}.
-static void conv4_x1_weights(torch::Tensor x1f, torch::TensorOptions opts,
-                             torch::Tensor* k) {
+// the quadratic whose averages over cells i-1, i, i+1 are a. The first and
+// last cell (ghosts the 5-point x1 stencils read, with one x1 neighbour here)
+// take q as the cubic whose averages over that cell and the next three inward
+// are a: its q'' is O(h^2) accurate, so L a is accurate to O(h^4), as the
+// centred one is on a smooth grid. k = {kp, km, lo, hi}.
+static void conv4_x1_weights(torch::Tensor x1f, int n,
+                             torch::TensorOptions opts, torch::Tensor* k) {
+  TORCH_CHECK(n >= 4 && x1f.size(0) == n + 1,
+              "dynamics/conversion-order 4 needs nc1 >= 4 cells and nc1 + 1 "
+              "x1 faces, got ",
+              n, " and ", x1f.size(0));
   x1f = x1f.to(torch::kCPU, torch::kFloat64);
-  int n = x1f.size(0) - 1;
-  TORCH_CHECK(n >= 4, "dynamics/conversion-order 4 needs nc1 >= 4, got ", n);
   auto f = [&](int s) { return x1f.narrow(0, s, n - 2); };
   auto c = (f(2) - f(1)).square() / 4. / (f(3) - f(0));
   k[0] = c / (f(3) - f(1));
@@ -336,7 +338,7 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
     auto* k = conv4_x1_;
     if (!k[0].defined() || k[0].device() != u.device() ||
         k[0].scalar_type() != u.scalar_type())
-      conv4_x1_weights(pmb->pcoord->x1f, u.options(), k);
+      conv4_x1_weights(pmb->pcoord->x1f, u.size(DIM1), u.options(), k);
     int n = u.size(DIM1) - 2;
     auto lap = [&](torch::Tensor const& a) {
       auto out = torch::empty_like(a);
