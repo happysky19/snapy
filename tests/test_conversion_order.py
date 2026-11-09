@@ -12,6 +12,9 @@ mass     |dM|/M <= 1e-13 after 40 steps: two pulses against a reflecting wall (o
          the seam of two x1 blocks in one process.
 limiter  limiter on, 20 steps through the redo loop, no redo: a 4-cell dip whose u - L u is below the floor, and
          a moist column whose vapor steps to zero (u - L u has negative vapor there).
+gravity  a column at rest with T = 1 - 0.8 z (g = 1, discretely balanced) and a density/pressure pulse at z = 0.5,
+         nx1 = 64, 128, 256 against 1024: the pulse's fitted order >= 3.8 (the default face density reference is
+         O(dz^2) where p/rho curves; key 4 takes the fourth-order one, docs/derivations/wb-ref4.md).
 
   python test_conversion_order.py [--device cpu|cuda]
 """
@@ -23,13 +26,14 @@ import time
 import numpy as np
 import torch
 import yaml
-from snapy import Mesh, MeshOptions, kICY, kIDN, kIPR
+from snapy import Mesh, MeshOptions, balance_column, kICY, kIDN, kIPR
 
 G, NG, TOL = 1.4, 3, 1.e-13
 X, WQ = (torch.from_numpy(v) for v in np.polynomial.legendre.leggauss(8))
 
 
-def mesh(key, nx=64, geo="cartesian", x1f=None, nb1=1, limiter=False, moist=False, shock=False, tracer=False):
+def mesh(key, nx=64, geo="cartesian", x1f=None, nb1=1, limiter=False, moist=False, shock=False, tracer=False,
+         grav=0.):
     bounds = {"x1min": 0., "x1max": 1., "x2min": 0., "x2max": 1., "x3min": 0., "x3max": 1.}
     bounds.update({"spherical-polar": {"x1min": 1., "x1max": 2., "x2min": 1., "x2max": 2.},
                    "gnomonic-equiangle": {"x1min": 1., "x1max": 2., "x2min": -.05, "x2max": .05,
@@ -55,6 +59,8 @@ def mesh(key, nx=64, geo="cartesian", x1f=None, nb1=1, limiter=False, moist=Fals
     if tracer:
         cfg["scalar"] = {"nvar": 1, "names": ["q"], "reconstruct": {"type": "weno5", "shock": False},
                          "riemann-solver": {"type": "upwind"}}
+    if grav:
+        cfg["forcing"] = {"const-gravity": {"grav1": -grav}}
     if moist:
         cfg["reference-state"] = {"Tref": 0., "Pref": 1.e5}
         cfg["species"] = [{"name": "dry", "composition": {"H": 1.6667, "He": 0.16667}, "cv_R": 2.5},
@@ -228,15 +234,40 @@ def arm_limiter(device):
     return ok
 
 
+def arm_gravity(device):
+    temp = lambda r: 1. - .8 * r
+    p0, d = lambda r: temp(r) ** 1.25, lambda r: 1.e-3 * torch.exp(-((r - .5) / .1) ** 2)
+    rho0 = lambda r: p0(r) / temp(r)
+    def run_nx(nx, dt):
+        bg = []
+        def init(xf, xv):  # the pulse's exact averages on the balanced column
+            w0, w1 = averages(xf, rho0, lambda r: 0 * r, p0)[0], \
+                averages(xf, lambda r: rho0(r) * (1 + d(r)), lambda r: 0 * r, lambda r: p0(r) * (1 + d(r)) ** G)[0]
+            s = slice(NG, -NG)
+            col = torch.stack([w0[kIDN][s]] + [0 * w0[kIDN][s]] * 3 + [w0[kIPR][s]]).view(5, 1, 1, -1)
+            wb = balance_column(col, (xf[1:] - xf[:-1])[s].contiguous(), 1., rtol=1.e-13)[0]
+            wb = torch.cat([wb[..., :1]] * NG + [wb] + [wb[..., -1:]] * NG, -1)[:, 0, 0]
+            bg.append(wb[kIDN][s])
+            return {kIDN: wb[kIDN] + w1[kIDN] - w0[kIDN], kIPR: wb[kIPR] + w1[kIPR] - w0[kIPR]}
+        state, blocks, _, _ = run(mesh(4, nx, grav=1.), init, device, round(.1 / dt), dt)
+        return (interior(state, blocks, "hydro_u", kIDN) - bg[0]) / nx
+    dt = .25 / 1024 / G ** .5
+    ref = run_nx(1024, dt)
+    err = [float((run_nx(nx, dt) - ref.view(nx, -1).sum(1)).abs().sum()) for nx in (64, 128, 256)]
+    print(f"gravity key 4: L1 {err} order {fit(err):.2f}")
+    return fit(err) >= 3.8
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
-    ap.add_argument("--arms", default="order,radial,refused,shock,mass,limiter")
+    ap.add_argument("--arms", default="order,radial,refused,shock,mass,limiter,gravity")
     a = ap.parse_args()
     if a.device == "cuda" and not torch.cuda.is_available():
         raise SystemExit(125)
     arms = {"order": lambda d: arm_order(d, 0.) and arm_order(d, .8), "radial": arm_radial, "refused": arm_refused,
-            "shock": arm_shock, "mass": arm_mass, "limiter": arm_limiter}
+            "shock": arm_shock, "mass": arm_mass, "limiter": arm_limiter,
+            "gravity": arm_gravity}
     bad = []
     for name in a.arms.split(","):
         t0 = time.time()
