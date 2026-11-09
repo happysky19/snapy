@@ -12,6 +12,8 @@ mass     |dM|/M <= 1e-13 after 40 steps: two pulses against a reflecting wall (o
          the seam of two x1 blocks in one process.
 limiter  limiter on, 20 steps through the redo loop, no redo: a 4-cell dip whose u - L u is below the floor, and
          a moist column whose vapor steps to zero (u - L u has negative vapor there).
+theta    a coarse Straka density current (32 x 128, dry, adiabatic, reflecting walls) to t = 900 s: theta' stays
+         within its initial range +- 2 K (adiabatic flow carries theta).
 gravity  a column at rest with T = 1 - 0.8 z (g = 1, discretely balanced) and a density/pressure pulse at z = 0.5,
          nx1 = 64, 128, 256 against 1024: the pulse's fitted order >= 3.8 (the default face density reference is
          O(dz^2) where p/rho curves; key 4 takes the fourth-order one, docs/derivations/wb-ref4.md).
@@ -33,7 +35,7 @@ X, WQ = (torch.from_numpy(v) for v in np.polynomial.legendre.leggauss(8))
 
 
 def mesh(key, nx=64, geo="cartesian", x1f=None, nb1=1, limiter=False, moist=False, shock=False, tracer=False,
-         grav=0.):
+         grav=0., straka=False):
     bounds = {"x1min": 0., "x1max": 1., "x2min": 0., "x2max": 1., "x3min": 0., "x3max": 1.}
     bounds.update({"spherical-polar": {"x1min": 1., "x1max": 2., "x2min": 1., "x2max": 2.},
                    "gnomonic-equiangle": {"x1min": 1., "x1max": 2., "x2min": -.05, "x2max": .05,
@@ -59,6 +61,13 @@ def mesh(key, nx=64, geo="cartesian", x1f=None, nb1=1, limiter=False, moist=Fals
     if tracer:
         cfg["scalar"] = {"nvar": 1, "names": ["q"], "reconstruct": {"type": "weno5", "shock": False},
                          "riemann-solver": {"type": "upwind"}}
+    if straka:
+        cfg["geometry"].update(bounds={"x1min": 0., "x1max": 6.4e3, "x2min": 0., "x2max": 25.6e3, "x3min": 0.,
+                                       "x3max": 1.}, cells={"nx1": nx, "nx2": 4 * nx, "nx3": 1, "nghost": NG})
+        cfg["dynamics"]["equation-of-state"]["weight"] = 29.e-3
+        cfg["boundary-condition"]["external"] = {f"x{d}-{s}": "reflecting" for d in (1, 2, 3)
+                                                 for s in ("inner", "outer")}
+        cfg["integration"]["cfl"] = .9
     if grav:
         cfg["forcing"] = {"const-gravity": {"grav1": -grav}}
     if moist:
@@ -234,6 +243,29 @@ def arm_limiter(device):
     return ok
 
 
+def arm_theta(device):
+    rd, g = 8.314462618 / 29.e-3, 9.8
+    cp = G * rd / (G - 1)
+    m = mesh(4, 32, grav=g, straka=True)
+    b = list(m.blocks)[0]
+    b.to(torch.device(device), torch.float64)
+    z, x = b.buffer("coord.x1v").double()[None, :], b.buffer("coord.x2v").double()[:, None]
+    big = torch.sqrt((x / 4.e3) ** 2 + ((z - 3.e3) / 2.e3) ** 2)
+    temp = 300. - g * z / cp
+    p = 1.e5 * (temp / 300.) ** (cp / rd)
+    temp = temp + torch.where(big <= 1, -7.5 * (torch.cos(big * np.pi) + 1), 0.)
+    w = b.buffer("hydro.D").clone().zero_()
+    w[kIPR], w[kIDN] = p.to(w), (p / (rd * temp)).to(w)
+    state, _ = m.initialize([{"hydro_w": w}])
+    th = lambda: (lambda w: w[kIPR] / (rd * w[kIDN]) * (1.e5 / w[kIPR]) ** (rd / cp) - 300.)(
+        state[0]["hydro_w"][b.part((0, 0, 0), False)])
+    lo, hi = float(th().min()), float(th().max())
+    run(m, None, device, tend=900., state=state)
+    a, z = float(th().min()), float(th().max())
+    print(f"theta key 4: theta' initial [{lo:.2f}, {hi:.2f}] at t = 900 s [{a:.2f}, {z:.2f}]")
+    return lo - 2. <= a and z <= hi + 2.
+
+
 def arm_gravity(device):
     temp = lambda r: 1. - .8 * r
     p0, d = lambda r: temp(r) ** 1.25, lambda r: 1.e-3 * torch.exp(-((r - .5) / .1) ** 2)
@@ -261,13 +293,13 @@ def arm_gravity(device):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
-    ap.add_argument("--arms", default="order,radial,refused,shock,mass,limiter,gravity")
+    ap.add_argument("--arms", default="order,radial,refused,shock,mass,limiter,theta,gravity")
     a = ap.parse_args()
     if a.device == "cuda" and not torch.cuda.is_available():
         raise SystemExit(125)
     arms = {"order": lambda d: arm_order(d, 0.) and arm_order(d, .8), "radial": arm_radial, "refused": arm_refused,
             "shock": arm_shock, "mass": arm_mass, "limiter": arm_limiter,
-            "gravity": arm_gravity}
+            "theta": arm_theta, "gravity": arm_gravity}
     bad = []
     for name in a.arms.split(","):
         t0 = time.time()
