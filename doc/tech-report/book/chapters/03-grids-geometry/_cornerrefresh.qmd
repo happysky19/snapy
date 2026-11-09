@@ -28,7 +28,8 @@ array), so the ghost corners next to an $x_1$ wall match the updated column; a r
 **Guarantee / limits.** Exact, provided each boundary function gives the same ghosts when called again on an
 $n_g$-wide slab.
 
-**Evidence.** `test_wb_wall_corner`; check `[C19]`; the ctest entry was not run for this chapter at the pin (missing evidence).
+**Evidence.** `test_wb_wall_corner` (Cartesian only; untested on the cubed sphere and on spherical-polar); check
+`[C19]`; the ctest entry was not run for this chapter at the pin (missing evidence).
 :::
 
 Local symbols: $n_{\mathrm t}$ the array length along a tangential direction, ghosts
@@ -45,6 +46,21 @@ once over the whole array: it mirrors each $x_1$ row from that row's own interio
 corner values as the slab calls and rewrites the other $x_1$ ghost rows with the bits they already hold. The rule relies on the contract stated with the `BC_FUNCTION` macro: a face function called again on
 a tangential slab must not depend on the slab's size and must give the same ghosts ({{< code src/bc/bc_func.hpp BC_FUNCTION >}}).
 Outflow is excluded because its background must match the whole block and it needs primitives.
+
+**What `physical` resolves to on each layout**, because the rule reads the installed functions and the layouts do
+not install the same ones. On `slab` and `cubed`, construction removes the $x_2$ and $x_3$ function of a face that
+has a neighbouring block or whose axis is periodic ({{< code src/mesh/meshblock.cpp MeshBlockImpl::reset >}}), so
+`physical` is false exactly on the tangential faces the exchange owns and the slabs there are refreshed; this is
+the Cartesian and the spherical-polar case. On the cubed sphere that removal does not run at all — the whole block
+is guarded by `type() != "cubed-sphere"` — so every face keeps the function the card named. The cubed-sphere cards
+name `custom` on $x_2$ and $x_3$, and `custom_inner` and `custom_outer` are registered built-ins with an empty body
+([`bc_func.cpp:7-8`](https://github.com/chengcli/snapy/blob/68f4e066974ede87e4379285c4fba895b970b7f1/src/bc/bc_func.cpp#L7-L8)), so those faces are installed, are not periodic, and `physical` is
+true on them: **at the pin no $x_2$ or $x_3$ slab of a cubed-sphere block is refreshed**, and the corners next to a
+radial wall keep what the panel exchange left. Nothing writes them instead, because the function that made the face
+count as physical does nothing. The radial direction is not split there ($p_z$ is forced to 1,
+{{< code src/layout/cubed_sphere_layout.cpp CubedSphereLayoutImpl::_initialize >}}), so every cubed-sphere block
+owns both $x_1$ walls and the refresh has something to re-apply; it is the tangential classification, not the
+$x_1$ one, that differs.
 
 The check enumerates the rule (`[C19]`).[^cr-c19] Over 35 $(n_g, n_{\mathrm t})$ pairs the two end slabs of width
 $n_{\mathrm{slab}}$ never meet, which is what the minimum is for; and over the 140 combinations of
@@ -127,11 +143,21 @@ The cases are `x2_uniform_rest_keeps_u2_zero` and `user_wall_keeps_u2_zero` ({{<
 `scalar_corner_primitive_matches_conserved` ({{< code tests/test_wb_wall_corner.cpp WallCorner.scalar_corner_primitive_matches_conserved >}}), each with a `_cuda` twin that
 skips without a GPU. One process. They were not run for this chapter at the pin (missing evidence).
 
+**Layout coverage.** Every case above declares `layout: slab` with `type: cartesian`, so the rule is asserted on
+the Cartesian layout only. It is **untested on the cubed sphere**: no test at the pin asserts a cubed-sphere corner,
+which is also where the rule does the least, since `physical` is true on every tangential face there (Derivation).
+It is **untested on spherical-polar** as a corner assertion. The spherical-polar path is exercised without being
+asserted by `test_x1_centroid_rest_python`, whose deck is reflecting on $x_1$ and $x_2$ and periodic on $x_3$ with
+$n_{x_2}=n_{x_3}=4$: the two $x_3$ slabs are refreshed and the two $x_2$ slabs are skipped as physical, and the
+test asserts that the column stays at rest, not what the corners hold.
+
 ### Limits
 
 ::: {.callout-warning title="Limits"}
 - `Mesh::exchange_ghost_zones` does not refresh corners; only the block's per-stage sync does.
 - Only $x_1$ walls are refreshed; $x_2$-$x_3$ corners are synthesised (@sec-ch03-exchange).
+- On the cubed sphere the rule never fires on a tangential slab: the cards' `custom` faces are installed built-ins,
+  so `physical` is true and the radial-wall corners inside the panel halos are left as the exchange wrote them.
 :::
 
 The `Mesh`-level sync is a plain exchange ({{< code src/mesh/mesh.cpp MeshImpl::exchange_ghost_zones >}} for `exchange_ghost_zones`). A user boundary
