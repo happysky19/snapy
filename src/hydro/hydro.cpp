@@ -122,13 +122,13 @@ void HydroImpl::reset() {
     }
     // the wb4 resolution flag is computed per block from scan pressures up to
     // three cells away, so x1 seam sides agree only with nghost >= 3
-    if (wb_ref4_enabled() && options->grav()->grav1() != 0. && pmb &&
-        pmb->pcoord) {
+    if ((wb_ref4_enabled() || options->conversion_order() == 4) &&
+        options->grav()->grav1() != 0. && pmb && pmb->pcoord) {
       int ng = pmb->pcoord->options->nghost();
       TORCH_CHECK(ng >= 3,
                   "SNAP_WB_REF4 (or SNAP_X1_CENTROID_EXACT, which implies "
-                  "it) needs nghost >= 3, got ",
-                  ng, "; unset it");
+                  "it, or dynamics/conversion-order 4) needs nghost >= 3, got ",
+                  ng);
     }
     // the one-sided rho_1 at a wall spans three cells: fewer reads the ghost
     if (x1_mass_covariance() && options->grav()->grav1() != 0. && pmb &&
@@ -624,7 +624,8 @@ HydroImpl::_hydro_ref_x1(torch::Tensor const& w) const {
   // spherical-polar the cells read here are then plain means, for which it is
   // fourth order (docs/derivations/x1-centroid-spherical.md)
   torch::Tensor wb4_flag;
-  if (wb_ref4()) {
+  // conversion-order 4 needs it too: the default dsf is O(dz^2) (wb-ref4.md)
+  if (wb_ref4() || options->conversion_order() == 4) {
     if (!wb_ref4_ || wb_ref4_->stale(w)) {
       bool clamp = options->wb_wall_clamp();
       wb_ref4_ = std::make_shared<WbRef4Stencils>(
