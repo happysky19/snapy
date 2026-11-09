@@ -123,6 +123,22 @@ std::tuple<torch::Tensor, double, int> balance_column(
 
   TORCH_CHECK(err < rtol, "balance_column: no discrete balance after ", sweeps,
               " sweeps; residual bound on |a|/g is ", err, " > ", rtol);
+
+  // Balancing is not the same as being usable. The fixed point is a free gauge
+  // p' == c, nothing above bounds c, and the solver restores p' + psf at every
+  // physical face and floors a non-positive result back to the bare reference
+  // -- a finite jump exactly where the cancellation has to be exact. Measured
+  // at dz/H = 4, nx1 = 5: residual 1.574e-16 with the top wall face restoring
+  // to -5.240e-05, after which both schemes hit the floor, exhaust their
+  // redos and terminate. Refuse that state rather than certify it.
+  auto gauge = (prs - pref).narrow(-1, nc1 - 1, 1);
+  auto face = torch::cat({psf_lo, psf_hi.narrow(-1, nc1 - 1, 1)}, -1);
+  double face_min = (gauge + face).min().item<double>();
+  TORCH_CHECK(face_min > 0., "balance_column: the column balances (residual ",
+              err, ") but its restored face pressure p' + psf reaches ",
+              face_min,
+              " <= 0, so the solver's positivity floor would fire at a face. "
+              "The column is too deep for one gauge: use thinner cells.");
   return {wb, err, sweeps};
 }
 
