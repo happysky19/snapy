@@ -11,6 +11,7 @@
 #include "flux_positivity.hpp"
 #include "gravity_work_radial.hpp"
 #include "hydro.hpp"
+#include "hydro_dispatch.hpp"
 #include "x1_mass_covariance.hpp"
 
 namespace snap {
@@ -433,6 +434,45 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
       // floor=false: reconstruction-stage floors would clamp legitimately
       // negative perturbations.
       wtmp = precon1->forward(wx1, DIM1, /*floor=*/false);
+
+      // Past kX1RefMaxThickness the unlimited x1 reconstruction of the
+      // pressure perturbation is unstable in the explicit path: the growth
+      // per step of a seeded perturbation runs from e^(-5.8e-05) at
+      // dz/H = 0.5 to e^(+4.9e-04) at 0.75 and e^(+6.0e-03) at 1.5, while a
+      // limited one damps at every thickness tried (happysky19/snapy#5). So
+      // limit that one row there, with the slope recon/plm.cpp uses. The test
+      // is the complement of the reference's, tolerance and all, so a deck
+      // written AT the bound keeps the unlimited stencil on both sides.
+      // Pressure only: LMARS builds the face velocity from the pressure
+      // difference, and limiting IDN and IVX as well was measured to change
+      // nothing at rest and to damp a seeded perturbation no better.
+      {
+        // downward magnitude, as _hydro_ref_x1 takes it, so that the two
+        // gates agree by sign as well as by value
+        double gdn = -options->grav()->grav1();
+        auto thick = gdn * density *
+                     pmb->pcoord->dx1f.to(w.device(), w.scalar_type()) /
+                     pressure;
+        auto gate = thick > kX1RefMaxThickness * (1. + kX1RefThicknessTol);
+        auto pp = wx1[IPR];
+        int64_t n = pp.size(-1);
+        auto dw = pp.narrow(-1, 1, n - 1) - pp.narrow(-1, 0, n - 1);
+        auto dwl = dw.narrow(-1, 0, n - 2), dwr = dw.narrow(-1, 1, n - 2);
+        auto dw2 = dwl * dwr;
+        auto half =
+            torch::where(dw2 > 0., dw2 / (dwl + dwr), torch::zeros_like(dw2));
+        auto pc = pp.narrow(-1, 1, n - 2), g = gate.narrow(-1, 1, n - 2);
+        // Both sides of every face, ghosts included. Narrowing this to the
+        // owned cells leaves one side of each WALL face unlimited and the
+        // other limited, and the asymmetry leaks mass through the wall:
+        // test_x1_seam_split_wb_ref4 then aborts on the gravity-work fixer
+        // with 8.80454e-08 kg across an x1 boundary face (measured).
+        // wtmp[ILT][i] is face i seen from cell i-1, wtmp[IRT][i] from cell i
+        auto lo = wtmp[IRT][IPR].narrow(-1, 1, n - 2);
+        lo.copy_(torch::where(g, pc - half, lo));
+        auto hi = wtmp[ILT][IPR].narrow(-1, 2, n - 2);
+        hi.copy_(torch::where(g, pc + half, hi));
+      }
 
       wx1[IPR].copy_(pressure);
       wx1[IDN].copy_(density);

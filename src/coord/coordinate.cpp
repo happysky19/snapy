@@ -162,10 +162,12 @@ CoordinateOptions CoordinateOptionsImpl::from_yaml(
       TORCH_CHECK(faces[k] > faces[k - 1],
                   "stretched x1 faces must increase strictly; face ", k, " = ",
                   faces[k], " <= ", faces[k - 1]);
+    const double qmax = CoordinateOptionsImpl::kX1MaxWidthRatio *
+                        (1. + CoordinateOptionsImpl::kX1MaxWidthRatioTol);
     for (size_t k = 1; k + 1 < faces.size(); ++k) {
       double below = faces[k] - faces[k - 1], above = faces[k + 1] - faces[k];
       double ratio = std::max(above / below, below / above);
-      TORCH_CHECK(ratio <= CoordinateOptionsImpl::kX1MaxWidthRatio,
+      TORCH_CHECK(ratio <= qmax,  // inclusive to kX1MaxWidthRatioTol
                   "stretched x1: the cell widths across face ", k,
                   " differ by a factor ", ratio, " (", below, " and ", above,
                   "), outside the stage-1 bound [1/",

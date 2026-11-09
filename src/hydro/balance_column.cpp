@@ -74,9 +74,20 @@ std::tuple<torch::Tensor, double, int> balance_column(
                .to(w.options());
   auto wgt = grav * dxf;
 
+  // Past the thickness gate the solver amplifies whatever the sweeps leave
+  // behind, so there they run to the fixed point rather than stopping at the
+  // first state under rtol; below it they stop as they always have, and the
+  // caller's answer does not move. g rho dz / p is g dz / rt, and rt is held
+  // fixed, so this is a property of the column handed in.
+  bool thick_regime =
+      ((wgt / rt) > kX1RefMaxThickness * (1. + kX1RefThicknessTol))
+          .any()
+          .item<bool>();
+
   // check, then update: the residual therefore describes the state returned,
   // and a column already at the fixed point comes back after zero updates
   double err = std::numeric_limits<double>::infinity();
+  double prev = std::numeric_limits<double>::infinity();
   int sweeps = 0;
   for (; sweeps <= max_iter; ++sweeps) {
     at::native::call_hydro_ref_x1(wb.device().type(), wb, dxf, anchor, psf_lo,
@@ -86,8 +97,24 @@ std::tuple<torch::Tensor, double, int> balance_column(
     auto pp = prs - pref;
     auto c = pp.narrow(-1, nc1 - 1, 1);  // one gauge per column, at its top
     err = ((pp - c).abs() / (rho * wgt)).max().item<double>();
-    if (err < rtol || sweeps == max_iter) break;
-    prs.copy_(pref + c);
+    // The sweeps converge with a tail factor of 0.42 to 0.63, so the first
+    // state under rtol sits two to three orders above the fixed point a few
+    // sweeps later (dz/H = 1, nx1 = 8: 7.618e-14 at sweep 34, 2.481e-16 at
+    // 40), and the solver reconstructs p - pref, so that leftover is momentum
+    // the state injects into itself. 0.9 is above every measured tail factor
+    // and below the floor's, where the residual alternates. The no-op test
+    // keeps the invariant above: a column handed its own answer back returns
+    // in zero sweeps, as the update reproduces it bitwise. A thick column can
+    // now run to max_iter and still return, so it costs more sweeps than it
+    // did: 34 -> 41 at dz/H = 1, 98 -> 118 at 3.
+    auto next = pref + c;
+    // the tensor compare is last so it only runs on a sweep that can stop
+    if (sweeps == max_iter ||
+        (err < rtol &&
+         (!thick_regime || !(err < 0.9 * prev) || torch::equal(prs, next))))
+      break;
+    prev = err;
+    prs.copy_(next);
     rho.copy_(prs / rt);
     // a diverging column walks its top cells to vacuum, and once rho goes
     // negative the residual above goes negative with it and reads as converged
@@ -100,6 +127,22 @@ std::tuple<torch::Tensor, double, int> balance_column(
 
   TORCH_CHECK(err < rtol, "balance_column: no discrete balance after ", sweeps,
               " sweeps; residual bound on |a|/g is ", err, " > ", rtol);
+
+  // Balancing is not the same as being usable. The fixed point is a free gauge
+  // p' == c, nothing above bounds c, and the solver restores p' + psf at every
+  // physical face and floors a non-positive result back to the bare reference
+  // -- a finite jump exactly where the cancellation has to be exact. Measured
+  // at dz/H = 4, nx1 = 5: residual 1.574e-16 with the top wall face restoring
+  // to -5.240e-05, after which both schemes hit the floor, exhaust their
+  // redos and terminate. Refuse that state rather than certify it.
+  auto gauge = (prs - pref).narrow(-1, nc1 - 1, 1);
+  auto face = torch::cat({psf_lo, psf_hi.narrow(-1, nc1 - 1, 1)}, -1);
+  double face_min = (gauge + face).min().item<double>();
+  TORCH_CHECK(face_min > 0., "balance_column: the column balances (residual ",
+              err, ") but its restored face pressure p' + psf reaches ",
+              face_min,
+              " <= 0, so the solver's positivity floor would fire at a face. "
+              "The column is too deep for one gauge: use thinner cells.");
   return {wb, err, sweeps};
 }
 
