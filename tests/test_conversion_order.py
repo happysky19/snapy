@@ -12,6 +12,9 @@ mass     |dM|/M <= 1e-13 after 40 steps: two pulses against a reflecting wall (o
          the seam of two x1 blocks in one process.
 limiter  limiter on, 20 steps through the redo loop, no redo: a 4-cell dip whose u - L u is below the floor, and
          a moist column whose vapor steps to zero (u - L u has negative vapor there).
+seam     moist EOS, limiter on, two x1 blocks in one process, a vapor step (0.1 -> 0) with a cloud band 100 m
+         above the seam: total mass (dry + vapor + cloud) within 1e-13 over 20 steps; the limiter must not make the
+         fallback differ between a block and its neighbour's ghost copy of the seam cells.
 theta    a coarse Straka density current (32 x 128, dry, adiabatic, reflecting walls) to t = 900 s: theta' stays
          within its initial range +- 2 K (adiabatic flow carries theta).
 gravity  a column at rest with T = 1 - 0.8 z (g = 1, discretely balanced) and a density/pressure pulse at z = 0.5,
@@ -225,6 +228,24 @@ def arm_mass(device):
     return ok
 
 
+def arm_seam(device):
+    def init(xf, z):
+        p = 1.e5 * torch.exp(-z * 10. / (3900. * 320.))
+        return {kIDN: p / (3900. * 320.), kIPR: p, kICY: torch.where(z < 5.1e3, .1, 0.).double(),
+                kICY + 1: torch.where((z - 5.1e3).abs() < 300., 5.e-3, 0.).double()}
+    m = mesh(4, nb1=2, moist=True)
+    state, blocks = start(m, init, device)
+    dx = torch.cat([b.buffer("coord.dx1f").double().cpu()[NG:-NG] for b in blocks])
+    mass = lambda: sum(float((interior(state, blocks, "hydro_u", r) * dx).sum()) for r in (kIDN, kICY, kICY + 1))
+    m0 = mass()
+    run(m, None, device, 20, state=state)
+    drift = abs(mass() - m0) / m0
+    trips = [int(b.buffer("hydro.conversion_trips")) for b in blocks]
+    print(f"seam key 4: |dM|/M {drift:.2e}, trips per block {trips}")
+    del m, state, blocks
+    return drift <= TOL
+
+
 def arm_limiter(device):
     ok = True
     dip = lambda xf, xv: {kIDN: torch.where((xv > .45) & (xv < .45 + 4 / 64), .0405, 1.).double(),
@@ -293,13 +314,14 @@ def arm_gravity(device):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
-    ap.add_argument("--arms", default="order,radial,refused,shock,mass,limiter,theta,gravity")
+    ap.add_argument("--arms", default="order,radial,refused,shock,mass,seam,limiter,theta,gravity")
     a = ap.parse_args()
     if a.device == "cuda" and not torch.cuda.is_available():
         raise SystemExit(125)
     arms = {"order": lambda d: arm_order(d, 0.) and arm_order(d, .8), "radial": arm_radial, "refused": arm_refused,
             "shock": arm_shock, "mass": arm_mass, "limiter": arm_limiter,
-            "theta": arm_theta, "gravity": arm_gravity}
+            "theta": arm_theta, "gravity": arm_gravity,
+            "seam": arm_seam}
     bad = []
     for name in a.arms.split(","):
         t0 = time.time()
