@@ -624,7 +624,9 @@ HydroImpl::_hydro_ref_x1(torch::Tensor const& w) const {
   // spherical-polar the cells read here are then plain means, for which it is
   // fourth order (docs/derivations/x1-centroid-spherical.md)
   torch::Tensor wb4_flag;
-  // conversion-order 4 needs it too: the default dsf is O(dz^2) (wb-ref4.md)
+  // conversion-order 4 needs the fourth-order face part: the default dsf is
+  // O(dz^2) (wb-ref4.md); it keeps the kernel's cell dref, whose replacement
+  // breaks the theta bound of a density current at a wall
   if (wb_ref4() || options->conversion_order() == 4) {
     if (!wb_ref4_ || wb_ref4_->stale(w)) {
       bool clamp = options->wb_wall_clamp();
@@ -632,7 +634,8 @@ HydroImpl::_hydro_ref_x1(torch::Tensor const& w) const {
           wb_ref4_stencils(pcoord->x1f, is, iu, clamp && phys_in,
                            clamp && phys_out, w.options()));
     }
-    wb4_flag = wb_ref4_cells(*wb_ref4_, w, psf_lo, psf_hi, pref, dref);
+    wb4_flag = wb_ref4_cells(*wb_ref4_, w, psf_lo, psf_hi, pref,
+                             wb_ref4() ? dref : dref.clone());
   }
 
   if (below >= 0) {
