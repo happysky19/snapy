@@ -373,7 +373,7 @@ The switch does nothing on cubed-sphere grids. Under it `balance_column` balance
 
 [^rg-2ecd0b8c12cb]: $r$ — $x_1$ on a spherical-polar grid (radius) [m]
 
-[^rg-9f1279c76a64]: $x^{\mathrm{m}}_{1,i}$ — cell midpoint $\tfrac12(x_{1,i-1/2}+x_{1,i+1/2})$ ($r^{\mathrm{m}}_i$ on spherical-polar); it is not the cell average of $x_1$, which is the centroid $x_{1,i}$; [source](https://github.com/chengcli/snapy/blob/68f4e066974ede87e4379285c4fba895b970b7f1/src/coord/coordinate.cpp#L439)
+[^rg-9f1279c76a64]: $x^{\mathrm{m}}_{1,i}$ — cell midpoint $\tfrac12(x_{1,i-1/2}+x_{1,i+1/2})$ ($r^{\mathrm{m}}_i$ on spherical-polar); it is not the cell average of $x_1$, which is the centroid $x_{1,i}$; the half-sum of `x1f`; [source](https://github.com/chengcli/snapy/blob/68f4e066974ede87e4379285c4fba895b970b7f1/src/coord/coordinate.cpp#L439)
 
 [^rg-014edceb12dd]: x2min — lower bound of the second coordinate
 

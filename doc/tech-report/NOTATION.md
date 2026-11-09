@@ -28,7 +28,7 @@ Book-only acronym conventions (notation only): TVD — total-variation diminishi
 | $n_g$ | ghost cells on each side | `nghost` | NG |
 | $x_{1,i\pm1/2}$ | face positions | `x1f` | $r_\pm$, $z_\pm$ |
 | $x_{1,i}$ | cell volume centroid ($r_{c,i}$ on spherical-polar) | `x1v` | $r_c$ |
-| $x^{\mathrm{m}}_{1,i}$ | cell midpoint $\tfrac12(x_{1,i-1/2}+x_{1,i+1/2})$ ($r^{\mathrm{m}}_i$ on spherical-polar); it is not the cell average of $x_1$, which is the centroid $x_{1,i}$ | | $\bar r$, $\bar x_1$ |
+| $x^{\mathrm{m}}_{1,i}$ | cell midpoint $\tfrac12(x_{1,i-1/2}+x_{1,i+1/2})$ ($r^{\mathrm{m}}_i$ on spherical-polar); it is not the cell average of $x_1$, which is the centroid $x_{1,i}$; the half-sum of `x1f` | | $\bar r$, $\bar x_1$ |
 | $h_i$ | $x_1$ width of cell $i$, $x_{1,i+1/2}-x_{1,i-1/2}$; written $\Delta x_1$ where the direction must be explicit | `dx1f` | $\Delta z$, $h$ |
 | $\Delta_\pm$ | centroid spacings $x_{1,i+1}-x_{1,i}$ ($+$) and $x_{1,i}-x_{1,i-1}$ ($-$), used in non-uniform stencils; never $h_\pm$, which would read as cell widths | | $h_\pm$ |
 | $l$ | stencil offset index ($\bar\rho_{i+l}$); never $k$, which is the $x_3$ index | | $k$ in figure scripts |
@@ -36,8 +36,8 @@ Book-only acronym conventions (notation only): TVD — total-variation diminishi
 | $\delta_i$ | centroid offset $x_{1,i}-x^{\mathrm{m}}_{1,i}$ (zero on Cartesian) | | $\delta$ |
 | $A_{i\pm1/2}$ | $x_1$ face area | `face_area1()` | $A_f$ |
 | $V_i$ | cell volume | `cell_volume()` | |
-| $\varpi_{jk}$ | horizontal factor of a cell volume, $V_{ijk}=\varpi_{jk}V^{(1)}_i$: the solid angle on spherical-polar ($V^{(1)}_i=\tfrac13(r_{+}^3-r_{-}^3)$), $\Delta x_2\Delta x_3$ on Cartesian ($V^{(1)}_i=h_i$) | | $\Omega(\theta,\varphi)$ |
-| $V^{(1)}_i$ | the $x_1$ factor of the cell volume, $V_{ijk}=\varpi_{jk}V^{(1)}_i$: $\tfrac13(x_{1,i+1/2}^3-x_{1,i-1/2}^3)$ on spherical-polar, $h_i$ on Cartesian | | |
+| $\varpi_{jk}$ | horizontal factor of a cell volume, $V_{ijk}=\varpi_{jk}V^{(1)}_i$: the solid angle on spherical-polar ($V^{(1)}_i=\tfrac13(r_{+}^3-r_{-}^3)$), $\Delta x_2\Delta x_3$ on Cartesian ($V^{(1)}_i=h_i$); the angular factors of `cell_volume` | | $\Omega(\theta,\varphi)$ |
+| $V^{(1)}_i$ | the $x_1$ factor of the cell volume, $V_{ijk}=\varpi_{jk}V^{(1)}_i$: $\tfrac13(x_{1,i+1/2}^3-x_{1,i-1/2}^3)$ on spherical-polar, $h_i$ on Cartesian; the radial factor of `cell_volume` | | |
 | $\sigma_i^2$ | variance of $x_1$ about the centroid over cell $i$ on its own measure, $\langle (x_1-x_{1,i})^2\rangle_{V_i}$ | `x1_variance` | $\sigma^2$ |
 | $\mathcal I$ | the interior cells of a block; $\partial\mathcal I$ its boundary faces | `interior` part | |
 
