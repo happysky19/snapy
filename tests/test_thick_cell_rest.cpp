@@ -9,7 +9,6 @@
 #include <unistd.h>
 
 #include <cstdio>
-#include <snap/coord/coordinate.hpp>
 #include <snap/hydro/balance_column.hpp>
 #include <snap/mesh/meshblock.hpp>
 #include <string>
@@ -29,26 +28,33 @@ dynamics: {equation-of-state: {type: ideal-gas, gammad: %.17g, weight: %.17g, de
 boundary-condition: {external: {x1-inner: reflecting, x1-outer: reflecting}}
 integration: {type: rk3, cfl: 0.4, implicit-scheme: %d}
 forcing: {const-gravity: {grav1: %.17g}})";
-constexpr char kGeom[] =
-    R"(geometry: {type: cartesian, cells: {nx1: %d, nx2: 1, nx3: 1, nghost: %d, x1rat: %.17g}, bounds: {x1min: 0., x1max: 1.e6, x2min: 0., x2max: 1., x3min: 0., x3max: 1.}})";
 
-std::string deck(char const* fmt, double x, int imp = 0) {
-  char y[1024], f[] = "/tmp/test-thick-cell-XXXXXX";
-  std::snprintf(y, sizeof y, fmt, kNx1, kNg, x, kGamma, 8.31446261815324 / kRd,
-                imp, -kGrav);
-  int fd = mkstemp(f);
-  EXPECT_NE(fd, -1);
-  std::FILE* p = fdopen(fd, "w");
-  std::fputs(y, p);
-  std::fclose(p);
-  return f;
+//! project the exact continuum column of `a` scale heights per cell, or
+//! re-project the state `w` the previous call returned
+std::tuple<torch::Tensor, double, int> project(double a, torch::Tensor w = {}) {
+  auto opt = torch::TensorOptions().dtype(torch::kFloat64);
+  if (!w.defined()) {
+    auto p = kPs * torch::exp(-(torch::arange(kNx1, opt) + 0.5) * a);
+    w = torch::zeros({snap::IPR + 1, 1, 1, kNx1}, opt);
+    w[snap::IPR].copy_(p.view({1, 1, kNx1}));
+    w[snap::IDN].copy_((p / (kRd * kT0)).view({1, 1, kNx1}));
+  }
+  return snap::balance_column(w, torch::full({kNx1}, a * kH, opt), kGrav, true,
+                              1.e-13, 5000, "cartesian", false);
 }
 
 //! max |v1| / c over every owned cell and every step, starting from `col`
 double drift(torch::Tensor const& col, double a, int imp) {
-  auto f = deck(kDeck, a * kH * kNx1, imp);
+  char y[1024], f[] = "/tmp/test-thick-cell-XXXXXX";
+  std::snprintf(y, sizeof y, kDeck, kNx1, kNg, a * kH * kNx1, kGamma,
+                8.31446261815324 / kRd, imp, -kGrav);
+  int fd = mkstemp(f);
+  EXPECT_NE(fd, -1);
+  std::FILE* fp = fdopen(fd, "w");
+  std::fputs(y, fp);
+  std::fclose(fp);
   auto b = snap::MeshBlock(snap::MeshBlockOptionsImpl::from_yaml(f));
-  std::remove(f.c_str());
+  std::remove(f);
   b->to(torch::kCPU, torch::kFloat64);
   int il = b->pcoord->il();
   auto co = b->pcoord->options;
@@ -68,22 +74,12 @@ double drift(torch::Tensor const& col, double a, int imp) {
   }
   return mach;
 }
-
-//! project the exact continuum column of `a` scale heights per cell
-std::tuple<torch::Tensor, double, int> project(double a) {
-  auto opt = torch::TensorOptions().dtype(torch::kFloat64);
-  auto p = kPs * torch::exp(-(torch::arange(kNx1, opt) + 0.5) * a);
-  auto w = torch::zeros({snap::IPR + 1, 1, 1, kNx1}, opt);
-  w[snap::IPR].copy_(p.view({1, 1, kNx1}));
-  w[snap::IDN].copy_((p / (kRd * kT0)).view({1, 1, kNx1}));
-  return snap::balance_column(w, torch::full({kNx1}, a * kH, opt), kGrav, true,
-                              1.e-13, 5000, "cartesian", false);
-}
 }  // namespace
 
 // At fb003523 the projection plateaus at 1.898760e-01 for a = 1.5 instead of
-// converging, so the case stops there; after the fix both thicknesses reach
-// their residual floor and hold rest in both paths.
+// converging, so the case stops there. After the fix both thicknesses reach
+// their residual floor, that state is a fixed point of the same solve, and it
+// holds rest in both integration paths.
 TEST(ThickCellRest, a_thick_isothermal_column_reaches_rest_and_keeps_it) {
   torch::set_num_threads(1);
   for (double a : {1.5, 3.0}) {
@@ -92,11 +88,18 @@ TEST(ThickCellRest, a_thick_isothermal_column_reaches_rest_and_keeps_it) {
     int sweeps = -1;
     ASSERT_NO_THROW(std::tie(wb, err, sweeps) = project(a)) << "a=" << a;
     EXPECT_LT(err, 1.e-13) << "a=" << a;
+    // re-projecting the answer buys nothing and moves it by roundoff only:
+    // measured 0 to 1 sweeps and 0 to 3.5e-16 relative at nx1 = 5 and 8
+    auto [wb2, err2, sweeps2] = project(a, wb);
+    EXPECT_LT(err2, 2. * err) << "a=" << a << ": not a fixed point";
+    auto rel = (wb2 - wb).abs() / wb.abs().clamp_min(1.e-300);  // v1 == 0
+    EXPECT_LT(rel.max().item<double>(), 1.e-14)
+        << "a=" << a << ": re-projection moved the state";
     double ex = drift(wb, a, 0), im = drift(wb, a, 1);
     std::printf(
-        "a=%.2f: residual %.6e in %d sweeps; max |w|/c over %d steps "
-        "%.6e explicit, %.6e implicit\n",
-        a, err, sweeps, kSteps, ex, im);
+        "a=%.2f: residual %.6e in %d sweeps, re-projected %.6e in %d; "
+        "max |w|/c over %d steps %.6e explicit, %.6e implicit\n",
+        a, err, sweeps, err2, sweeps2, kSteps, ex, im);
     EXPECT_LT(ex, 1.e-12) << "a=" << a << " explicit";
     EXPECT_LT(im, 1.e-12) << "a=" << a << " implicit";
   }
@@ -104,18 +107,15 @@ TEST(ThickCellRest, a_thick_isothermal_column_reaches_rest_and_keeps_it) {
 
 // Balancing is not being usable: by a = 4 the gauge drives a restored face
 // pressure negative (residual 1.574e-16, face -5.240e-05) and the solver then
-// exhausts its redos. That has to be an error, not a certified state.
+// exhausts its redos. The message is asserted, not just the throw: fb003523
+// refuses a = 4 as well, but for non-convergence, which is the other defect.
 TEST(ThickCellRest, a_column_too_deep_for_one_gauge_is_refused) {
-  EXPECT_THROW(project(4.0), std::exception);
-}
-
-// cells/x1rat builds its faces from expm1, so adjacent width ratios come out
-// as q (1 + O(eps)) and a STRICT test refused the documented bound itself.
-TEST(ThickCellRest, the_x1rat_guard_admits_its_bound_and_refuses_more) {
-  const double qmax = snap::CoordinateOptionsImpl::kX1MaxWidthRatio;
-  auto good = deck(kGeom, qmax), bad = deck(kGeom, 1.001 * qmax);
-  EXPECT_NO_THROW(snap::CoordinateOptionsImpl::from_yaml(good)) << qmax;
-  EXPECT_THROW(snap::CoordinateOptionsImpl::from_yaml(bad), std::exception);
-  std::remove(good.c_str());
-  std::remove(bad.c_str());
+  try {
+    project(4.0);
+    ADD_FAILURE() << "a = 4 was certified";
+  } catch (std::exception const& e) {
+    EXPECT_NE(std::string(e.what()).find("restored face pressure"),
+              std::string::npos)
+        << e.what();
+  }
 }

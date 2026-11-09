@@ -444,7 +444,10 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
       // is the complement of the reference's, tolerance and all, so a deck
       // written AT the bound keeps the unlimited stencil on both sides.
       {
-        auto thick = std::abs(options->grav()->grav1()) * density *
+        // downward magnitude, as _hydro_ref_x1 takes it, so that the two
+        // gates agree by sign as well as by value
+        double gdn = -options->grav()->grav1();
+        auto thick = gdn * density *
                      pmb->pcoord->dx1f.to(w.device(), w.scalar_type()) /
                      pressure;
         auto gate = thick > kX1RefMaxThickness * (1. + kX1RefThicknessTol);
