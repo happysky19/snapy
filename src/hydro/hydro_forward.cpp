@@ -288,8 +288,11 @@ torch::Tensor HydroImpl::scalar_flux_covariance(torch::Tensor const& rl,
 // last cell (ghosts the 5-point x1 stencils read, with one x1 neighbour here)
 // take q as the cubic whose averages over that cell and the next three inward
 // are a: its q'' is O(h^2) accurate, so L a is accurate to O(h^4), as the
-// centred one is on a smooth grid. k = {kp, km, lo, hi}.
-static void conv4_x1_weights(torch::Tensor x1f, int n,
+// centred one is on a smooth grid. At an x1 block seam the cell that is the
+// neighbour's outermost ghost (2 ng - 1 below, n - 2 ng above) takes the same
+// one-sided cubic the neighbour uses for it, so both blocks hold the same w in
+// every cell either reads. k = {kp, km, lo, hi, seam lo, seam hi}.
+static void conv4_x1_weights(torch::Tensor x1f, int n, int ng,
                              torch::TensorOptions opts, torch::Tensor* k) {
   TORCH_CHECK(n >= 4 && x1f.size(0) == n + 1,
               "dynamics/conversion-order 4 needs nc1 >= 4 cells and nc1 + 1 "
@@ -313,7 +316,12 @@ static void conv4_x1_weights(torch::Tensor x1f, int n,
   };
   k[2] = side(0, 0);
   k[3] = side(n - 4, n - 1);
-  for (int i = 0; i < 4; ++i) k[i] = k[i].to(opts);
+  if (ng >= 2 && n >= 4 * ng) {
+    k[4] = side(2 * ng - 4, 2 * ng - 1);
+    k[5] = side(n - 2 * ng, n - 2 * ng);
+  }
+  for (int i = 0; i < 6; ++i)
+    if (k[i].defined()) k[i] = k[i].to(opts);
 }
 
 torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
@@ -335,10 +343,22 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
   // x1 point values u - L u, the primitives there, and back to cell averages:
   // w = W(u - L u) + L W(u), fourth order where W(u) is second
   if (options->conversion_order() == 4 && u.size(DIM1) > 1) {
+    auto const& mo = pmb->options;
+    int ng = pmb->pcoord->options->nghost();
+    // x1 faces whose ghosts are a neighbour's cells: block seams and periodic
+    auto seam = [&](int f) {
+      return !mo->is_physical_boundary(0, 0, 2 * f - 1) ||
+             (f < (int)mo->bcnames().size() &&
+              mo->bcnames()[f].rfind("periodic", 0) == 0);
+    };
+    bool seam_lo = seam(0), seam_hi = seam(1);
     auto* k = conv4_x1_;
     if (!k[0].defined() || k[0].device() != u.device() ||
         k[0].scalar_type() != u.scalar_type())
-      conv4_x1_weights(pmb->pcoord->x1f, u.size(DIM1), u.options(), k);
+      conv4_x1_weights(pmb->pcoord->x1f, u.size(DIM1), ng, u.options(), k);
+    TORCH_CHECK(!(seam_lo || seam_hi) || k[4].defined(),
+                "dynamics/conversion-order 4 at an x1 block seam needs "
+                "nghost >= 2 and nx1 >= 2 nghost");
     int n = u.size(DIM1) - 2;
     auto lap = [&](torch::Tensor const& a) {
       auto out = torch::empty_like(a);
@@ -347,26 +367,59 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
           k[0] * (a.narrow(-1, 2, n) - a0) - k[1] * (a0 - am);
       out.select(-1, 0) = (a.narrow(-1, 0, 4) * k[2]).sum(-1);
       out.select(-1, n + 1) = (a.narrow(-1, n - 2, 4) * k[3]).sum(-1);
+      if (seam_lo)
+        out.select(-1, 2 * ng - 1) =
+            (a.narrow(-1, 2 * ng - 4, 4) * k[4]).sum(-1);
+      if (seam_hi)
+        out.select(-1, n + 2 - 2 * ng) =
+            (a.narrow(-1, n + 2 - 2 * ng, 4) * k[5]).sum(-1);
       return out;
     };
     // per cell, keep the second-order w where the fourth-order state is not
-    // admissible: rho or p not positive, or non-finite, in u - L u, in its
-    // primitives or in w (a 1:1000 jump makes u - L u negative next to it).
-    // Those cells hand u, not u - L u, to the EOS; trips are counted per cell
-    // and stage, x1 ghosts included
+    // admissible: rho or p not above the floor (limiter on) or zero, or
+    // non-finite, in u - L u, in its primitives or in w, or a state the
+    // limiter would repair (a 1:1000 jump makes u - L u negative next to it).
+    // Those cells hand u, not u - L u, to the EOS; the limiter's redo marks
+    // and vapor failures from this call are dropped. Trips are counted per
+    // cell and stage, x1 ghosts included
+    bool lim = peos->options->limiter();
+    double df = lim ? peos->options->density_floor() : 0.;
+    double pf = lim ? peos->options->pressure_floor() : 0.;
     auto ok = [&](torch::Tensor const& a, bool p) {
-      auto good = torch::isfinite(a).all(0) & (a[IDN] > 0.);
-      return p && a.size(0) > IPR ? good & (a[IPR] > 0.) : good;
+      auto good = torch::isfinite(a).all(0) & (a[IDN] > df);
+      return p && a.size(0) > IPR ? good & (a[IPR] > pf) : good;
     };
     auto w0 = w.clone();
     auto up = u - lap(u);
     auto good = ok(up, false);
-    peos->forward(torch::where(good, up, u), w);
+    auto tmp = torch::where(good, up, u);
+    auto marks = peos->limiter_marks().defined() ? peos->limiter_marks().clone()
+                                                 : torch::Tensor();
+    auto fails = peos->vapor_failures().defined()
+                     ? peos->vapor_failures().clone()
+                     : torch::Tensor();
+    auto tmp0 = lim ? tmp.clone() : torch::Tensor();
+    peos->forward(tmp, w);
+    if (lim) {
+      good &= (tmp == tmp0).all(0);
+      if (marks.defined()) peos->limiter_marks().copy_(marks);
+      if (peos->vapor_failures().defined())
+        fails.defined() ? peos->vapor_failures().copy_(fails)
+                        : peos->vapor_failures().zero_();
+    }
     good &= ok(w, true);
     w.add_(lap(w0));
     good &= ok(w, true);
     w.copy_(torch::where(good, w, w0));
     _conv4_trips += good.logical_not().sum();
+    // reflecting x1 walls: the ghosts mirror the converted interior, as the
+    // boundary condition mirrors u, so the wall face carries no mass
+    BoundaryFuncOptions bop;
+    bop.nghost(ng);
+    bop.type(kPrimitive);
+    for (int f = 0; f < 2; ++f)
+      if (!seam(f) && is_reflecting(mo->bfuncs()[f]))
+        mo->bfuncs()[f](w, 3, bop);
   }
   if (options->verbose()) {
     auto end = std::chrono::high_resolution_clock::now();
