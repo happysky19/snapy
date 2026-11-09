@@ -377,22 +377,29 @@ TEST(ThickCellRest, a_projected_thick_column_does_not_drift) {
 //! rungs and the two paths that hold rather than the whole cross product.
 constexpr int kLongSteps = 10000;
 
-// What balance_column RETURNS has to be the fixed point, not merely the first
-// sweep that dips under rtol. The sweeps converge geometrically with a tail
-// factor of 0.42 to 0.63, so those are two different states two to three
-// orders apart: at dz/H = 1, nx1 = 8, sweep 34 gives 7.618e-14 and sweep 40
-// gives 2.481e-16. The solver reconstructs p - pref, so the leftover is the
-// momentum the state injects into itself every step, and on cells of about a
-// scale height the explicit path amplifies it.
+// What balance_column returns for a column PAST THE GATE has to be the fixed
+// point, not merely the first sweep that dips under rtol. The sweeps converge
+// geometrically with a tail factor of 0.42 to 0.63, so those are two different
+// states two to three orders apart: at dz/H = 1, nx1 = 8, sweep 34 gives
+// 7.618e-14 and sweep 40 gives 2.481e-16. The solver reconstructs p - pref, so
+// the leftover is the momentum the state injects into itself every step, and
+// past the gate the explicit path amplifies it.
 //
-// The gate is therefore the residual's own floor, plus idempotence: feeding
-// the answer back in must not buy another order. Before the stopping rule the
+// The gate for that is the residual's own floor, plus idempotence: feeding the
+// answer back in must not buy another order. Before the stopping rule the
 // second call returned the same state in ZERO sweeps -- the loose state is a
 // fixed point of the stopping rule, not of the iteration -- so idempotence
-// alone cannot see this; it is kept to pin the new rule against an iteration
-// that wanders at the floor. Measured, nx1 = 8, dz/H = 1: residual 7.618e-14
-// in 34 sweeps before, 2.481e-16 in 41 after.
+// alone cannot see this; it is kept to pin the rule against an iteration that
+// wanders at the floor.
+//
+// BELOW the gate the old stopping rule is deliberately kept, so every existing
+// caller keeps its answer bit for bit; there the only promise is the contract,
+// err < rtol. Measured: the cubed-sphere convection example projects its
+// initial condition here at rtol 1e-11 with all cells at g rho dz / p =
+// 0.0083, and its CSV is byte-identical to the one fb003523 produces.
 TEST(ThickCellRest, balance_column_returns_the_fixed_point_not_the_first_pass) {
+  const double gate =
+      snap::kX1RefMaxThickness * (1. + snap::kX1RefThicknessTol);
   for (int nx1 : {5, 8}) {
     for (double a : thicknesses()) {
       auto [w, dx1f] = isothermal_column(nx1, a);
@@ -404,6 +411,9 @@ TEST(ThickCellRest, balance_column_returns_the_fixed_point_not_the_first_pass) {
       std::cout << std::scientific << "nx1=" << nx1 << " a=" << a
                 << ": residual " << err << " in " << sweeps << " sweeps, "
                 << "re-projected " << err2 << " in " << sweeps2 << '\n';
+      EXPECT_LT(err, 1.e-13)
+          << "nx1=" << nx1 << " a=" << a << ": the contract itself is broken";
+      if (a <= gate) continue;  // thin: the legacy stopping rule, by design
       EXPECT_LT(err, 1.e-14) << "nx1=" << nx1 << " a=" << a
                              << ": the returned residual is not at its floor";
       EXPECT_GT(err2, 0.1 * err)

@@ -74,6 +74,26 @@ std::tuple<torch::Tensor, double, int> balance_column(
                .to(w.options());
   auto wgt = grav * dxf;
 
+  // Is any cell of this column past the thickness gate? g rho dz / p is
+  // g dz / rt, and rt is held fixed per cell, so this is a property of the
+  // column the caller handed in, decided once.
+  //
+  // It decides whether the sweeps below stop at the first state under `rtol`,
+  // as they always have, or carry on to the fixed point. Driving every column
+  // to its fixed point would be strictly more accurate, but it would also
+  // change the state returned to EVERY existing caller, and what that buys is
+  // only worth having where the solver amplifies the leftover: past this
+  // bound the explicit path grows a perturbation at e^(+4.9e-04) per step and
+  // up, below it the same measurement damps (hydro_dispatch.hpp). So a column
+  // that stays under the bound keeps the answer it has always had, bit for
+  // bit -- measured on the cubed-sphere convection example, which projects
+  // its initial condition here at rtol 1e-11 and whose cells are all at
+  // g rho dz / p = 0.0083.
+  bool thick_regime =
+      ((wgt / rt) > kX1RefMaxThickness * (1. + kX1RefThicknessTol))
+          .any()
+          .item<bool>();
+
   // check, then update: the residual therefore describes the state returned,
   // and a column already at the fixed point comes back after zero updates
   double err = std::numeric_limits<double>::infinity();
@@ -87,27 +107,27 @@ std::tuple<torch::Tensor, double, int> balance_column(
     auto pp = prs - pref;
     auto c = pp.narrow(-1, nc1 - 1, 1);  // one gauge per column, at its top
     err = ((pp - c).abs() / (rho * wgt)).max().item<double>();
-    // Stop at the FIXED POINT, not at the first sweep that dips under rtol.
-    // The sweeps converge geometrically with a measured tail factor of 0.42 to
-    // 0.63 per sweep, so the first state under rtol sits two to three orders
-    // above the one a handful of sweeps later: at dz/H = 1, nx1 = 8, sweep 34
-    // gives 7.618e-14 and sweep 40 gives 2.481e-16, the floor. That gap is not
-    // cosmetic. The solver reconstructs p - pref, so whatever is left of
-    // p' - c is the per-step momentum the state injects into itself, and the
-    // explicit path AMPLIFIES it on cells of about a scale height and thicker
-    // (measured e^(+5.5e-04) per step at dz/H = 1 and e^(+2.9e-03) at 1.25,
-    // from a seeded perturbation; plm damps at every thickness, so the
-    // amplification is the WENO reconstruction's, not this iteration's).
-    // Returning the loosest admissible state hands that amplifier three extra
-    // orders to work on: over 10,000 steps at dz/H = 1 the drift goes from
-    // 1.159e-12 to 2.011e-14 purely from the extra sweeps below.
+    // A thin column stops at the first sweep under `rtol`, as it always has.
+    // A column past the thickness gate carries on to the FIXED POINT.
     //
-    // So: keep sweeping while the residual is still being bought down, and
-    // stop when it is not. 0.9 sits above every measured tail factor and below
-    // the floor's, where the residual alternates between two neighbouring
-    // values (ratios 0.76 and 1.32 at dz/H = 1.5) and so is left within a
-    // sweep or two. `rtol` keeps its meaning as the tolerance that must be
-    // MET; it is no longer also the point at which the iteration gives up.
+    // The sweeps converge geometrically with a measured tail factor of 0.42 to
+    // 0.63, so those are two different states: at dz/H = 1, nx1 = 8, sweep 34
+    // gives 7.618e-14 and sweep 40 gives 2.481e-16, the floor. The gap is not
+    // cosmetic where the solver amplifies it. The solver reconstructs
+    // p - pref, so whatever is left of p' - c is the per-step momentum the
+    // state injects into itself, and past the gate the explicit path grows it
+    // (measured e^(+5.5e-04) per step at dz/H = 1, e^(+2.9e-03) at 1.25);
+    // over 10,000 steps at dz/H = 1 the drift goes from 1.159e-12 to
+    // 2.011e-14 purely from the extra sweeps. Below the gate the same
+    // measurement damps, so there the extra precision buys nothing that would
+    // justify moving every existing caller's answer.
+    //
+    // Past the gate: keep sweeping while the residual is still being bought
+    // down. 0.9 sits above every measured tail factor and below the floor's,
+    // where the residual alternates between two neighbouring values (ratios
+    // 0.76 and 1.32 at dz/H = 1.5) and so is left within a sweep or two.
+    // `rtol` is then the tolerance that must be MET rather than the point at
+    // which the iteration gives up.
     //
     // The no-op test keeps the documented invariant above: a column handed
     // back its own answer would otherwise spend one sweep discovering that the
@@ -115,9 +135,9 @@ std::tuple<torch::Tensor, double, int> balance_column(
     // returned 0. At the fixed point the update reproduces the state bitwise,
     // so this reads "nothing left to do" directly instead of inferring it.
     auto next = pref + c;
-    if ((err < rtol && (!(err < 0.9 * prev) || torch::equal(prs, next))) ||
-        sweeps == max_iter)
-      break;
+    bool settled =
+        !thick_regime || !(err < 0.9 * prev) || torch::equal(prs, next);
+    if ((err < rtol && settled) || sweeps == max_iter) break;
     prev = err;
     prs.copy_(next);
     rho.copy_(prs / rt);
