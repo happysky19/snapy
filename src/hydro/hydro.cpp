@@ -616,17 +616,15 @@ HydroImpl::_hydro_ref_x1(torch::Tensor const& w) const {
       w.device().type(), w, dx1f, anchor, psf_lo, psf_hi, pref, dsf, dref, iu,
       g, x1_grid, phys_in, phys_out, options->wb_wall_clamp(), rows);
 
-  // #289 (SNAP_WB_REF4): the cell part of the fourth-order density reference,
-  // before the seam exchange below
-  // so that the exchanged ghost rows carry it; the face part follows the
-  // exchange. psf is never changed, so the rest balance is the kernel's.
-  // SNAP_X1_CENTROID_EXACT implies the switch (wb_ref4_enabled()): on
-  // spherical-polar the cells read here are then plain means, for which it is
-  // fourth order (docs/derivations/x1-centroid-spherical.md)
+  // #289 (SNAP_WB_REF4), and conversion-order 4, which needs it: the only
+  // fourth-order part is the face density below, the face value of the
+  // kernel's own cell dref -- that is what makes the O(dz^2) face offset
+  // vanish, whatever dref's own accuracy (wb-ref4.md section 2), and
+  // replacing dref broke the theta bound of a density current at a wall. psf
+  // is never changed, so the rest balance is the kernel's. Only the
+  // resolution flag is wanted here; the face part follows the seam exchange,
+  // so a column split along x1 gets one block's faces.
   torch::Tensor wb4_flag;
-  // conversion-order 4 needs the fourth-order face part: the default dsf is
-  // O(dz^2) (wb-ref4.md); it keeps the kernel's cell dref, whose replacement
-  // breaks the theta bound of a density current at a wall
   if (wb_ref4() || options->conversion_order() == 4) {
     if (!wb_ref4_ || wb_ref4_->stale(w)) {
       bool clamp = options->wb_wall_clamp();
@@ -634,8 +632,7 @@ HydroImpl::_hydro_ref_x1(torch::Tensor const& w) const {
           wb_ref4_stencils(pcoord->x1f, is, iu, clamp && phys_in,
                            clamp && phys_out, w.options()));
     }
-    wb4_flag = wb_ref4_cells(*wb_ref4_, w, psf_lo, psf_hi, pref,
-                             wb_ref4() ? dref : dref.clone());
+    wb4_flag = wb_ref4_flag(*wb_ref4_, psf_lo, psf_hi);
   }
 
   if (below >= 0) {
