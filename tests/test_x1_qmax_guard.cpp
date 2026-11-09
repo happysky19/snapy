@@ -142,3 +142,27 @@ TEST(X1QmaxGuard, the_uniform_path_is_untouched) {
         << cells;
   }
 }
+
+// cells/x1rat builds its faces from expm1, so the differenced widths come out
+// as q (1 + O(eps)) and a STRICT ratio <= kX1MaxWidthRatio refused the
+// documented bound ITSELF at every nx1: measured excess 1.1e-15 at nx1 = 5
+// rising to 3.4e-13 at nx1 = 1588. The comparison now carries
+// kX1MaxWidthRatioTol, and a ratio a thousandth past the bound is still
+// refused.
+TEST(X1QmaxGuard, the_bound_itself_is_admitted_and_a_real_violation_is_not) {
+  const double qmax = CoordinateOptionsImpl::kX1MaxWidthRatio;
+  for (double q : {qmax, 1.001 * qmax}) {
+    char b[32];
+    std::snprintf(b, sizeof(b), "%.17g", q);
+    for (int n : {5, 16, 100}) {
+      auto cells =
+          "{nx1: " + std::to_string(n) + ", nghost: 3, x1rat: " + b + "}";
+      auto text = card(cells, "", "{x1min: 0., x1max: 1.e6}");
+      if (q == qmax) {
+        EXPECT_NO_THROW(load(text)) << cells;
+      } else {
+        EXPECT_THROW(load(text), c10::Error) << cells;
+      }
+    }
+  }
+}

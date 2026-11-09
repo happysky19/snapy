@@ -97,6 +97,11 @@ void face_floor_uses_adjacent_density(torch::Device device) {
 // and keeps the kernel's reference, which does not follow the dip; the
 // overshoot is then floored to the adjacent density, as with the switch off:
 // the same flux in every arm (with the linear/ln wall continuation of rho/p)
+//
+// g dz rho/p = 1 puts every UNDIPPED cell past kX1RefMaxThickness, so their
+// reference is the log-mean of the cell's faces and the flux moved 3.1% from
+// 2.83191e-8. The dipped cell itself (1e-4) and the one below it (0.2) stay
+// well inside the bound and keep the six-face path.
 void face_floor_fires_on_an_unresolved_column(torch::Device device) {
   auto block = dipped_column(device, 10.);
   int dipped = block->pcoord->iu() - 1;
@@ -104,7 +109,7 @@ void face_floor_fires_on_an_unresolved_column(torch::Device device) {
       block->phydro->flux1()[IDN].select(-1, dipped).item<double>();
   std::printf("wb_ref4 %d, p = 10 e^{-x/2}: dipped face mass flux %.4e\n",
               static_cast<int>(HydroImpl::wb_ref4()), dipped_mass);
-  EXPECT_NEAR(dipped_mass, 2.83191e-8, 1.e-5 * 2.83191e-8);
+  EXPECT_NEAR(dipped_mass, 2.92080e-8, 1.e-5 * 2.92080e-8);
 }
 
 }  // namespace

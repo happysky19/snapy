@@ -90,6 +90,7 @@ set_tests_properties(test_yamlcpp_cstdint_patch PROPERTIES
 
 setup_test(test_sedimentation_guards)
 setup_test(test_balance_column)
+setup_test(test_thick_cell_rest)
 setup_test(test_hydro_ref_x1)
 add_test(NAME test_hydro_ref_x1_stretched_cuda.${buildl}
          COMMAND test_hydro_ref_x1.${buildl}
