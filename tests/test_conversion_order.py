@@ -71,10 +71,9 @@ def pulse(nx, a, key, dt, device):
     xq = (x1f[:-1, None] + x1f[1:, None] + (x1f[1:, None] - x1f[:-1, None]) * x) / 2
     c = 1. + .03 * torch.exp(-((xq - .3) / .07) ** 2)  # right-moving simple wave, p = rho^G / G
     rho, v = c ** (2 / (G - 1)), 2 / (G - 1) * (c - 1.)
-    m, e = ((q * wq).sum(-1) / 2 for q in (rho * v, rho ** G / G / (G - 1) + rho * v * v / 2))
+    r, m, e = ((q * wq).sum(-1) / 2 for q in (rho, rho * v, rho ** G / G / (G - 1) + rho * v * v / 2))
     w = b.buffer("hydro.D").clone().zero_()  # w = W(u) of the exact u averages
-    w[kIDN] = (rho * wq).sum(-1).to(w) / 2
-    w[1], w[kIPR] = (m / w[kIDN]).to(w), ((G - 1) * (e - m * m / w[kIDN] / 2)).to(w)
+    w[kIDN], w[1], w[kIPR] = r.to(w), (m / r).to(w), ((G - 1) * (e - m * m / r / 2)).to(w)
     u, q = run(b, w, round(T / dt), dt)
     h = (x1f[1:] - x1f[:-1])[NG:-NG]
     return u[kIDN, 0, 0] * h, h, q
