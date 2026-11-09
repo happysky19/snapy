@@ -97,11 +97,9 @@ struct CoordinateOptionsImpl {
 
   static constexpr double kX1MaxWidthRatio = 1.5;
 
-  //! Relative slack on kX1MaxWidthRatio, so the BOUND ITSELF is admissible:
-  //! cells/x1rat builds its faces from expm1, so a deck asking for exactly
-  //! 1.5 differs from it by rounding (measured excess 1.1e-15 at nx1 = 5 to
-  //! 3.4e-13 at nx1 = 1588). 1e-9 clears that and is still eight orders below
-  //! any violation a deck could mean.
+  //! Relative slack, so the BOUND ITSELF is admissible: cells/x1rat builds
+  //! its faces from expm1, so a deck asking for exactly 1.5 differs from it by
+  //! rounding (excess 1.1e-15 at nx1 = 5 to 3.4e-13 at nx1 = 1588).
   static constexpr double kX1MaxWidthRatioTol = 1.e-9;
 
   int x1f_ghosts() const { return std::max(nghost(), 3) + 1; }

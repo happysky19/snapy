@@ -14,15 +14,14 @@
 #include <snap/mesh/meshblock.hpp>
 #include <string>
 #include <tuple>
-#include <utility>
 
 namespace {
 constexpr double kGrav = 10.44, kRd = 3777., kGamma = 1.4, kT0 = 300.,
                  kPs = 1.e5, kH = kRd * kT0 / kGrav;
 constexpr int kNx1 = 5, kNg = 3, kSteps = 300;
 
-//! One column of kNx1 cells, walls at both ends, floats at full precision: at
-//! 6 digits the block's dx1f differs from the column's in the 7th place.
+//! kNx1 cells of `dz`, walls at both x1 ends, every float at full precision:
+//! at 6 digits the block's dx1f differs from the column's in the 7th place.
 constexpr char kDeck[] =
     R"(species: [{name: dry, composition: {H: 2}, cv_R: 2.5}]
 geometry: {type: cartesian, cells: {nx1: %d, nx2: 1, nx3: 1, nghost: %d}, bounds: {x1min: 0., x1max: %.17g, x2min: 0., x2max: 1., x3min: 0., x3max: 1.}}
@@ -31,34 +30,23 @@ boundary-condition: {external: {x1-inner: reflecting, x1-outer: reflecting}}
 integration: {type: rk3, cfl: 0.4, implicit-scheme: %d}
 forcing: {const-gravity: {grav1: %.17g}})";
 constexpr char kGeom[] =
-    R"(geometry: {type: cartesian, cells: {nx1: 16, nx2: 1, nx3: 1, nghost: %d, x1rat: %.17g}, bounds: {x1min: 0., x1max: 1.e6, x2min: 0., x2max: 1., x3min: 0., x3max: 1.}})";
+    R"(geometry: {type: cartesian, cells: {nx1: %d, nx2: 1, nx3: 1, nghost: %d, x1rat: %.17g}, bounds: {x1min: 0., x1max: 1.e6, x2min: 0., x2max: 1., x3min: 0., x3max: 1.}})";
 
-std::string tmp_deck(char const* text) {
-  char f[] = "/tmp/test-thick-cell-XXXXXX";
+std::string deck(char const* fmt, double x, int imp = 0) {
+  char y[1024], f[] = "/tmp/test-thick-cell-XXXXXX";
+  std::snprintf(y, sizeof y, fmt, kNx1, kNg, x, kGamma, 8.31446261815324 / kRd,
+                imp, -kGrav);
   int fd = mkstemp(f);
   EXPECT_NE(fd, -1);
   std::FILE* p = fdopen(fd, "w");
-  std::fputs(text, p);
+  std::fputs(y, p);
   std::fclose(p);
   return f;
 }
 
-//! the exact continuum column of `a` scale heights per cell, and its widths
-std::pair<torch::Tensor, torch::Tensor> column(double a) {
-  auto opt = torch::TensorOptions().dtype(torch::kFloat64);
-  auto p = kPs * torch::exp(-(torch::arange(kNx1, opt) + 0.5) * a);
-  auto w = torch::zeros({snap::IPR + 1, 1, 1, kNx1}, opt);
-  w[snap::IPR].copy_(p.view({1, 1, kNx1}));
-  w[snap::IDN].copy_((p / (kRd * kT0)).view({1, 1, kNx1}));
-  return {w, torch::full({kNx1}, a * kH, opt)};
-}
-
 //! max |v1| / c over every owned cell and every step, starting from `col`
-double drift(torch::Tensor const& col, double dz, int imp) {
-  char y[1024];
-  std::snprintf(y, sizeof y, kDeck, kNx1, kNg, dz * kNx1, kGamma,
-                8.31446261815324 / kRd, imp, -kGrav);
-  auto f = tmp_deck(y);
+double drift(torch::Tensor const& col, double a, int imp) {
+  auto f = deck(kDeck, a * kH * kNx1, imp);
   auto b = snap::MeshBlock(snap::MeshBlockOptionsImpl::from_yaml(f));
   std::remove(f.c_str());
   b->to(torch::kCPU, torch::kFloat64);
@@ -80,6 +68,17 @@ double drift(torch::Tensor const& col, double dz, int imp) {
   }
   return mach;
 }
+
+//! project the exact continuum column of `a` scale heights per cell
+std::tuple<torch::Tensor, double, int> project(double a) {
+  auto opt = torch::TensorOptions().dtype(torch::kFloat64);
+  auto p = kPs * torch::exp(-(torch::arange(kNx1, opt) + 0.5) * a);
+  auto w = torch::zeros({snap::IPR + 1, 1, 1, kNx1}, opt);
+  w[snap::IPR].copy_(p.view({1, 1, kNx1}));
+  w[snap::IDN].copy_((p / (kRd * kT0)).view({1, 1, kNx1}));
+  return snap::balance_column(w, torch::full({kNx1}, a * kH, opt), kGrav, true,
+                              1.e-13, 5000, "cartesian", false);
+}
 }  // namespace
 
 // At fb003523 the projection plateaus at 1.898760e-01 for a = 1.5 instead of
@@ -88,15 +87,12 @@ double drift(torch::Tensor const& col, double dz, int imp) {
 TEST(ThickCellRest, a_thick_isothermal_column_reaches_rest_and_keeps_it) {
   torch::set_num_threads(1);
   for (double a : {1.5, 3.0}) {
-    auto [w, dx1f] = column(a);
     torch::Tensor wb;
     double err = -1.;
     int sweeps = -1;
-    ASSERT_NO_THROW(std::tie(wb, err, sweeps) = snap::balance_column(
-                        w, dx1f, kGrav, true, 1.e-13, 5000, "cartesian", false))
-        << "a=" << a;
+    ASSERT_NO_THROW(std::tie(wb, err, sweeps) = project(a)) << "a=" << a;
     EXPECT_LT(err, 1.e-13) << "a=" << a;
-    double ex = drift(wb, a * kH, 0), im = drift(wb, a * kH, 1);
+    double ex = drift(wb, a, 0), im = drift(wb, a, 1);
     std::printf(
         "a=%.2f: residual %.6e in %d sweeps; max |w|/c over %d steps "
         "%.6e explicit, %.6e implicit\n",
@@ -110,25 +106,16 @@ TEST(ThickCellRest, a_thick_isothermal_column_reaches_rest_and_keeps_it) {
 // pressure negative (residual 1.574e-16, face -5.240e-05) and the solver then
 // exhausts its redos. That has to be an error, not a certified state.
 TEST(ThickCellRest, a_column_too_deep_for_one_gauge_is_refused) {
-  auto [w, dx1f] = column(4.0);
-  EXPECT_THROW(snap::balance_column(w, dx1f, kGrav, true, 1.e-13, 5000,
-                                    "cartesian", false),
-               std::exception);
+  EXPECT_THROW(project(4.0), std::exception);
 }
 
 // cells/x1rat builds its faces from expm1, so adjacent width ratios come out
 // as q (1 + O(eps)) and a STRICT test refused the documented bound itself.
 TEST(ThickCellRest, the_x1rat_guard_admits_its_bound_and_refuses_more) {
   const double qmax = snap::CoordinateOptionsImpl::kX1MaxWidthRatio;
-  for (double q : {qmax, 1.001 * qmax}) {
-    char y[512];
-    std::snprintf(y, sizeof y, kGeom, kNg, q);
-    auto f = tmp_deck(y);
-    if (q == qmax) {
-      EXPECT_NO_THROW(snap::CoordinateOptionsImpl::from_yaml(f)) << "q=" << q;
-    } else {
-      EXPECT_THROW(snap::CoordinateOptionsImpl::from_yaml(f), std::exception);
-    }
-    std::remove(f.c_str());
-  }
+  auto good = deck(kGeom, qmax), bad = deck(kGeom, 1.001 * qmax);
+  EXPECT_NO_THROW(snap::CoordinateOptionsImpl::from_yaml(good)) << qmax;
+  EXPECT_THROW(snap::CoordinateOptionsImpl::from_yaml(bad), std::exception);
+  std::remove(good.c_str());
+  std::remove(bad.c_str());
 }
