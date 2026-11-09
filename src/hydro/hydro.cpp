@@ -25,6 +25,10 @@ HydroImpl::HydroImpl(const HydroOptions& options_, torch::nn::Module* p)
 
 void HydroImpl::reset() {
   TORCH_CHECK(pmb, "[Hydro] Parent MeshBlock is null");
+  TORCH_CHECK(
+      options->conversion_order() == 2 || options->conversion_order() == 4,
+      "[Hydro] dynamics/conversion-order must be 2 or 4, got ",
+      options->conversion_order());
 
   //// ---- (1) set up equation-of-state model ---- ////
   peos = EquationOfStateImpl::create(options->eos(), this);

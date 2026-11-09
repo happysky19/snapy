@@ -283,6 +283,37 @@ torch::Tensor HydroImpl::scalar_flux_covariance(torch::Tensor const& rl,
   return dflx;
 }
 
+// dynamics/conversion-order 4: the x1 weights of L a = h^2/24 q''(x_i), with q
+// the quadratic whose averages over cells i-1, i, i+1 are a (sketch of the
+// #280 follow-up). The first and last cell, which the 5-point x1 stencils read
+// but which have one x1 neighbour, take q as the cubic whose averages over
+// that cell and the next three inward are a: q'' is then O(h^2), so L a, like
+// the centred one on a smooth grid, is O(h^4). k = {kp, km, lo, hi}.
+static void conv4_x1_weights(torch::Tensor x1f, torch::TensorOptions opts,
+                             torch::Tensor* k) {
+  x1f = x1f.to(torch::kCPU, torch::kFloat64);
+  int n = x1f.size(0) - 1;
+  TORCH_CHECK(n >= 4, "dynamics/conversion-order 4 needs nc1 >= 4, got ", n);
+  auto f = [&](int s) { return x1f.narrow(0, s, n - 2); };
+  auto c = (f(2) - f(1)).square() / 4. / (f(3) - f(0));
+  k[0] = c / (f(3) - f(1));
+  k[1] = c / (f(2) - f(0));
+  // cubic q = sum c_m xi^m, xi = (x - x_t) / h_t, from the averages of cells
+  // s..s+3; h_t^2/24 q''(x_t) = c_2 / 12
+  auto side = [&](int s, int t) {
+    double h = (x1f[t + 1] - x1f[t]).item<double>();
+    auto xi = (x1f.narrow(0, s, 5) - 0.5 * (x1f[t] + x1f[t + 1])) / h;
+    auto m = torch::arange(1, 5, torch::kFloat64);
+    auto prim = xi.unsqueeze(1).pow(m) / m;
+    auto avg = (prim.narrow(0, 1, 4) - prim.narrow(0, 0, 4)) /
+               (xi.narrow(0, 1, 4) - xi.narrow(0, 0, 4)).unsqueeze(1);
+    return torch::linalg_inv(avg)[2] / 12.;
+  };
+  k[2] = side(0, 0);
+  k[3] = side(n - 4, n - 1);
+  for (int i = 0; i < 4; ++i) k[i] = k[i].to(opts);
+}
+
 torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
                                  Variables const& other) {
   enum { DIM1 = 3, DIM2 = 2, DIM3 = 1 };
@@ -299,6 +330,27 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
   auto const& w = other.at("hydro_w");
 
   peos->forward(u, w);
+  // x1 point values u - L u, the primitives there, and back to cell averages:
+  // w = W(u - L u) + L W(u), fourth order where W(u) is second
+  if (options->conversion_order() == 4 && u.size(DIM1) > 1) {
+    auto* k = conv4_x1_;
+    if (!k[0].defined() || k[0].device() != u.device() ||
+        k[0].scalar_type() != u.scalar_type())
+      conv4_x1_weights(pmb->pcoord->x1f, u.options(), k);
+    int n = u.size(DIM1) - 2;
+    auto lap = [&](torch::Tensor const& a) {
+      auto out = torch::empty_like(a);
+      auto am = a.narrow(-1, 0, n), a0 = a.narrow(-1, 1, n);
+      out.narrow(-1, 1, n) =
+          k[0] * (a.narrow(-1, 2, n) - a0) - k[1] * (a0 - am);
+      out.select(-1, 0) = (a.narrow(-1, 0, 4) * k[2]).sum(-1);
+      out.select(-1, n + 1) = (a.narrow(-1, n - 2, 4) * k[3]).sum(-1);
+      return out;
+    };
+    auto w2 = lap(w);
+    peos->forward(u - lap(u), w);
+    w.add_(w2);
+  }
   if (options->verbose()) {
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
