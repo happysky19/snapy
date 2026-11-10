@@ -257,13 +257,16 @@ if __name__ == '__main__':
                     and abs(out['mass']) < 1e-12 and out['clamp'] == 0
                     and (work == 'cell' and not fixer or abs(out['epe_drift']) < tall.EPE_TOL)):
                 failures.append(f'tall column {nz}: {out}')
-        out = tall_run(45, 40, 9, work, 40, 1500, fixer=fixer)
+        # the face arm runs until its instability reaches the redo: p rows and
+        # ln p redid at attempted step 25 and 24, the factored rows (balanced
+        # to 8.7e-12 m/s instead of 6.3e-6 after one step) at 44
+        out = tall_run(45, 40, 9, work, 80 if work == 'face' else 40, 1500, fixer=fixer)
         if work == 'face':
             # Rollback coverage only; a retry does not establish stability.
             if out['redo_status'] > 0:
                 if not out['rolled_back']:
                     failures.append(f'coarse face retry did not restore its input: {out}')
-            elif not (out['finite'] and out['steps'] == 40 and out['wmax'] < 0.1
+            elif not (out['finite'] and out['steps'] == 80 and out['wmax'] < 0.1
                       and abs(out['mass']) < 1.e-12):
                 failures.append(f'coarse face run outside rollback control: {out}')
         elif not (out['finite'] and out['redos'] == 0 and out['steps'] == 40
