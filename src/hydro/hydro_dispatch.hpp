@@ -25,6 +25,16 @@ enum X1RefGrid : int {
 //! A cell past the bound gets no row (start < 0) and keeps the log-mean of its
 //! own two faces, which is exact for a column that IS e^{-z/H_ref} and is what
 //! the branch computed before rows existed.
+//!
+//! Those figures are DOUBLE precision: the table is built in float64 here and
+//! converted with .to(w.options()) in hydro.cpp, so a float32 run loses the
+//! largest weights to +-inf earlier. Measured by bisection on this function,
+//! max|c_m| passes FLT_MAX at dz/H_ref = 19.2934 (8.1e+37 at 19.0, 2.2e+38 at
+//! 19.2, 3.5e+38 at 19.3), i.e. just inside the bound. That failure is safe --
+//! an infinite weight makes the row's bracket comparison false and the cell
+//! keeps the same log-mean the guard would have given it -- and a cell 19
+//! scale heights thick is not a float32 column anyway, so the bound is left at
+//! the double figure rather than made dtype-dependent.
 constexpr double kX1RefMaxFactoredThickness = 20.0;
 
 torch::Tensor hydro_ref_x1_stretched_rows(torch::Tensor const& dx1f, int iu,

@@ -47,8 +47,8 @@ void bind_hydro(py::module& m) {
       .def("max_time_step", &snap::HydroImpl::max_time_step);
 
   m.def("balance_column", &snap::balance_column, py::arg("w"), py::arg("dx1f"),
-        py::arg("grav"), py::arg("wall_clamp") = true, py::arg("rtol") = 1.e-10,
-        py::arg("max_iter") = 120, py::arg("geometry") = "",
+        py::arg("grav"), py::arg("wall_clamp") = true, py::arg("rtol") = 1.e-13,
+        py::arg("max_iter") = 450, py::arg("geometry") = "",
         py::arg("stretched") = false, py::arg("x1_ref_scale_height") = 0.,
         R"(Project a ghost-free x1 column onto the well-balanced scheme's own
 discrete hydrostatic balance, holding p/rho -- the temperature -- fixed per
@@ -57,7 +57,10 @@ acceleration the balanced column can still feel in units of g. `w` is
 (nvar, nc3, nc2, nx1) with NO ghost cells: hand it the whole column and the p
 and rho it returns do not depend on how that column is later split over blocks,
 because the cell pressure reference is bitwise the same either way. Raises if it
-does not converge. `wall_clamp` must be true and must match
+does not converge. `rtol` and `max_iter` are the same paired defaults the C++
+declaration carries (src/hydro/balance_column.hpp): they move together, because
+a tighter residual costs sweeps and they come out of one budget. `wall_clamp`
+must be true and must match
 `dynamics/wb-wall-clamp` in the card that will run the result, so a card that
 turns the clamp off cannot use this primitive. See
 src/hydro/balance_column.hpp for the caller's two obligations (physical x1

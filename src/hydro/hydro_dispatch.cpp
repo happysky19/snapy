@@ -284,9 +284,16 @@ torch::Tensor hydro_ref_x1_factored_rows(torch::Tensor const& dx1f, int iu,
     r[i][0] = start;
     if (start < 0) continue;
     // Validity guard (kX1RefMaxFactoredThickness, hydro_dispatch.hpp): a cell
-    // too thick for its own factored row -- or one reached with a non-finite
-    // href -- is handed back with no row, so the kernel keeps its log-mean
-    // instead of a row of overflowing weights. The negated form catches NaN.
+    // too thick for its own factored row is handed back with no row, so the
+    // kernel keeps its log-mean instead of a row of overflowing weights. The
+    // comparison is negated so that a non-finite href fails it too, and so
+    // does href <= 0 -- the value hydro.cpp:626-628 produces from a POSITIVE
+    // grav1, since g there is -grav1. Such a column then takes the log-mean
+    // everywhere. Note that a negative href is not nonsense for the basis
+    // itself (it is the growing exponential that an upward gravity's column
+    // actually follows, and |dz/href| would be the bound that fits it); it is
+    // refused because nothing in the tree sets a positive grav1 and the case
+    // is unmeasured here.
     if (!(hp[i] <= kX1RefMaxFactoredThickness * href)) {
       r[i][0] = -1;
       continue;
