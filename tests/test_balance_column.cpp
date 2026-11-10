@@ -515,4 +515,23 @@ TEST(BalanceColumn, x1_centroid_switch_balances_only_a_cartesian_column_cuda) {
       torch::Device(torch::kCUDA, 0));
 }
 
+//! An isothermal five-cell column 1.46-1.50 scale heights per cell. The two
+//! cells under the top wall average one six-face polynomial; the top cell
+//! rejected it while the cell below kept it, and the sweeps cycled between
+//! the bracket branches (residual 5.5e-2 at 1.46 H after 120 sweeps).
+TEST(BalanceColumn, a_thick_isothermal_five_cell_column_converges) {
+  for (auto dev : {torch::kCPU, torch::kCUDA}) {
+    if (dev == torch::kCUDA && !snapy_cuda_test_enabled()) continue;
+    auto opt = torch::TensorOptions().dtype(torch::kFloat64).device(dev);
+    for (double a : {1.46, 1.48, 1.50}) {
+      auto dx1f = torch::full({5}, a * kRd * kTs / kGrav, opt);
+      auto p = kPs * torch::exp(-(torch::arange(5, opt) + 0.5) * a);
+      auto w = torch::zeros({snap::IPR + 1, 1, 1, 5}, opt);
+      w[snap::IPR].copy_(p.view({1, 1, 5}));
+      w[snap::IDN].copy_((p / (kRd * kTs)).view({1, 1, 5}));
+      EXPECT_NO_THROW(balance(w, dx1f, kGrav)) << "a=" << a << " " << dev;
+    }
+  }
+}
+
 }  // namespace

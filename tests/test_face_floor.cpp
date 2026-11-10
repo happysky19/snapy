@@ -105,6 +105,10 @@ void face_floor_uses_adjacent_density(torch::Device device) {
 // log-mean of the cell's own faces rather than their arithmetic mean, and
 // the top face became average-consistent (happysky19/snapy#5). Both arms
 // agree to all ten digits, as the comment above requires.
+// It moved again, to 3.1424080142e-8 (+6.7%), when a clamped wall pair came
+// to be judged as one polynomial: the top cell's row is inside its bracket,
+// but its partner, the dipped cell, is far outside, so the top cell takes the
+// log-mean too.
 void face_floor_fires_on_an_unresolved_column(torch::Device device) {
   auto block = dipped_column(device, 10.);
   int dipped = block->pcoord->iu() - 1;
@@ -112,7 +116,7 @@ void face_floor_fires_on_an_unresolved_column(torch::Device device) {
       block->phydro->flux1()[IDN].select(-1, dipped).item<double>();
   std::printf("wb_ref4 %d, p = 10 e^{-x/2}: dipped face mass flux %.10e\n",
               static_cast<int>(HydroImpl::wb_ref4()), dipped_mass);
-  EXPECT_NEAR(dipped_mass, 2.9449159572e-8, 1.e-5 * 2.9449159572e-8);
+  EXPECT_NEAR(dipped_mass, 3.1424080142e-8, 1.e-5 * 3.1424080142e-8);
 }
 
 }  // namespace
