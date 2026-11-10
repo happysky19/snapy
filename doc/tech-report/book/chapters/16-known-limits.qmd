@@ -1,7 +1,7 @@
 # Known limits {#sec-ch16}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml); kintera@c55b13b2204997d2d09e04498558ab9495d8ee77
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml); kintera@c55b13b2204997d2d09e04498558ab9495d8ee77
 sources: the Limits layer of every chapter on the tech-report branch;
 OUTLINE.md, known limits
 status: draft
@@ -17,7 +17,7 @@ explains the problem and the evidence behind it.
 The chapter adds nothing of its own. Every row restates a limit that its source section already states. Where
 a section and the outline disagree, the section is followed.
 
-There are 166 items from 14 chapters. 150 are in the three tables below, which @tbl-ch16-counts counts. The
+There are 170 items from 14 chapters. 154 are in the three tables below, which @tbl-ch16-counts counts. The
 other 16 are in @sec-ch16-pending, which collects the limits of the default gravity work (the energy transfer from gravity to the flow,
 booked by the corrected face form of @sec-ch06-dwork) and of the $x_1$[^rg-01fadbe6e8ea] seams: the faces where a column is cut into blocks along $x_1$, the vertical or radial direction (@sec-ch03-x1seams).[^ch16-round]
 
@@ -45,7 +45,7 @@ Three classes are used:
 | @sec-ch01 | 1 | 7 | 3 | 11 |
 | @sec-ch02 | 2 | 7 | 1 | 10 |
 | @sec-ch03 | 5 | 8 | 0 | 13 |
-| @sec-ch04 | 3 | 9 | 6 | 18 |
+| @sec-ch04 | 4 | 11 | 7 | 22 |
 | @sec-ch05 | 1 | 7 | 1 | 9 |
 | @sec-ch06 | 1 | 1 | 0 | 2 |
 | @sec-ch07 | 3 | 9 | 3 | 15 |
@@ -56,7 +56,7 @@ Three classes are used:
 | @sec-ch12 | 0 | 5 | 1 | 6 |
 | @sec-ch13 | 0 | 2 | 4 | 6 |
 | @sec-ch14 | 3 | 5 | 8 | 16 |
-| total | 32 | 82 | 36 | 150 |
+| total | 33 | 84 | 37 | 154 |
 
 : Items per chapter and class. {#tbl-ch16-counts}
 
@@ -77,6 +77,7 @@ Items where a configuration the code accepts can produce wrong results, or conse
 | The centred polynomials have no limiter: across a discontinuity they oscillate, and only the floors stand between an overshoot and a negative density. | @sec-ch04-cp | `interp_cp3` ({{< code src/recon/interp_simple.hpp interp_cp3 >}}) |
 | The Roe solver has no entropy fix: at a sonic point it can admit an expansion shock; no test exercises a transonic rarefaction. | @sec-ch04-roe | `sqrtdl` ({{< code src/riemann/roe_impl.h roe_impl >}}) |
 | `SNAP_X1_MASS_COVARIANCE` is off by default, so every stratified column carries the second-order gap of @eq-ch04-x1masscov-gap; with it on and $g_1\ne0$, fewer than three $x_1$ cells fail the run. | @sec-ch04-x1masscov | `x1_mass_covariance` ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}) |
+| With `dynamics/conversion-order: 4` a cell whose point state is not admissible keeps the second-order primitives, so the order of the $x_1$ conversion is cell-local: a run can be fourth order away from such cells and second order at them, with no message. `conversion_trips` counts them and is not printed on the cycle line. | @sec-ch04-conv4 | `lap` ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}); `conversion_trips` ({{< code src/hydro/hydro.cpp HydroImpl::reset >}}) |
 | The $x_2$ and $x_3$ reconstructions have no well-balanced treatment; a column hydrostatic in the continuum but not at the discrete fixed point is not at rest. | @sec-ch05-wbx1 | `_hydro_ref_x1` ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}) |
 | Under the corrected-PE[^rg-ebfc2f2fc00c] face work (`SNAP_GRAVITY_WORK_RADIAL_EXACT`) the conserved sum is $E_{\mathrm{tot}}+P$, so an $E_{\mathrm{tot}}+\mathrm{PE}_d$ check measures the wrong invariant; `gravity_work_defect()` is filled only by the cell form and stays zero under `face`. `face-wallc` does not get the scheme. A slope stencil shorter than three cells (the block's cells, plus the neighbour's cell at an internal $x_1$ seam) gives a zero slope; on the cubed sphere the centroid-offset term remains. | @sec-ch06-dwork | `corrected_pe_work_seam` ({{< code src/hydro/gravity_work_radial.hpp corrected_pe_work_seam >}}); `centroid_slope_stencil` ({{< code src/hydro/gravity_work_radial.hpp centroid_slope_stencil >}}); check `d_face_work_pe_check.py` `[C7]` |
 | On the `Mesh` path a driver update made after the last stage reaches the ghosts only after the next stage's exchange; a `Mesh` driver with between-step sources is not tested (not measured). | @sec-ch07-exchange | `forward` ({{< code src/mesh/mesh.cpp MeshImpl::forward >}}) |
@@ -118,7 +119,7 @@ Items where a scheme, switch or path is limited to some configurations, or a com
 | Limiter and source operations can change the conserved budgets; the spatial order of the complete stage is not measured. | @sec-ch02-laws | stated in the section |
 | The outline's round-trip example `prim2cons_hydro_ideal_ncloud5` is inside a block comment and is not active evidence; floors make the maps non-invertible. | @sec-ch02-ideal-gas | the commented-out test ({{< code tests/test_eos.cpp >}}) |
 | `use-nasa9-cp` and `use-h2-cp` do not establish a matching phase-equilibrium closure; H2 dissociation is not modelled. | @sec-ch02-moist-mixture | `intEng_nasa` ([`kintera eval_uhs.cpp:285-300`](https://github.com/chengcli/kintera/blob/c55b13b2204997d2d09e04498558ab9495d8ee77/src/thermo/eval_uhs.cpp#L285-L300)) |
-| T-31: The two test decks `tests/test_uranus_cycle1_abort.yaml` and `tests/test_uranus_late_abort.yaml` give `NH3`, `NH3(s)` and `NH3(s,p)` `composition: {H: 2, O: 1}`, which is water's formula, so the abort regression they drive runs ammonia at 18.015 instead of 17.031 g/mol (+5.78 %). The example decks `jupiter_crm.yaml`, `jupiter_gcm.yaml`, `uranus.yaml` and `jupiter_evap_precip_1d.yaml` carry `{N: 1, H: 3}`, which `test_example_species_composition` checks ({{< code tests/test_example_species_composition.py >}}). | @sec-ch02-ideal-moist | `NH3` in [test_uranus_cycle1_abort.yaml#L15-L41](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/tests/test_uranus_cycle1_abort.yaml#L15-L41), `NH3` in [test_uranus_late_abort.yaml#L20-L46](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/tests/test_uranus_late_abort.yaml#L20-L46), `NH3` in [jupiter_crm.yaml#L15-L16](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/examples/jupiter_crm.yaml#L15-L16); checks C7-C9; independent arithmetic C7-C9 in `h2he_check.py` |
+| T-31: The two test decks `tests/test_uranus_cycle1_abort.yaml` and `tests/test_uranus_late_abort.yaml` give `NH3`, `NH3(s)` and `NH3(s,p)` `composition: {H: 2, O: 1}`, which is water's formula, so the abort regression they drive runs ammonia at 18.015 instead of 17.031 g/mol (+5.78 %). The example decks `jupiter_crm.yaml`, `jupiter_gcm.yaml`, `uranus.yaml` and `jupiter_evap_precip_1d.yaml` carry `{N: 1, H: 3}`, which `test_example_species_composition` checks ({{< code tests/test_example_species_composition.py >}}). | @sec-ch02-ideal-moist | `NH3` in [test_uranus_cycle1_abort.yaml#L15-L41](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/tests/test_uranus_cycle1_abort.yaml#L15-L41), `NH3` in [test_uranus_late_abort.yaml#L20-L46](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/tests/test_uranus_late_abort.yaml#L20-L46), `NH3` in [jupiter_crm.yaml#L15-L16](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/examples/jupiter_crm.yaml#L15-L16); checks C7-C9; independent arithmetic C7-C9 in `h2he_check.py` |
 | The shipped ANEOS constructor throws; the wrapper has no moist species, no metric raising/lowering and no `W->A`, and its base heat capacity returns zero. | @sec-ch02-aneos | `cs` ({{< code src/eos/aneos.cpp ANEOSImpl::compute >}}) |
 | The hydro forcing loop requests `W->T`; only forcings that tolerate an undefined temperature work with shallow water. | @sec-ch02-shallow-water | `sqrt` ({{< code src/eos/shallow_water.cpp ShallowWaterImpl::compute >}}) |
 | No moist-mixture `UT->I` versus `W->I` regression exists; the temperature-sweep script selects ideal-moist only. | @sec-ch02-consistency | `_temp2intEng` ({{< code src/eos/ideal_moist.cpp IdealMoistImpl::_temp2intEng >}}) |
@@ -140,11 +141,13 @@ Items where a scheme, switch or path is limited to some configurations, or a com
 | The radial pressure force has three branches: with face pressures (every deck with more than one $x_1$ cell, since the solvers that cannot return one refuse to run), with `SNAP_X1_CENTROID_EXACT`, which also reads the face pressures, and without (a block with one $x_1$ cell), which uses the cell pressure; only the two face-pressure branches balance against the well-balanced reconstruction. | @sec-ch04-sphsrc | `coord_src1_i` ({{< code src/coord/spherical_polar.cpp SphericalPolarImpl::forward >}}) |
 | The stored cubed-sphere cell centre is the mid-radius, not the centroid; the exact volume is unconditional, so runs before and after it do not agree bitwise. | @sec-ch04-gnomonic | `cell_volume` ({{< code src/coord/gnomonic_equiangle.cpp GnomonicEquiangleImpl::cell_volume >}}) |
 | The flux-covariance zero for an isothermal state holds in Cartesian only; a column with fewer than three $x_1$ cells gets no correction, silently. | @sec-ch04-fluxcov | check `covariance_check.py` |
+| `dynamics/conversion-order: 4` converts $x_1$ only: $x_2$ and $x_3$ keep the second-order conversion of the averages, so a two- or three-dimensional run stays second order through them, and no test at the pin measures the lateral order with the key on. The fourth-order claim is derived for a uniform or smoothly stretched grid; at a one-cell $1\!:\!2$ width jump the conversion operator alone fits order 2.89 and no test runs such a grid. | @sec-ch04-conv4 | `conversion_order` ({{< code src/hydro/hydro.hpp HydroOptionsImpl >}}); check `derivation_check.py` `[C19]` |
+| `dynamics/conversion-order: 4` needs at least four $x_1$ cells per block including ghosts and $n_{c1}+1$ faces, refused on the first stage rather than at construction, and with nonzero `grav1`[^rg-6fd5060af188] it needs `nghost`[^rg-9f8b210c1766] $\ge3$ and silently takes the fourth-order face density reference of @sec-ch05-wbref4. A run at rest in a moist column is kept at rest only to the tolerances of its test arms; no rest identity is derived. | @sec-ch04-conv4 | `conv4_x1_weights` ({{< code src/hydro/hydro_forward.cpp conv4_x1_weights >}}); `TORCH_CHECK` ({{< code src/hydro/hydro.cpp HydroImpl::reset >}}) |
 | On a non-uniform $x_1$ that is not keyed stretched (faces from a mesh generator) the reference cell pressure is the log-mean, exact only for isothermal cells; on any grid a column is at rest to round-off only after `balance_column` with the same classification. | @sec-ch05-refkernel | `hydro_ref_x1_cell_impl` ({{< code src/hydro/hydro_ref_x1_impl.h hydro_ref_x1_cell_impl >}}) |
 | On a keyed stretched $x_1$ the wall continuation steps by physical distance but the binomial weights its cells by index, so stretched-grid wall faces are outside the second-order argument (not measured); with `wb-wall-clamp: false`, `balance_column` cannot be used. | @sec-ch05-wallclamp | `hydro_ref_x1_wall_steps` ({{< code src/hydro/hydro_ref_x1_impl.h hydro_ref_x1_wall_steps >}}) |
 | `non-hydrostatic`[^rg-1dd113c26916] $n_h = 0$ is not a hydrostatic model: the vertical velocity stays prognostic. | @sec-ch05-hsmode | `rho_grav` ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}) |
 | A balanced column moves by a free constant (the header quotes $2.5\times10^{-4}$ and $1.2\times10^{-2}$ of $p$[^rg-3bafdb78128c], not re-measured); a spherical-polar column cannot be balanced under `SNAP_X1_CENTROID_EXACT`. | @sec-ch05-balcol | `balance_column` ({{< code src/hydro/balance_column.hpp balance_column >}}) |
-| `SNAP_WB_REF4` needs `nghost`[^rg-9f8b210c1766] $\ge 3$ and is read once per process. | @sec-ch05-wbref4 | `wb_ref4_enabled` ({{< code src/hydro/wb_ref4.cpp wb_ref4_enabled >}}); the `nghost` check ({{< code src/hydro/hydro.cpp HydroImpl::reset >}}) |
+| `SNAP_WB_REF4` needs `nghost` $\ge 3$ and is read once per process. | @sec-ch05-wbref4 | `wb_ref4_enabled` ({{< code src/hydro/wb_ref4.cpp wb_ref4_enabled >}}); the `nghost` check ({{< code src/hydro/hydro.cpp HydroImpl::reset >}}) |
 | `SNAP_X1_CENTROID_EXACT` provides no gnomonic measure conversion, but it is not a no-op there: it implies `SNAP_WB_REF4`, whose reference update still runs. Under it `balance_column` balances only a column declared Cartesian. | @sec-ch05-x1cent | `x1_plain_mean_stencils` ({{< code src/coord/x1_centroid.cpp x1_plain_mean_stencils >}}); `wb_ref4_enabled` ({{< code src/hydro/wb_ref4.cpp wb_ref4_enabled >}}) |
 | The $O(\Delta x_1^2/R)$ remainder on spherical-polar grids is not removed by any switch. | @sec-ch05-oneoverr | check `wbref_check.py` `[C21]` |
 | The VIC gravity-work rows are a linearisation about the stage state. | @sec-ch06-vic | `gravity_work` ({{< code src/implicit/implicit_hydro.cpp ImplicitHydroImpl::forward_masked >}}) |
@@ -208,6 +211,7 @@ Items where cost, diagnostics, documentation or defaults that surprise a user, w
 | A deck that leaves the reconstruction `type`[^rg-32f5eba3262f] unset gets first-order donor cell, with no warning. | @sec-ch04-dc | `DonorCellInterp` ({{< code src/recon/interpolation.cpp InterpImpl::create >}}) |
 | Four PLM[^rg-519f17b4266b] limiter functions are unreachable, and the slope assumes equal cell widths, so it is not the limited slope of the linear fit on unequal ones. A deck that declares a stretched $x_1$ is refused with `plm` at setup, so this reaches a reader only on $x_2$/$x_3$ or on an undeclared non-uniform grid. | @sec-ch04-plm | `interp_plm` ({{< code src/recon/interp_simple.hpp interp_plm >}}); `set_x1_coeffs` ({{< code src/recon/interpolation.hpp InterpImpl::set_x1_coeffs >}}) |
 | `type: ppm` is accepted by the parser and the run stops on the first stage ("PPM[^rg-81104a9e74ab] interpolation is not implemented yet."); the inline `interp_ppm` is never reached. | @sec-ch04-ppm | `PPMInterpImpl::forward` ({{< code src/recon/ppm.cpp PPMInterpImpl::forward >}}) |
+| `dynamics/conversion-order: 4` adds, per stage, a second equation-of-state call, a ghost exchange, an $x_1$ row exchange and one pass of the boundary functions; the cost is not measured at the pin. | @sec-ch04-conv4 | `forward` ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}) |
 | The two Riemann parser paths have different defaults (stated once in @sec-ch04-riemann). The shipped decks select their solver explicitly; deleting the block or only its type can change the scheme. | @sec-ch04-riemann | `RiemannSolverOptionsImpl` ({{< code src/riemann/riemann_solver.hpp RiemannSolverOptionsImpl >}}); `from_yaml` ({{< code src/riemann/riemann_solver.cpp RiemannSolverOptionsImpl::from_yaml overload=2 >}}) |
 | `plume-roe` is a Lax-Friedrichs flux under a name that promises a characteristic solver. | @sec-ch04-shallow | `lax_friedrichs_flux` ({{< code src/riemann/plume_roe.cpp lax_friedrichs_flux >}}) |
 | The legacy isentropic wall fill is commented out, and the wall-face copy runs only without `wb_x1` under gravity, which no configuration with a pressure row reaches; if revived, the fill would conflict with the well-balanced perturbation ghosts. | @sec-ch05-legacy | `_revise_x1inner_lr` ({{< code src/hydro/hydro.cpp HydroImpl::_revise_x1inner_lr >}}) |
@@ -242,7 +246,7 @@ Items where cost, diagnostics, documentation or defaults that surprise a user, w
 ## Limits of the default gravity work and the $x_1$ seams {#sec-ch16-pending}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: the gravity-work round recorded in [^ch16-round]; the code at the pin; the Limits
 layers of the sections cited
 status: draft
@@ -352,11 +356,13 @@ from the Limits layer of any single section.[^ch16-round]
 
 [^rg-f73ac19c00f2]: $\gamma$ — mixture ratio of specific heats $c_p/c_v$, local, varies with composition, dimensionless [-]; $\gamma_{\mathrm{d}}$ is the dry value
 
+[^rg-6fd5060af188]: grav1 — gravity component along the first coordinate
+
+[^rg-9f8b210c1766]: nghost — number of ghost cells at each boundary
+
 [^rg-1dd113c26916]: non-hydrostatic — fraction of the vertical body force retained by the non-hydrostatic treatment
 
 [^rg-3bafdb78128c]: $p$ — pressure [Pa]
-
-[^rg-9f8b210c1766]: nghost — number of ghost cells at each boundary
 
 [^rg-0659223b0ffa]: implicit-scheme — implicit time-integration scheme selector
 
@@ -364,7 +370,7 @@ from the Limits layer of any single section.[^ch16-round]
 
 [^rg-cde6c69a25bc]: $\mathsf A^{\pm}$ — the Roe dissipation matrices $\mathsf R\lvert\Lambda\rvert\mathsf R^{-1}$ at faces $i\pm\tfrac12$
 
-[^rg-af18ba914a5b]: $\mathsf I$ — the identity matrix, sized by context; [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/implicit/implicit_hydro.cpp#L349-L355)
+[^rg-af18ba914a5b]: $\mathsf I$ — the identity matrix, sized by context; [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/implicit/implicit_hydro.cpp#L349-L355)
 
 [^rg-93beee05e98b]: $\Delta t_c$ — the time step handed to the implicit solve: $w_{2,s}\Delta t$ under rk3 and rk3s4, $\Delta t$ under rk1 and rk2
 
@@ -374,7 +380,7 @@ from the Limits layer of any single section.[^ch16-round]
 
 [^rg-16446b930188]: MPI — Message Passing Interface
 
-[^rg-401936d2848d]: NCCL — NVIDIA Collective Communications Library; [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/external/gloo/README.md#L43-L56)
+[^rg-401936d2848d]: NCCL — NVIDIA Collective Communications Library; [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/external/gloo/README.md#L43-L56)
 
 [^rg-d1be4fb0f62d]: GPU — graphics processing unit
 

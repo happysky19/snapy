@@ -1,7 +1,7 @@
 ## Positivity-limiter meters: `limcut`, `thetamin`, `thetasevere` (`_positivity_severe`) {#sec-ch13-limiter-meters}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy)
 sources: OUTLINE.md 13.2; src/hydro/hydro_forward.cpp (with the relaxation of chengcli/snapy#338); src/hydro/flux_positivity.cpp; src/hydro/flux_positivity.hpp;
          src/hydro/hydro.cpp; src/mesh/meshblock.cpp; tests/test_cycle_diagnostics.cpp;
          sources/gh__PR_BODIES_202-219.md
@@ -101,7 +101,10 @@ entries with $\Theta<1$ to `_positivity_hits`, the severe ones to `_positivity_s
 interior $x_1$ flux magnitude to `_lim_flux` and the cut to `_lim_cut` ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}).
 
 The five meters are module buffers set up with `register_buffer` at construction: 0 for the counts and sums, 1
-for the minimum ({{< code src/hydro/hydro.cpp HydroImpl::reset >}}). The cycle line sums the counts and the two flux totals over
+for the minimum ({{< code src/hydro/hydro.cpp HydroImpl::reset >}}). The same `reset` registers a sixth counter
+beside them, `conversion_trips`, but only when `dynamics/conversion-order` is 4: it is not a limiter meter and
+is described with the scheme that fills it (@sec-ch04-conv4). At the default key the buffer does not exist, so
+a reader listing the module's buffers sees five. The cycle line sums the counts and the two flux totals over
 blocks and ranks, takes the MIN of $\Theta$, and prints the ratio only when the offered total is positive, through
 `limcut` ({{< code src/mesh/meshblock.cpp print_cycle_diagnostics >}}). The hit count is not printed. It is read by the step acceptance
 (@sec-ch07-redo) through the EOS[^rg-b14888cbe998] limiter marks, `limiter_hits` ({{< code src/mesh/meshblock.cpp MeshBlockImpl::limiter_hits >}}).
@@ -142,6 +145,7 @@ torch::minimum_out(_positivity_min, _positivity_min, ti.min());        // thetam
 | census | {{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}} | `_positivity_severe` | `equation-of-state/limiter`, or face-flux covariance rows added |
 | cut and offered flux | {{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}} | `_lim_cut` | |
 | buffers | {{< code src/hydro/hydro.cpp HydroImpl::reset >}} | `register_buffer` | |
+| the sixth counter, not a limiter meter | {{< code src/hydro/hydro.cpp HydroImpl::reset >}} | `conversion_trips` | `dynamics/conversion-order` 4 |
 | accessors | {{< code src/hydro/hydro.hpp HydroImpl >}} | `positivity_min` | |
 | printing | {{< code src/mesh/meshblock.cpp print_cycle_diagnostics >}} | `thetasevere` | |
 
@@ -186,6 +190,8 @@ ctest cases: **pending: pinned ctest run**.
    rest of the run.
 3. **Scalars.** The passive-scalar module keeps its own hit counter, `_positivity_hits`
    ({{< code src/scalar/scalar.cpp ScalarImpl::forward >}}), which is not printed.
+4. **`conversion_trips` is not printed either.** The counter of @sec-ch04-conv4 sits among these buffers but has
+   no cycle-line token, so a run must read the buffer to see it ({{< code src/mesh/meshblock.cpp print_cycle_diagnostics >}}).
 
 [^ch13-lim-src]: Stated in the Limits of the source summary, `sources/gh__PR_BODIES_202-219.md`.
 

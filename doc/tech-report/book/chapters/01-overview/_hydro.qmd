@@ -1,7 +1,7 @@
 ## Follow the hydro increment through seven sections (`dynamics:`) {#sec-ch01-hydro}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md entry 1.7; src/hydro/hydro_forward.cpp
 status: draft
 author: Jiheng Hu
@@ -102,7 +102,9 @@ make_fig()
 
 **How to use it.** The `dynamics` block selects the pieces; the keys accepted at this level are
 `equation-of-state`, `reconstruct`[^rg-af5f86077ee8], `riemann-solver`, `verbose`, `disable-flux-x1`[^rg-ae041ae1bceb], `disable-flux-x2`[^rg-80c2fa91bc52],
-`disable-flux-x3`[^rg-7e9816437e3b] and `wb-wall-clamp`[^rg-008bc3db0d40] ({{< code src/hydro/hydro_options.cpp HydroOptionsImpl::from_yaml >}}):
+`disable-flux-x3`[^rg-7e9816437e3b], `wb-wall-clamp`[^rg-008bc3db0d40] and `conversion-order`[^rg-a68ffe8ce68d], the order of the
+$x_1$ cell-average to point conversion of the primitives (@sec-ch04-conv4)
+({{< code src/hydro/hydro_options.cpp HydroOptionsImpl::from_yaml >}}):
 
 <!-- reader glossary keys -->Keys in this fragment: `vertical`[^rg-febc4357099f], `horizontal`[^rg-9f229b714348].
 ```yaml
@@ -152,6 +154,8 @@ seam fluxes are not averaged, by the cited code. Neither case is measured here.
 [^rg-7e9816437e3b]: disable-flux-x3 — whether the third-coordinate flux is disabled
 
 [^rg-008bc3db0d40]: wb-wall-clamp — whether to clamp the well-balanced wall continuation
+
+[^rg-a68ffe8ce68d]: conversion-order — order of the $x_1$ cell-average to point conversion of the primitives: 2 (default) or 4
 
 [^rg-febc4357099f]: vertical — options for the vertical reconstruction
 

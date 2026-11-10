@@ -1,7 +1,7 @@
 ## YAML scheme selection and setup guards (`YAML keys`) {#sec-ch12-yaml}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md 12.11; src/hydro/hydro_options.cpp; src/forcing/const_gravity.cpp; src/implicit/implicit_hydro.cpp;
          src/eos/equation_of_state.cpp; src/recon/reconstruct.cpp; src/riemann/riemann_solver.cpp; src/coord/coordinate.cpp;
          src/layout/layout.cpp; src/mesh/meshblock_options.cpp; src/hydro/hydro.cpp; tests/test_yaml_keys.cpp;
@@ -41,6 +41,7 @@ explains it, is listed in @sec-appi.
 | `non-hydrostatic`[^rg-5e19433b0f93] | 1 | must lie in $[0,1]$ |
 | `dynamics/wb-wall-clamp` | true | required by `balance_column` |
 | `dynamics/disable-flux-x1`, `-x2`, `-x3`, `verbose` | false | flux and source direction gates |
+| `dynamics/conversion-order` | 2 | 2 or 4, anything else refused; 4 is the fourth-order $x_1$ cell-average to point conversion of @sec-ch04-conv4, and with nonzero `grav1` it needs `nghost` $\ge 3$ and the fourth-order face density reference of @sec-ch05-wbref4 |
 | `dynamics/equation-of-state/type` | `moist-mixture` | `shallow-water` bypasses the radial well-balanced path |
 | EOS `limiter`[^rg-98ec00569918] | false | positivity correction |
 | EOS density, pressure and temperature floors | $10^{-6}\ \mathrm{kg\,m^{-3}}$, $10^{-3}\ \mathrm{Pa}$, $20\ \mathrm{K}$ | state floors |

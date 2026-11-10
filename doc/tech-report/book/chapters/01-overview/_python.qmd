@@ -1,7 +1,7 @@
 ## Expose the C++ API to Python (`import snapy`) {#sec-ch01-python}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md entry 1.12; python/__init__.py; python/csrc/snapy.cpp; python/csrc/pymesh.cpp; python/csrc/pylayout.cpp;
          pyproject.toml; tests/CMakeLists.txt; tests/test_python_import_path.py; tests/test_jit_user_forcing.py
 status: draft
@@ -53,7 +53,8 @@ entries (buffers `interp1.cm_x1`, `interp1.cp_x1`, `interp2.cm_x1`, `interp2.cp_
 than `weno5` and `cp5`), and the free builders `weno5_x1_coeffs` and `cp5_x1_coeffs`, which return the rows of a face
 vector with no block, `(cm, cp)` of $n_f-5$ rows of 48 and 5 columns; `bind_hydro`
 ({{< code python/csrc/pyhydro.cpp bind_hydro >}}) gives `balance_column` the argument `stretched=False`
-(@sec-ch05-balcol). The stubs are in {{< code python/snapy/reconstruction.pyi >}}. {{< code pyproject.toml >}} declares the build requirements (torch pinned
+(@sec-ch05-balcol) and exposes the hydro option `conversion_order`, the order of the $x_1$ cell-average to
+point conversion of the primitives (@sec-ch04-conv4), whose stub is {{< code python/snapy/hydro.pyi >}}. The stubs are in {{< code python/snapy/reconstruction.pyi >}}. {{< code pyproject.toml >}} declares the build requirements (torch pinned
 to one version, kintera, and on Linux commux and pinc) apart from the run-time requirements. It also declares the two
 console scripts `pd-combine` and `pd-inspect`. The Python ctests import the package under `SNAPY_TEST_PYTHONPATH` when
 that cache path is set ({{< code tests/CMakeLists.txt >}}; @sec-ch12-build). Import and binding introduce no spatial
@@ -90,6 +91,7 @@ make_fig()
 | stretched $x_1$ options | {{< code python/csrc/pycoord.cpp bind_coord >}} | `x1f_interior` | none |
 | per-face $x_1$ rows | {{< code python/csrc/pyrecon.cpp bind_recon >}} | `set_x1_faces` | none |
 | `balance_column` | {{< code python/csrc/pyhydro.cpp bind_hydro >}} | `stretched` | none |
+| hydro options | {{< code python/csrc/pyhydro.cpp bind_hydro >}} | `conversion_order` | `dynamics/conversion-order` |
 | packaging | {{< code pyproject.toml >}} | `dependencies` | none |
 | scripts | {{< code pyproject.toml >}} | `pd-combine` | none |
 | test path | {{< code tests/CMakeLists.txt >}} | `SNAPY_TEST_PYTHONPATH` | `SNAPY_TEST_PYTHONPATH` |
