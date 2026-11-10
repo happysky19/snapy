@@ -53,11 +53,33 @@ namespace snap {
 //!                 a 1e-13 start stays at 2.4e-10.
 //! \param max_iter sweeps before giving up. The two defaults are paired: a
 //!                 tighter residual costs sweeps, and they come out of this
-//!                 budget. 450 covers every column measured for #5 -- the
-//!                 worst, dz/H = 1.25 at nx1 = 5, needs 434 -- where the old
-//!                 120 left dz/H = 1.10 and 1.30 throwing at 1e-13 despite
-//!                 converging at 1e-10. balance_column runs once per column at
-//!                 initialisation, so the extra sweeps cost well under a
+//!                 budget.
+//!
+//!                 An earlier revision of this line justified 450 with "450
+//!                 covers every column measured for #5 -- the worst, dz/H =
+//!                 1.25 at nx1 = 5, needs 434". That figure is not reproducible
+//!                 and the sentence does not describe this kernel. With the
+//!                 factored rows an ISOTHERMAL column is an exact fixed point
+//!                 of this iteration: measured here over dz/H = 0.25 to 4 at
+//!                 nx1 = 5, 20 and 64, every such column returns after 0
+//!                 sweeps with a residual at round-off (4e-17 to 1.4e-15). The
+//!                 isothermal ladder costs no sweeps at all, so no isothermal
+//!                 column can be the one this budget is sized for.
+//!
+//!                 What costs sweeps is a temperature gradient, which the rows
+//!                 are not exact for. Over T_top/T_bot in {0.8, 0.5, 0.3},
+//!                 nx1 in {5, 20, 64} and the same dz/H ladder, the worst
+//!                 column that converges WITHIN this budget takes 386 sweeps
+//!                 (nx1 = 20, T_top/T_bot = 0.5, dz/H = 1.30). 450 is about
+//!                 17% of headroom over that, not a wide margin.
+//!
+//!                 It is a budget, not a guarantee, and raising it is not a
+//!                 fix. The next column of that family (dz/H = 1.40) needs
+//!                 1621 sweeps and is refused here; everything above it stalls
+//!                 at a residual of 1e-2 to 1 and reaches no balance at 450 or
+//!                 at 5000. A column that does not converge is refused, which
+//!                 is what the throw below is for. balance_column runs once per
+//!                 column at initialisation, so the sweeps cost well under a
 //!                 millisecond and only columns that would otherwise throw
 //!                 reach the larger budget at all.
 //!
