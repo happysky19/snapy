@@ -92,7 +92,8 @@ std::tuple<torch::Tensor, double, int> balance_column(
                                   wall_clamp, rows);
     auto pp = prs - pref;
     auto c = pp.narrow(-1, nc1 - 1, 1);  // one gauge per column, at its top
-    err = ((pp - c).abs() / (rho * wgt)).max().item<double>();
+    auto res = (pp - c).abs() / (rho * wgt);
+    err = res.max().item<double>();
     if (err < rtol || sweeps == max_iter) break;
     prs.copy_(pref + c);
     rho.copy_(prs / rt);
@@ -105,8 +106,20 @@ std::tuple<torch::Tensor, double, int> balance_column(
         sweeps, " -- the column is diverging, not converging.");
   }
 
-  TORCH_CHECK(err < rtol, "balance_column: no discrete balance after ", sweeps,
-              " sweeps; residual bound on |a|/g is ", err, " > ", rtol);
+  if (!(err < rtol)) {
+    // name the worst cell and its dz/H, H = p / (rho g) of that cell
+    auto pp = prs - pref;
+    auto res = ((pp - pp.narrow(-1, nc1 - 1, 1)).abs() / (rho * wgt)).cpu();
+    int64_t at = res.reshape(-1).argmax().item<int64_t>();
+    int i = static_cast<int>(at % nc1);
+    double dzh =
+        (wgt.cpu()[i] * rho.cpu().reshape(-1)[at] / prs.cpu().reshape(-1)[at])
+            .item<double>();
+    TORCH_CHECK(false, "balance_column: no discrete balance after ", sweeps,
+                " sweeps; residual bound on |a|/g is ", err, " > ", rtol,
+                ", largest at x1 cell ", i, " where dz/H = ", dzh,
+                " with H = p / (rho g) of that cell.");
+  }
   return {wb, err, sweeps};
 }
 

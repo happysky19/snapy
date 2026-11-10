@@ -8,8 +8,10 @@
 #include <cmath>
 #include <fstream>
 #include <iomanip>
+#include <snap/hydro/balance_column.hpp>
 #include <snap/hydro/hydro_dispatch.hpp>
 #include <snap/mesh/meshblock.hpp>
+#include <string>
 #include <vector>
 
 #include "cuda_test_gate.hpp"
@@ -29,17 +31,17 @@ torch::Tensor column(double a, int n, torch::TensorOptions const& opt) {
 }
 
 //! that column's deck, with the density floor set to rho_top / `ratio`
-snap::MeshBlock block_at_floor_ratio(double ratio) {
-  double dz = kA * kRd * kT0 / kGrav;
-  double rho_top = kPs * std::exp(-(kN - 0.5) * kA) / (kRd * kT0);
+snap::MeshBlock block_at_floor_ratio(double ratio, double a = kA, int n = kN) {
+  double dz = a * kRd * kT0 / kGrav;
+  double rho_top = kPs * std::exp(-(n - 0.5) * a) / (kRd * kT0);
   char f[] = "/tmp/thickcell-XXXXXX";
   int fd = mkstemp(f);
   if (fd != -1) close(fd);
   std::ofstream(f)
       << std::setprecision(17) << "reference-state: {Tref: 0., Pref: 1.e5}\n"
       << "species: [{name: dry, composition: {H: 2}, cv_R: 2.5}]\n"
-      << "geometry: {type: cartesian, bounds: {x1min: 0., x1max: " << dz * kN
-      << ", x2min: 0., x2max: 1., x3min: 0., x3max: 1.}, cells: {nx1: " << kN
+      << "geometry: {type: cartesian, bounds: {x1min: 0., x1max: " << dz * n
+      << ", x2min: 0., x2max: 1., x3min: 0., x3max: 1.}, cells: {nx1: " << n
       << ", nx2: 1, nx3: 1, nghost: 3}}\ndynamics:\n"
       << "  equation-of-state: {type: ideal-gas, gammad: 1.4, weight: "
       << 8.31446261815324 / kRd << ", density-floor: " << rho_top / ratio
@@ -116,5 +118,69 @@ TEST(ThickCellRef, the_density_floor_guard_refuses_only_unsteppable_columns) {
     } else {
       EXPECT_THROW(blk->initialize(v), c10::Error) << "ratio " << ratio;
     }
+  }
+}
+
+//! A reference the six-face rows cannot hold positive is refused when it is
+//! first built, naming the cell and its dz/H. The factored rows hold the
+//! five-cell isothermal column at 1.25 H (whose restored top face was -29.07
+//! Pa with the p rows), so the refusal is exercised on a column they cannot
+//! hold: dz = 1.5 bottom scale heights and T falling linearly from 300 K to
+//! 60 K, which leaves the top cell 7.5 of its own scale heights thick and its
+//! restored top face p_top - pref_top + psf_top at -3.4 p_top. The isothermal
+//! 1.0 H column runs. RED at the parent: both run.
+TEST(ThickCellRef, a_non_positive_reference_is_refused_at_its_first_build) {
+  auto opt = torch::TensorOptions().dtype(torch::kFloat64);
+  for (double ttop : {kT0, 60.}) {
+    double a = ttop < kT0 ? 1.5 : 1.0;
+    auto blk = block_at_floor_ratio(1.e6, a, 5);
+    auto co = blk->pcoord->options;
+    auto w =
+        torch::zeros({snap::IPR + 1, co->nc3(), co->nc2(), co->nc1()}, opt);
+    auto col = column(a, 5, opt);
+    if (ttop < kT0) {  // T linear in the cell index, p by the cell-to-cell drop
+      double dz = a * kRd * kT0 / kGrav;
+      auto p = col[snap::IPR].flatten(), rho = col[snap::IDN].flatten();
+      double pi = kPs, tprev = kT0;
+      for (int i = 0; i < 5; ++i) {
+        double t = kT0 + (ttop - kT0) * i / 4.;
+        if (i > 0) pi *= std::exp(-kGrav * dz / (kRd * 0.5 * (t + tprev)));
+        p[i] = pi;
+        rho[i] = pi / (kRd * t);
+        tprev = t;
+      }
+    }
+    w.narrow(-1, blk->pcoord->il(), 5).copy_(col);
+    snap::Variables v{{"hydro_w", w}};
+    blk->initialize(v);
+    if (ttop == kT0) {
+      EXPECT_NO_THROW(blk->forward(v, 1.e-3, 0)) << "dz/H " << a;
+    } else {
+      try {
+        blk->forward(v, 1.e-3, 0);
+        ADD_FAILURE() << "a cold top 7.5 scale heights thick was accepted";
+      } catch (c10::Error const& e) {
+        std::string m = e.what_without_backtrace();
+        EXPECT_NE(m.find("restored top-face pressure"), std::string::npos) << m;
+        EXPECT_NE(m.find("owned x1 cell 4"), std::string::npos) << m;
+      }
+    }
+  }
+}
+
+//! and balance_column's refusal names its worst cell and dz/H: a sweep
+//! budget of one cannot balance the marched 1.25 H column
+TEST(ThickCellRef, an_unbalanced_column_is_refused_with_its_cell_and_dz_h) {
+  auto opt = torch::TensorOptions().dtype(torch::kFloat64);
+  auto col = column(1.25, 5, opt);
+  col[snap::IPR].mul_(1. + 0.01 * torch::arange(5, opt).view({1, 1, 5}));
+  auto dx1f = torch::full({5}, 1.25 * kRd * kT0 / kGrav, opt);
+  try {
+    snap::balance_column(col, dx1f, kGrav, true, 1.e-13, 1, "cartesian");
+    ADD_FAILURE() << "one sweep balanced a perturbed column";
+  } catch (c10::Error const& e) {
+    std::string m = e.what_without_backtrace();
+    EXPECT_NE(m.find("largest at x1 cell"), std::string::npos) << m;
+    EXPECT_NE(m.find("dz/H = "), std::string::npos) << m;
   }
 }

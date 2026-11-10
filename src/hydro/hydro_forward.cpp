@@ -377,6 +377,12 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
     torch::Tensor wtmp;
     if (wb_x1) {
       auto [psf_lo, pref, dsf, dref] = _hydro_ref_x1(wx1);
+      // once per run, on the reference of the initial state: later states
+      // that go bad are the redo path's business
+      if (!x1_ref_checked_) {
+        x1_ref_checked_ = true;
+        _check_x1_reference(wx1, psf_lo, pref);
+      }
       auto pressure = wx1[IPR].clone();
       auto density = wx1[IDN].clone();
 

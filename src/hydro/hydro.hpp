@@ -271,6 +271,11 @@ class HydroImpl : public torch::nn::Cloneable<HydroImpl> {
   // call.
   std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
   _hydro_ref_x1(torch::Tensor const& w) const;
+  //! throw if the first x1 reference of this run is not a positive, finite
+  //! pressure everywhere it is used: the owned cells, their faces and, at a
+  //! physical x1-outer wall, the restored top face p_top - pref_top + psf_top
+  void _check_x1_reference(torch::Tensor const& w, torch::Tensor const& psf_lo,
+                           torch::Tensor const& pref) const;
   //! overwrite the m x1 ghost rows of f next to each x1 neighbour with the
   //! neighbour's own rows of the same cells (faces: the same faces past the
   //! seam face), so a split column reads the values of one block
@@ -284,6 +289,8 @@ class HydroImpl : public torch::nn::Cloneable<HydroImpl> {
   std::vector<std::string> _register_forcings_module();
 
   mutable int x1_uniform_ = -1;
+  //! the first x1 reference has been checked (_check_x1_reference)
+  mutable bool x1_ref_checked_ = false;
   mutable torch::Tensor x1_rows_;
   //! H_ref of the factored rows, 0 until set (see x1_href_candidate)
   mutable double x1_href_ = 0.;
