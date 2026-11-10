@@ -308,6 +308,12 @@ double MeshImpl::initialize(MeshVariables& vars, char const* restart_file) {
         current_time = block_time;
       }
     }
+    // a restart carries H_ref (RestartOutput); an older file does not, and
+    // then the setup rule runs on the restart state, as before it was stored
+    bool stored = true;
+    for (auto& b : blocks)
+      stored = stored && (!b->phydro || b->phydro->x1_href() > 0.);
+    if (!stored) set_x1_href(vars);
     return current_time;
   }
 

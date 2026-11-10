@@ -1650,6 +1650,14 @@ double MeshBlockImpl::_init_from_restart(Variables &vars, std::string fname) {
         vars.count("scalar_s") ? vars.at("scalar_s").clone() : torch::Tensor());
   }
 
+  // H_ref of the factored x1 rows, as the run that wrote this set it at setup
+  // (MeshImpl::set_x1_href); a file without one recomputes it on the restart
+  // state (MeshImpl::initialize)
+  if (vars.count("x1_href")) {
+    if (phydro) phydro->x1_href(vars.at("x1_href").item<double>());
+    vars.erase("x1_href");
+  }
+
   // remove timing data
   vars.erase("last_time");
   vars.erase("last_cycle");

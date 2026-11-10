@@ -646,6 +646,20 @@ if (NOT APPLE)
       )
     endforeach()
 
+    # the factored x1 rows' H_ref is carried by the restart file
+    add_test(
+      NAME test_restart_x1_href
+      COMMAND ${Python3_EXECUTABLE}
+              ${CMAKE_CURRENT_SOURCE_DIR}/run_restart_x1_href.py
+              --build-dir ${CMAKE_BINARY_DIR}
+              --build-type release
+    )
+    set_tests_properties(test_restart_x1_href PROPERTIES
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+      TIMEOUT 600
+      LABELS "restart;examples"
+    )
+
     add_test(
       NAME test_netcdf_axis_attrs
       COMMAND ${Python3_EXECUTABLE}
