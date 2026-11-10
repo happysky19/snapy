@@ -23,5 +23,10 @@
  "eq-ch04-x1volume-average": "On a curved grid the stored $x_1$ cell value is the average of the field against the radial volume element $x_1^2\\,\\mathrm{d}x_1$, not against $\\mathrm{d}x_1$.",
  "eq-ch04-x1volume-plain": "In the volume coordinate $\\mathcal X=x_1^3/3$ that same value is a plain cell average, with cell increments $\\Delta\\mathcal X_i=V^{(1)}_i$.",
  "eq-ch04-x1volume-width": "The volume increment of a radial cell is $(x^{\\mathrm m}_{1,i})^2h_i+h_i^3/12$, so equal radial widths give unequal increments.",
- "eq-ch04-x1volume-beta": "The WENO5 smoothness indicators in the volume coordinate, from the second derivative of each candidate quadratic and its value at the target face."
+ "eq-ch04-x1volume-beta": "The WENO5 smoothness indicators in the volume coordinate, from the second derivative of each candidate quadratic and its value at the target face.",
+ "eq-ch04-conv4-avg": "A cell average is the midpoint value plus $h_i^2/24$ times the second $x_1$ derivative, with an $O(h^4)$ remainder.",
+ "eq-ch04-conv4-op": "The curvature operator $\\mathsf Q$: $h_i^2/24$ times the second derivative of the quadratic whose averages over cells $i-1$, $i$, $i+1$ are the data.",
+ "eq-ch04-conv4-weights": "The weights of $\\mathsf Q$ from the three cell widths, $1/24$ each on equal widths.",
+ "eq-ch04-conv4-scheme": "The fourth-order conversion $\\mathbf W(\\overline{\\mathbf U} - \\mathsf Q\\overline{\\mathbf U}) + \\mathsf Q\\,\\mathbf W(\\overline{\\mathbf U})$ of the primitives along $x_1$.",
+ "eq-ch04-conv4-gap": "Without the key the conversion misses $h_i^2/24$ times the second state derivative of the equation of state against the squared $x_1$ slope."
 }

@@ -1,0 +1,393 @@
+## The fourth-order $x_1$ conversion between cell averages and point values (`dynamics/conversion-order`) {#sec-ch04-conv4}
+
+<!-- PROVENANCE
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
+sources: OUTLINE.md 4; src/hydro/hydro_forward.cpp, src/hydro/hydro.cpp, src/hydro/hydro.hpp,
+         src/hydro/hydro_options.cpp, src/hydro/wb_ref4.hpp, python/csrc/pyhydro.cpp, python/snapy/hydro.pyi,
+         tests/test_conversion_order.py, tests/CMakeLists.txt at the pin
+status: draft
+-->
+
+### Summary
+
+The solver stores the cell average of each conserved variable and needs the primitive variables — density,
+velocity, pressure and the mass fractions — before it can reconstruct anything to a face. It gets them by
+handing the stored averages to the equation of state. That is the wrong order of operations: the equation of
+state is a pointwise, nonlinear map, so the primitive of an average is not the average of the primitive. The two
+differ at second order in the cell width wherever the state varies inside the cell, which in a stratified column
+is everywhere. This section is the optional repair along $x_1$: convert the averages to point values at the cell
+centre, apply the equation of state there, and convert the result back to an average. The key is off by default,
+and $x_2$ and $x_3$ keep the second-order conversion either way.
+
+::: {.callout-note title="At a glance"}
+**Purpose.** Replaces $\mathbf W(\overline{\mathbf U})$ by $\mathbf W(\overline{\mathbf U} - \mathsf Q\overline{\mathbf U}) + \mathsf Q\,\mathbf W(\overline{\mathbf U})$, @eq-ch04-conv4-scheme, which is the cell average of the primitives to $O(h^4)$.
+
+**Data.** Reads $\overline{\mathbf U}$ and `x1f` with ghosts; writes `hydro_w` in place, ghosts included, and counts the cells it gave up on in `conversion_trips`.
+
+**Placement.** Every RK stage, in `HydroImpl::forward`, immediately after the equation-of-state call that opens the stage and before anything reads $\mathbf W$.
+
+**Activation.** `dynamics/conversion-order`, an integer, default 2; 4 turns it on and no other value is accepted. With 4 and $g_1\ne0$ it needs $n_{\mathrm{gh}} \ge 3$, and it needs $n_{c1}\ge4$ always.
+
+**Guarantee / limits.** Fourth order in $x_1$ on a uniform or smoothly stretched grid; second order in $x_2$ and $x_3$; a cell whose point state is inadmissible keeps the second-order value.
+
+**Evidence.** @tbl-ch04-conv4-tests; `test_conversion_order_python`, `derivation_check.py` `[C19]`.
+:::
+
+Local symbols: $h_i$ the $x_1$ width of cell $i$ (`dx1f`, appendix A, notation group 1); $x_{1,i\pm1/2}$[^rg-6ee63dfbd095] its two
+faces, the entries of `x1f`; $\mathbf W(\mathbf U)$ the pointwise equation-of-state map of @sec-ch02-interface,
+which the primitive vector $\mathbf W$ of appendix A, notation group 2 is the value of; $\mathsf Q$ the $x_1$
+curvature operator of @eq-ch04-conv4-op, a tridiagonal matrix on cell averages with the weights $k^+_i$ and
+$k^-_i$; $n_{c1}$ the number of $x_1$ cells of a block including its ghosts and $n_{\mathrm{gh}}$ the ghost
+depth (`nghost`).
+
+### Derivation
+
+Write $q(x_1)$ for a smooth field and $\bar q_i$ for its average over cell $i$. Cell $i$ runs from
+$x_{1,i-1/2}$ to $x_{1,i+1/2}$, is $h_i = x_{1,i+1/2} - x_{1,i-1/2}$ wide, and $x_{1,i}$ is its midpoint. The
+whole derivation is Cartesian: the measure is $\mathrm{d}x_1$ and the midpoint is the centroid. Every step is
+checked symbolically in `derivation_check.py` `[C19]`.
+
+#### An average is a point value plus a curvature
+
+1. *Expand and integrate.* Taylor-expand $q$ about the midpoint and average over the cell. The odd powers
+   integrate to zero, so
+
+   $$
+   \bar q_i = \frac{1}{h_i}\int_{x_{1,i-1/2}}^{x_{1,i+1/2}} q\,\mathrm{d}x_1
+    = q(x_{1,i}) + \frac{h_i^2}{24}\,\partial_1^2q(x_{1,i}) + \frac{h_i^4}{1920}\,\partial_1^4q(x_{1,i}) + O(h_i^6).
+   $$ {#eq-ch04-conv4-avg}
+
+2. *Read it backwards.* An average and a midpoint value differ at second order, and the difference is a
+   curvature. So a scheme that treats the stored average as a point value, or a point value as an average, is
+   second-order accurate and no better, whatever the reconstruction that follows does.
+
+#### The curvature operator $\mathsf Q$
+
+The code does not have $\partial_1^2q$; it has three cell averages. Let $q$ be the quadratic whose averages over
+cells $i-1$, $i$ and $i+1$ are $a_{i-1}$, $a_i$ and $a_{i+1}$, and define
+
+$$
+(\mathsf Q a)_i = \frac{h_i^2}{24}\,\partial_1^2 q = k^+_i\,(a_{i+1} - a_i) - k^-_i\,(a_i - a_{i-1}).
+$$ {#eq-ch04-conv4-op}
+
+The weights follow in four steps. Write $m_l$ for the midpoint of cell $l$ and $q = Ax_1^2 + Bx_1 + C$.
+
+1. *The average of a quadratic.* Over a cell of midpoint $m$ and width $h$,
+   $\bar q = A(m^2 + h^2/12) + Bm + C = q(m) + Ah^2/12$. So $q(m_l) = a_l - Ah_l^2/12$.
+2. *Second divided difference.* The leading coefficient of a quadratic is its second divided difference over any
+   three distinct points, so with $b_l = q(m_l)$,
+
+   $$
+   A = \frac{1}{m_{i+1}-m_{i-1}}\left(\frac{b_{i+1}-b_i}{m_{i+1}-m_i} - \frac{b_i-b_{i-1}}{m_i-m_{i-1}}\right).
+   $$
+
+3. *Substitute and collect.* With $m_{i+1}-m_i = (h_i+h_{i+1})/2$, $m_i-m_{i-1} = (h_{i-1}+h_i)/2$ and
+   $m_{i+1}-m_{i-1} = (h_{i-1}+2h_i+h_{i+1})/2$, the $Ah_l^2/12$ terms of step 1 contribute
+   $(h_{i+1}-h_i)$ and $(h_i-h_{i-1})$ through the identity $(h_{i+1}^2-h_i^2)/(h_i+h_{i+1}) = h_{i+1}-h_i$.
+   Moving them to the left-hand side gives
+
+   $$
+   A\,\frac{h_{i-1}+2h_i+h_{i+1}}{2} + \frac{A}{6}\bigl(h_{i-1}-2h_i+h_{i+1}\bigr)
+    = \frac{2(a_{i+1}-a_i)}{h_i+h_{i+1}} - \frac{2(a_i-a_{i-1})}{h_{i-1}+h_i},
+   $$
+
+   and the two bracketed widths add to $2(h_{i-1}+h_i+h_{i+1})/3$, so
+
+   $$
+   A = \frac{3}{h_{i-1}+h_i+h_{i+1}}\left(\frac{a_{i+1}-a_i}{h_i+h_{i+1}} - \frac{a_i-a_{i-1}}{h_{i-1}+h_i}\right).
+   $$
+
+4. *The weights.* $\partial_1^2q = 2A$, so @eq-ch04-conv4-op holds with
+
+   $$
+   k^+_i = \frac{c_i}{h_i+h_{i+1}},\qquad k^-_i = \frac{c_i}{h_{i-1}+h_i},\qquad
+   c_i = \frac{h_i^2}{4\,(h_{i-1}+h_i+h_{i+1})} ,
+   $$ {#eq-ch04-conv4-weights}
+
+   which on equal widths is $k^+_i = k^-_i = 1/24$ and $(\mathsf Q a)_i = (a_{i+1}-2a_i+a_{i-1})/24$. In the code,
+   @eq-ch04-conv4-weights is `c`, `k[0]` and `k[1]` of `conv4_x1_weights`
+   ({{< code src/hydro/hydro_forward.cpp conv4_x1_weights >}}), written as differences of `x1f` entries:
+   $h_i+h_{i+1}$ is `f(3) - f(1)`, $h_{i-1}+h_i$ is `f(2) - f(0)` and $h_{i-1}+h_i+h_{i+1}$ is `f(3) - f(0)`.
+   @eq-ch04-conv4-op is the lambda `lap` of `HydroImpl::forward`
+   ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}).
+
+Two properties of $\mathsf Q$ matter below, and both are in `[C19]`:
+
+- *It is exact for a quadratic on any face positions.* @eq-ch04-conv4-weights was solved from the quadratic, so
+  $(\mathsf Q a)_i - h_i^2\partial_1^2q/24 = 0$ identically in $x_{1,i-3/2}\ldots x_{1,i+3/2}$.
+- *It is fourth-order accurate on a smooth grid.* On cell averages of a smooth $q$,
+  $(\mathsf Q\bar q)_i = \tfrac{h_i^2}{24}\partial_1^2q(x_{1,i}) + O(h^4)$: on a uniform grid the remainder is
+  $h^4\partial_1^4q/192$, and on faces drawn from a smooth map $x_1(s)$ at a uniform step $s$ it is still $O(h^4)$.
+
+#### The order of $\mathbf W(\overline{\mathbf U} - \mathsf Q\overline{\mathbf U}) + \mathsf Q\,\mathbf W(\overline{\mathbf U})$
+
+The equation of state is a pointwise map $\mathbf W(\mathbf U)$, smooth in the state. The scheme is
+
+$$
+\overline{\mathbf W} \;\leftarrow\; \mathbf W\bigl(\overline{\mathbf U} - \mathsf Q\overline{\mathbf U}\bigr)
+ \;+\; \mathsf Q\,\mathbf W\bigl(\overline{\mathbf U}\bigr),
+$$ {#eq-ch04-conv4-scheme}
+
+and it reproduces the cell average of the primitives to $O(h^4)$. Each step is one line of `[C19]`; the
+argument is componentwise, so it is enough to follow one row and write $u$, $w = \mathbf W(u)$.
+
+1. *The first argument is the point value.* Apply @eq-ch04-conv4-avg to $u$ and the second property of
+   $\mathsf Q$: $\bar u_i - (\mathsf Q\bar u)_i = u(x_{1,i}) + O(h^4)$. This is the array the code calls `up`.
+2. *The equation of state is then evaluated at a point.* $\mathbf W$ is smooth in its argument, so
+   $w^{\mathrm{pt}}_i := \mathbf W(\bar u_i - (\mathsf Q\bar u)_i) = w(x_{1,i}) + O(h^4)$: the $O(h^4)$ error of
+   step 1 passes through the first derivative of $\mathbf W$ and stays $O(h^4)$.
+3. *Go back to an average.* Apply @eq-ch04-conv4-avg to $w$:
+   $\bar w_i = w(x_{1,i}) + \tfrac{h_i^2}{24}\partial_1^2w(x_{1,i}) + O(h^4)$, and by the second property of
+   $\mathsf Q$ again, $\tfrac{h_i^2}{24}\partial_1^2w(x_{1,i}) = (\mathsf Q\bar w)_i + O(h^4)$. Hence
+   $\bar w_i = w^{\mathrm{pt}}_i + (\mathsf Q\bar w)_i + O(h^4)$.
+4. *The code has no $\bar w$ to take $\mathsf Q$ of.* It takes $\mathsf Q$ of the second-order primitives
+   $\mathbf W(\overline{\mathbf U})$ instead. Those differ from $\bar w$ by $O(h^2)$ (step 5), and $\mathsf Q$
+   carries a factor $h^2$, so $\mathsf Q\,\mathbf W(\overline{\mathbf U}) = \mathsf Q\bar w + O(h^4)$ and
+   @eq-ch04-conv4-scheme is $\bar w_i + O(h^4)$.
+5. *What is removed.* Without the key the stage keeps $\mathbf W(\overline{\mathbf U})$, and
+
+   $$
+   \bar w_i - \mathbf W(\bar u_i) = \frac{h_i^2}{24}\,\partial^2_u\mathbf W\,(\partial_1u)^2 + O(h^4) :
+   $$ {#eq-ch04-conv4-gap}
+
+   the second-order gap is the curvature of the equation of state times the square of the $x_1$ slope of the
+   state. It vanishes where $\mathbf W$ is linear in that row and where the state is uniform across the cell,
+   which is why a uniform tracer ratio and a cell-wise constant state are untouched. @eq-ch04-conv4-gap is of the
+   same family as the covariance gap of @eq-ch04-fluxcov-dF and the stored-velocity gap of
+   @eq-ch04-x1masscov-gap: all three are the difference between averaging and applying a nonlinear map, here for
+   the equation of state rather than for a product.
+
+*What is exact and what is truncated.* @eq-ch04-conv4-op is exact on a quadratic for any face positions.
+@eq-ch04-conv4-scheme is the cell average of the primitives to $O(h^4)$ on a uniform or smoothly stretched
+$x_1$; the remainder is fourth order and no claim is made beyond it. Nothing here is exact: a resting column is
+kept at rest to round-off by the test of @tbl-ch04-conv4-tests, not by an identity of this section.
+
+### Numerical method
+
+```{python}
+#| label: fig-ch04-conv4-stencil
+#| fig-cap: "The three-cell stencil of the fourth-order $x_1$ conversion and where each array lives. Sky-blue circles are the stored cell averages $\\overline{\\mathbf U}$; the green square is the point value $\\overline{\\mathbf U} - \\mathsf Q\\overline{\\mathbf U}$ handed to the equation of state in cell $i$; the orange bracket spans the three cells the weights $k^\\pm_i$ of @eq-ch04-conv4-weights read. Hatched reddish-purple boxes are ghosts: the stencil of the outermost owned cell reads them, so at a block seam it reads the neighbour's cells and at a physical wall it reads whatever the boundary condition wrote. The thick black line is a wall and the dashed reddish-purple line a seam."
+#| fig-alt: "A row of six cells with two hatched ghost cells at each end, a wall on the left and a seam on the right, with circles for cell averages, one green square for the converted point value, and a bracket over three cells."
+#| echo: false
+from snapy_report.ch04.figures.fig_conv4_stencil import make_fig
+make_fig()
+```
+
+**Where it sits.** The stage calls the equation of state once on the stored averages, which fills `hydro_w` to
+second order. The conversion block runs immediately after that call and before any reconstruction, and it is
+entered only when the key is 4 and the block has more than one $x_1$ cell
+({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}). A block with one $x_1$ cell therefore keeps the
+second-order primitives with no error and no warning.
+
+**The weights are cached per grid.** `conv4_x1_weights` builds $k^+$ and $k^-$ once, on the CPU in double, from
+`x1f`, and the result is kept in `conv4_x1_` with the `(data_ptr, version)` pair of the `x1f` tensor it was built
+from, `conv4_x1_at_` ({{< code src/hydro/hydro.hpp HydroImpl >}}). They are rebuilt when that pair changes or when
+the state moves to another device or dtype, so a block whose $x_1$ grid is rewritten in place gets new weights.
+
+**One extra equation-of-state call, and a screen on its result.** The block evaluates the equation of state a
+second time, on the point state. Two things can go wrong there that cannot go wrong on the average, because the
+point state is the average minus a curvature and so can leave the admissible set:
+
+1. *The point state itself.* A cell is screened out when any row of $\overline{\mathbf U} - \mathsf Q\overline{\mathbf U}$ is
+   not finite, when its density is not above the floor, or — with the equation-of-state limiter on — when a
+   species row is negative. The floors are the limiter's `density_floor` and `pressure_floor` with the limiter on
+   and zero with it off, so with the limiter off the screen is "finite and positive".
+2. *The primitives it gives.* The same screen is applied to the resulting $\mathbf W$, pressure included. With
+   the limiter on, a cell is also screened out when the equation of state repaired the point state, which the
+   block detects by comparing the input array with a copy taken before the call.
+
+A screened cell keeps the second-order $\mathbf W(\overline{\mathbf U})$, so the order of the conversion is
+cell-local: a run can be fourth order over most of the grid and second order in the cells the screen caught. The
+screened state is handed to the equation of state as the plain average, and the redo marks and vapour failures
+this extra call raised are restored from the copies taken before it, so the step-acceptance test of
+@sec-ch07-redo never sees them. The count of screened cells per stage, ghosts included, goes into
+`conversion_trips` (@sec-ch13-limiter-meters).
+
+**Ghosts, walls and seams.** $\mathsf Q$ is centred in every cell the stencil fits, which includes every ghost but
+the outermost one on each side; the outermost ghost keeps the second-order value, because `lap` writes only
+cells $1$ to $n_{c1}-2$. The ghosts the converted cells were built from are the ones the exchange and the
+boundary conditions wrote before the stage, so they carry the second-order primitives of the neighbour, not its
+converted ones. The block therefore refills every ghost from the converted owned cells, in three steps and in
+this order ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}):
+
+1. the block's own exchange on `hydro_w`, with `interpolate` and the primitive representation, which fills the
+   $x_2$ and $x_3$ halos and the $x_1$ halos of a neighbour on the same board;
+2. `_x1_ghost_rows` ({{< code src/hydro/hydro.cpp HydroImpl::_x1_ghost_rows >}}) with the ghost depth, which
+   copies the $x_1$ neighbour's outermost owned rows again across the **whole** $x_2$/$x_3$ extent, so the
+   corner columns past an $x_1$ seam are the neighbour's converted cells and not stale;
+3. every installed boundary function on `hydro_w` as a primitive fill, over all ghost layers.
+
+An outflow $x_1$ face is skipped in step 3 unless the stage carries a saved background
+(`boundary_reference_w`), the same rule the `outflow` boundary of @sec-ch11-outflow uses; its ghosts then keep
+the value the conversion itself wrote there from the pre-stage ghosts.
+
+**Order of accuracy.** Interior: fourth order, derived above and measured. Wall cells and the cells beside a seam:
+not measured at the pin — the convergence arms of `test_conversion_order.py` put the pulse away from the walls,
+and the wall and seam arms test mass conservation, not order. **Missing evidence**; the Limits layer says what
+would close it. $x_2$ and $x_3$: second order in every configuration, because nothing is converted there
+({{< code src/hydro/hydro.hpp HydroOptionsImpl >}}).
+
+**What else the key turns on.** With the key at 4 and gravity on, the well-balanced $x_1$ reference takes the
+fourth-order **face** density of @sec-ch05-wbref4, the same one `SNAP_WB_REF4` selects, and with it that scheme's
+resolution flag and its $n_{\mathrm{gh}} \ge 3$ requirement ({{< code src/hydro/hydro.cpp HydroImpl::_hydro_ref_x1 >}},
+{{< code src/hydro/wb_ref4.hpp wb_ref4_flag >}}). Without it a fourth-order conversion would sit on a
+second-order hydrostatic reference and the gravity arm of the test would not converge.
+
+### Code
+
+`conversion-order` is the order of the $x_1$ cell-average to point conversion of the primitives: 2, the
+default, or 4. It is an integer key of the `dynamics` block and takes no other value.
+
+**A minimal input.** One integer in the `dynamics` block. Merged into a copy of
+`examples/straka_single.yaml` as `deck.yaml`, which already has `nghost: 3`, and run from `build/bin` of a
+build at the pin ([Install and run](#sec-preface-install)) with `./straka.release deck.yaml`:
+
+```yaml
+dynamics:
+  conversion-order: 4     # default 2; 4 is the fourth-order x1 conversion
+```
+
+**What the parser accepts and refuses.**
+
+1. *The key is read as an integer with the default 2* by `HydroOptionsImpl::from_yaml`
+   ({{< code src/hydro/hydro_options.cpp HydroOptionsImpl::from_yaml >}}), and `conversion-order` is in the
+   `check_keys` list of the `dynamics` block, so a misspelling is refused there.
+2. *Only 2 and 4 are accepted.* `HydroImpl::reset` ({{< code src/hydro/hydro.cpp HydroImpl::reset >}}) stops with
+   "[Hydro] dynamics/conversion-order must be 2 or 4, got ..." for anything else. The check is the first thing
+   `reset` does, before the equation of state is built.
+3. *With 4 and $g_1 \ne 0$ a block needs $n_{\mathrm{gh}} \ge 3$*, the requirement of the fourth-order face
+   density reference it turns on, with the message "SNAP_WB_REF4 (or SNAP_X1_CENTROID_EXACT, which implies it, or
+   dynamics/conversion-order 4) needs nghost >= 3, got ..." ({{< code src/hydro/hydro.cpp HydroImpl::reset >}}).
+4. *A block needs at least four $x_1$ cells, ghosts included, and $n_{c1}+1$ faces.* `conv4_x1_weights`
+   ({{< code src/hydro/hydro_forward.cpp conv4_x1_weights >}}) refuses less with "dynamics/conversion-order 4
+   needs nc1 >= 4 cells and nc1 + 1 x1 faces, got ...". The check is made where the weights are built, so it
+   fires on the first stage, not at construction.
+5. *The option is clonable and bound.* `HydroOptionsImpl::clone` copies it
+   ({{< code src/hydro/hydro_options.cpp HydroOptionsImpl::clone >}}) and `bind_hydro` exposes it to Python as
+   `conversion_order` ({{< code python/csrc/pyhydro.cpp bind_hydro >}}, stub {{< code python/snapy/hydro.pyi >}}).
+
+**The excerpt.** The block of `HydroImpl::forward`
+({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}):
+
+```cpp
+  if (options->conversion_order() == 4 && u.size(DIM1) > 1) {
+    ...
+    auto lap = [&](torch::Tensor const& a) {
+      auto out = torch::zeros_like(a);
+      auto am = a.narrow(-1, 0, n), a0 = a.narrow(-1, 1, n);
+      out.narrow(-1, 1, n) =
+          k[0] * (a.narrow(-1, 2, n) - a0) - k[1] * (a0 - am);
+      return out;
+    };
+    ...
+    auto w0 = w.clone();
+    auto up = u - lap(u);
+    auto good = ok(up, false);
+    auto tmp = torch::where(good, up, u);
+    ...
+    peos->forward(tmp, w);
+    ...
+    good &= ok(w, true);
+    w.add_(lap(w0));
+    w.copy_(torch::where(good, w, w0));
+    _conv4_trips += good.logical_not().sum();
+```
+
+`lap` is $\mathsf Q$ of @eq-ch04-conv4-op; `up` is the point state of step 1 of the order argument; `tmp` hands
+the plain average to the equation of state in the screened cells; `w.add_(lap(w0))` is the
+$\mathsf Q\,\mathbf W(\overline{\mathbf U})$ term of @eq-ch04-conv4-scheme, with `w0` the second-order
+primitives; the `copy_` restores them where `good` is false; `_conv4_trips` is the counter.
+
+| what | code link | symbol | switch |
+|---|---|---|---|
+| the key, its default and its type | {{< code src/hydro/hydro.hpp HydroOptionsImpl >}} | `conversion_order` | YAML, default 2 |
+| the parser and the accepted key set | {{< code src/hydro/hydro_options.cpp HydroOptionsImpl::from_yaml >}} | `check_keys` | |
+| only 2 or 4, and the ghost-depth check | {{< code src/hydro/hydro.cpp HydroImpl::reset >}} | `TORCH_CHECK` | key 4, $g_1\ne0$ |
+| the weights and the four-cell check | {{< code src/hydro/hydro_forward.cpp conv4_x1_weights >}} | `conv4_x1_weights` | key 4 |
+| the cached weights and the grid they were built from | {{< code src/hydro/hydro.hpp HydroImpl >}} | `conv4_x1_at_` | key 4 |
+| the conversion, the screen and the ghost refill | {{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}} | `lap` | key 4 |
+| the $x_1$ row exchange of step 2 | {{< code src/hydro/hydro.cpp HydroImpl::_x1_ghost_rows >}} | `_x1_ghost_rows` | an $x_1$ neighbour |
+| the fourth-order face density it turns on | {{< code src/hydro/wb_ref4.hpp wb_ref4_flag >}} | `wb_ref4_flag` | key 4, $g_1\ne0$ |
+| the Python option | {{< code python/csrc/pyhydro.cpp bind_hydro >}} | `conversion_order` | |
+
+: Code map of the fourth-order $x_1$ conversion. {#tbl-ch04-conv4-code}
+
+### Tests
+
+One ctest covers the scheme, `tests/test_conversion_order.py` (ctest `test_conversion_order_python`, and
+`test_conversion_order_cuda_python` with `--device cuda`), registered with the label `python;hydro`
+({{< code tests/CMakeLists.txt >}}). It has seven arms, each of which the author reports goes red when one piece
+of the key-4 path is taken out.
+
+| test (ctest name) | what it asserts | tolerance | where the tolerance comes from |
+|---|---|---|---|
+| `test_conversion_order_python`, arm `order` | an acoustic pulse on a uniform and on a stretched $x_1$, $n_1 = 64, 128, 256$ against 1024: the fitted $L_1$ order of the density is at least 3.8, and a uniform tracer ratio stays put | order $\ge 3.8$; ratio $\le10^{-13}$ | 3.8 is the pass band around the derived 4; $10^{-13}$ is the script's `TOL`, round-off on a double sum |
+| same, arm `radial` | the conversion alone on gnomonic-equiangle and spherical-polar blocks ($r^2\,\mathrm{d}r$ cells), $n_1 = 64,128,256$: the fitted order of the converted velocity against the exact one is at least 3.8; and a block whose `x1f` is rewritten gives the converted $\mathbf W$ of a fresh block | order $\ge3.8$; bitwise | the derived order; `torch.equal` on the cache test |
+| same, arm `gravity` | a balanced column with $T = 1-0.8z$ and a density/pressure pulse, $n_1 = 64,128,256$ against 1024: fitted order at least 3.8 | order $\ge3.8$ | the derived order, with the fourth-order face density reference on |
+| same, arm `theta` | a coarse Straka density current ($32\times128$) to $t = 900$ s: $\theta'$ stays inside its initial range | $\pm2$ K | a no-new-extremum band on a 15 K cold bubble |
+| same, arm `mass` | two pulses against a reflecting wall (one block) and a 2:1 jump on the seam of two $x_1$ blocks in one process, 40 steps; and a pulse leaving through $x_1$ outflow faces, 100 steps | $\lvert\Delta M\rvert/M\le10^{-13}$; outflow drift within $10^{-10}$ of the reference run | the script's `TOL`; the reference is the run whose every $\mathbf W$ ghost layer comes from the outflow condition |
+| same, arm `floor` | limiter on, a four-cell pressure dip of 0.06: a temperature floor that only the point state crosses does not change the solution | bitwise (`torch.equal`) | a screened cell must change nothing |
+| same, arm `slab` | moist equation of state, limiter on, a vapour slab on two $x_1$ blocks in one process, 30 steps: dry and water mass and the tracer ratio hold, every seam ghost of $\mathbf W$ including the corners is bitwise the neighbour's converted cell, and the vapour reaches the screened run's state | $10^{-13}$; bitwise; $10^{-10}$ | the script's `TOL`; the ghost refill is an identity, not an approximation |
+| `derivation_check.py` `[C19]` (this report) | @eq-ch04-conv4-avg, @eq-ch04-conv4-op, @eq-ch04-conv4-weights, @eq-ch04-conv4-scheme and @eq-ch04-conv4-gap; the grid dependence of the order | exact (sympy); fitted orders | symbolic, and a numpy fit over $n_1 = 32$ to $512$ |
+
+: Tests of the fourth-order $x_1$ conversion. {#tbl-ch04-conv4-tests}
+
+`[C19]` holds symbolically for every algebraic claim of the Derivation layer, and its numeric part fits the order
+of the point value $\bar q - \mathsf Q\bar q$ against the exact one: 4.00 on a uniform grid, 4.00 on the
+stretched grid the test uses, and 2.89 on a grid with a one-cell $1\!:\!2$ width jump, where the error is carried
+by the two cells at the jump.[^conv4-chk]
+
+All seven arms pass at the pin on CPU.[^conv4-ctest] The measured numbers are: the $L_1$ order of the acoustic
+pulse 4.50 (uniform) and 4.80 (stretched) with the key, against 2.81 and 2.75 without it, with the key's own
+tracer ratio at $1.5\times10^{-14}$ and $5.1\times10^{-14}$; the radial order 4.00 on both spherical-polar and
+gnomonic-equiangle against 2.00 without the key, and a rewritten `x1f` giving the fresh block's $\mathbf W$
+bitwise; the balanced-column order 4.95; the Straka $\theta'$ range $[-16.56, 0]$ K at the start and
+$[-9.54, +0.67]$ K at $t = 900$ s; $\lvert\Delta M\rvert/M$ of $1.7\times10^{-15}$ at the wall and
+$2.4\times10^{-15}$ across the seam, with the outflow drift equal to the reference to every printed digit; the
+temperature-floor arm bitwise equal; and in the moist slab $\lvert\Delta M\rvert/M$ of $1.8\times10^{-15}$ dry
+and $2.0\times10^{-15}$ water, a tracer ratio within $2.2\times10^{-15}$, every seam ghost bitwise the
+neighbour's converted cell, and the vapour sum equal to the screened run's. Every one of these is one to two
+orders inside its stated tolerance. The CUDA twin `test_conversion_order_cuda_python` was **not run**: the
+configure this round records (@sec-appc) is `CUDA=OFF`, and against that library every arm stops in torch's
+dispatch stub rather than measuring anything. **Missing evidence** for the CUDA arm; closing it needs a build of
+snapy and of kintera with CUDA on.
+
+[^conv4-chk]: [sha: snapy@919936da07d80a310b98ab11da184972a3203274; deck: the check itself; run:
+    `python3 src/snapy_report/ch04/checks/derivation_check.py`, CPU, double, 1 process; Python 3.12.11,
+    numpy 2.4.6, sympy 1.14.0; output identical to the committed file].
+
+[^conv4-ctest]: [sha: snapy@919936da07d80a310b98ab11da184972a3203274; deck:
+    the seven arms of `tests/test_conversion_order.py` at the pin, each building its own card; run:
+    `env CUDA_VISIBLE_DEVICES= OMP_NUM_THREADS=1 python3 test_conversion_order.py --device cpu` from the
+    `tests` directory of a Release source build of snapy@919936da07d80a310b98ab11da184972a3203274 configured
+    `-DCMAKE_BUILD_TYPE=Release -DNETCDF=ON` (so `CUDA=OFF`), CPU, double, 1 process; Python 3.12.11,
+    torch 2.10.0+cu128, numpy 2.4.6, kintera 2.6.3, pyharp 2.7.1, GCC 11.5.0]. Every arm printed `PASS` and the
+    script exited 0.
+
+### Limits
+
+1. **Off by default.** At `conversion-order: 2` every stage carries the second-order gap of
+   @eq-ch04-conv4-gap in $x_1$. The default is 2 and nothing else turns the key on.
+2. **$x_2$ and $x_3$ stay second order.** Only $x_1$ is converted. A run on a two- or three-dimensional block is
+   therefore second order overall through its lateral conversion, whatever the key does in $x_1$; the lateral
+   *flux* covariance of @sec-ch04-fluxcov is a different term and does not close this one. No test at the pin
+   measures the lateral order with the key on.
+3. **The order is cell-local.** A cell whose point state fails the screen keeps the second-order value, so a run
+   with a shock, a floor or a repaired cell is fourth order only away from them. `conversion_trips` is the only
+   diagnostic of how many such cells there were, and no test at the pin relates a trip count to a measured order.
+4. **Wall cells and seam cells: missing evidence.** The three convergence arms keep the pulse away from the
+   $x_1$ boundaries, so no fitted order at the pin covers the cells whose stencil reaches a ghost. Closing it
+   needs a convergence run with the feature at a wall and at a seam, with its deck, sha and command.
+5. **A width jump is not fourth order.** The derivation assumes a smooth grid map. On a one-cell $1\!:\!2$ width
+   jump the conversion operator alone fits order 2.89 (`[C19]`), and the Python stub says the scheme falls to
+   second order there ({{< code python/snapy/hydro.pyi >}}). No test at the pin runs such a grid, so the order of
+   a *solution* on one is not established.
+6. **Grid requirements.** $n_{c1}\ge4$ always, and $n_{\mathrm{gh}}\ge3$ with gravity. The four-cell check fires
+   on the first stage rather than at construction, so a deck that violates it fails mid-run.
+7. **Cost.** The key adds one equation-of-state call, one exchange, one $x_1$ row exchange and one pass of the
+   boundary functions per stage. Not measured at the pin.
+8. **Untested switch combinations** are listed in the switch coverage matrix, @sec-ch12-matrix.
+
+<!-- reader glossary notes -->
+[^rg-6ee63dfbd095]: $x_{1,i\pm1/2}$ — face positions
+<!-- end reader glossary notes -->

@@ -156,6 +156,8 @@
 
 **case**: Initialize primitives, ghosts and conserved states, @sec-ch01-initialization.
 
+**cell average to point value, x1 conversion**: The fourth-order $x_1$ conversion between cell averages and point values, @sec-ch04-conv4.
+
 *cell averages*, see **finite volume method**.
 
 **`cells`**: The passive-scalar limiter and the complement bound, @sec-ch08-scalar.
@@ -265,6 +267,10 @@
 *convergence tests*, see **verification, discretization**.
 
 **conversion between conserved and primitive variables**: EOS interface and dispatch, @sec-ch02-interface.
+
+**`conversion-order`**: The fourth-order $x_1$ conversion between cell averages and point values, @sec-ch04-conv4.
+
+*conversion-order*, see **cell average to point value, x1 conversion**.
 
 **`coriolis`**: The forcing loop: parsing, registration and the stage increment, @sec-ch09-framework.
 
@@ -498,7 +504,7 @@
 
 **environment switches, mass covariance**: Radial velocity mean correction, @sec-ch12-mass-covariance.
 
-**environment switches, reference**: Cell/face-consistent reference, @sec-ch12-wb-reference.
+**environment switches, reference**: Cell-consistent face reference, @sec-ch12-wb-reference.
 
 *environment variables*, see **environment switches**.
 
@@ -521,6 +527,8 @@
 **equation of state, adding**: How to add an equation of state, @sec-ch02-new-eos.
 
 **equation of state and solver consistency**: EOS and solver consistency, @sec-ch02-consistency.
+
+**equation of state applied to an average**: The fourth-order $x_1$ conversion between cell averages and point values, @sec-ch04-conv4.
 
 *equation-of-state block*, see **equation of state, choosing**.
 
@@ -617,6 +625,8 @@
 *forcing module*, see **forcing, adding a new one**.
 
 **`formula`**: Fixed-volume fixed-energy phase equilibrium, @sec-ch02-saturation.
+
+*fourth-order conversion*, see **cell average to point value, x1 conversion**.
 
 *free slip*, see **boundary condition, wall**.
 
@@ -784,7 +794,7 @@
 
 **hydrostatic primitive-equation core, differences**: How snapy differs from a hydrostatic primitive-equation core, @sec-ch02-pecore.
 
-**hydrostatic reference, fourth order**: Fourth-order, cell/face-consistent density reference, @sec-ch05-wbref4.
+**hydrostatic reference, fourth order**: Fourth-order, cell-consistent face density reference, @sec-ch05-wbref4.
 
 **hydrostatic reference state**: Hydrostatic reference kernel: face-pressure scan, cell pressure and density reference (with the WB path), @sec-ch05-refkernel.
 
@@ -1336,6 +1346,8 @@
 
 *PnetCDF*, see **output, parallel**.
 
+*point primitives*, see **cell average to point value, x1 conversion**.
+
 **pole, spherical-polar time step**: Choosing a grid: Cartesian, spherical-polar or cubed sphere, @sec-ch03-choosing.
 
 *porting from a GCM*, see **hydrostatic primitive-equation core, differences**.
@@ -1629,6 +1641,8 @@
 **seams, vertical**: $x_1$ seams between blocks, @sec-ch03-x1seams.
 
 **seams, vertical flux matching**: Single-valued $x_1$ seam fluxes, @sec-ch04-seam.
+
+*second-order conversion gap*, see **equation of state applied to an average**.
 
 **second-order face error, lateral faces**: The $x_2$ and $x_3$ face-flux covariance and centroid terms, @sec-ch04-fluxcov.
 

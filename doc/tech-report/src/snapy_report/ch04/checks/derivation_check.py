@@ -30,7 +30,10 @@ snapy@6fbb39750f62b83df096058a4746e77d0a634bc5 (the code pin):
   C16  the compositional-to-thermal buoyancy ratio of the tracer and energy rows;
   C17  WENO3 at a critical point: why the measured order falls to two (src/recon/interp_impl.h:33-70);
   C18  the round-off bound of the divergence: the rounding count, eps_m and the bound the text quotes
-       (src/coord/coordinate.cpp:509-552).
+       (src/coord/coordinate.cpp:509-552);
+  C19  conversion-order 4: the cell-average/point-value relation, the weights of the curvature operator Q
+       (src/hydro/hydro_forward.cpp, conv4_x1_weights) and the order of W(u - Q u) + Q W(u) against W(u)
+       (src/hydro/hydro_forward.cpp, HydroImpl::forward), with the grid dependence measured in numpy.
 
 Run: python3 derivation_check.py   (sympy only; prints one line per claim, exits with the number of failures)
 """
@@ -588,11 +591,109 @@ def check_C18():
            % (k, TEXT_K, int(np.log2(eps_m)), int(np.log2(TEXT_EPS_M)), bound.max(), TEXT_BOUND, resid.max()))
 
 
+# The weights the code builds in conv4_x1_weights, in the report's notation: with the three widths
+# h_{i-1}, h_i, h_{i+1} read off x1f, c_i = h_i^2 / (4 (h_{i-1} + h_i + h_{i+1})), k^+ = c_i/(h_i + h_{i+1})
+# and k^- = c_i/(h_{i-1} + h_i) (src/hydro/hydro_forward.cpp conv4_x1_weights).
+def conv4_weights(f0, f1, f2, f3):
+    """(k+, k-) of eq-ch04-conv4-weights from the four faces bounding cells i-1, i, i+1"""
+    c = (f2 - f1) ** 2 / 4 / (f3 - f0)
+    return c / (f3 - f1), c / (f2 - f0)
+
+
+def check_C19():
+    """conversion-order 4: the average-point relation, the weights of Q, and the order of the scheme"""
+    import numpy as np
+    y = sp.Symbol("y")
+
+    # (a) an average is a midpoint value plus h^2/24 times the second derivative
+    pa, ca = lead(cavg(U, 0) - (U.subs(x, 0) + sp.diff(U, x, 2).subs(x, 0) * h**2 / 24), 6)
+
+    # (b) the code's weights give h_i^2 d1^2 q / 24 exactly for a quadratic on any four faces
+    f0, f1, f2, f3 = sp.symbols("f0 f1 f2 f3", real=True)
+    A, B, C = sp.symbols("A B C")
+    quad = A * y**2 + B * y + C
+    av = lambda lo, hi: sp.integrate(quad, (y, lo, hi)) / (hi - lo)
+    kp, km = conv4_weights(f0, f1, f2, f3)
+    exact = sp.simplify(kp * (av(f2, f3) - av(f1, f2)) - km * (av(f1, f2) - av(f0, f1))
+                        - (f2 - f1)**2 / 24 * sp.diff(quad, y, 2))
+
+    # (c) equal widths: both weights are 1/24
+    eq = {f0: -3 * h / 2, f1: -h / 2, f2: h / 2, f3: 3 * h / 2}
+    uni = (sp.simplify(kp.subs(eq)), sp.simplify(km.subs(eq)))
+
+    # (d) Q of the cell averages of a smooth field is h^2 d1^2 q / 24 to fourth order, on a uniform grid and
+    #     on faces drawn from a smooth map x1(s) at a uniform step s
+    Qbar = (cavg(U, 1) - 2 * cavg(U, 0) + cavg(U, -1)) / 24
+    pd, cd = lead(Qbar - sp.diff(U, x, 2).subs(x, 0) * h**2 / 24, 7)
+    be, ga, sv = sp.symbols("beta gamma s_v")
+    xmap = sv + be * sv**2 / 2 + ga * sv**3 / 6            # a smooth grid map, dx1/ds = 1 at s = 0
+    F = [sp.expand(xmap.subs(sv, k * h / 2)) for k in (-3, -1, 1, 3)]
+    qc = sp.symbols("q0:6")
+    qs = sum(qc[k] * y**k for k in range(6))
+    avs = lambda lo, hi: sp.cancel(sp.integrate(qs, (y, lo, hi)) / (hi - lo))
+    kps, kms = [sp.cancel(w) for w in conv4_weights(*F)]
+    Qs = sp.cancel(kps * (avs(F[2], F[3]) - avs(F[1], F[2])) - kms * (avs(F[1], F[2]) - avs(F[0], F[1])))
+    tgt = (F[2] - F[1])**2 / 24 * sp.diff(qs, y, 2).subs(y, (F[1] + F[2]) / 2)
+    ps, cs = lead(sp.cancel(Qs - tgt), 6)
+
+    # (e) the scheme: W(ubar - Q ubar) + Q W(ubar) is the cell average of W(u) to fourth order, and the
+    #     plain conversion W(ubar) is second order, with the gap of eq-ch04-conv4-gap. W is carried by its
+    #     own Taylor coefficients b_m about the cell's average, so the composition stays polynomial.
+    M = 5
+    b = sp.symbols("b0:%d" % (M + 1))
+    W = lambda z: sum(b[m] * (z - a[0])**m for m in range(M + 1))
+    ubar, Qu = cavg(U, 0), (cavg(U, 1) - 2 * cavg(U, 0) + cavg(U, -1)) / 24
+    w0 = [W(cavg(U, j)) for j in (-1, 0, 1)]
+    Qw0 = (w0[2] - 2 * w0[1] + w0[0]) / 24
+    wbar = cavg(sp.expand(W(U)), 0)
+    p4, c4 = lead(sp.expand(wbar - (W(ubar - Qu) + Qw0)), 5)
+    p2, c2 = lead(sp.expand(wbar - W(ubar)), 5)
+    # d^2W/du^2 (d1 u)^2 h^2/24 with b2 = W''/2 and a1 = d1 u
+    gap = sp.simplify(c2 - 2 * b[2] * a[1]**2 / 24)
+
+    # (f) the grid dependence, measured: the point value ubar - Q ubar against the exact one, max norm
+    qn = lambda z: np.sin(3.0 * z) + 0.4 * np.cos(1.7 * z + 0.3)
+    Qn = lambda z: -np.cos(3.0 * z) / 3.0 + 0.4 * np.sin(1.7 * z + 0.3) / 1.7
+    def point_err(faces):
+        wd = np.diff(faces)
+        ca_ = (Qn(faces[1:]) - Qn(faces[:-1])) / wd
+        kpn, kmn = conv4_weights(faces[:-3], faces[1:-2], faces[2:-1], faces[3:])
+        Qa = kpn * (ca_[2:] - ca_[1:-1]) - kmn * (ca_[1:-1] - ca_[:-2])
+        mid = (faces[1:-2] + faces[2:-1]) / 2.0
+        return np.abs(ca_[1:-1] - Qa - qn(mid)).max()
+    ns = np.array([32, 64, 128, 256, 512], float)
+    grids = {
+        "uniform": lambda n: np.linspace(0.0, 1.0, n + 1),
+        "stretched": lambda n: (lambda z: z + 0.8 * np.sin(2 * np.pi * z) / (2 * np.pi))(
+            np.linspace(0.0, 1.0, n + 1)),
+        "1:2 width jump": lambda n: (lambda f: f / f[-1])(np.concatenate(
+            [[0.0], np.cumsum(np.where(np.arange(n) < n // 2, 1.0, 2.0))])),
+    }
+    fits = {}
+    for name, make in grids.items():
+        e = np.array([point_err(make(int(n))) for n in ns])
+        fits[name] = -np.polyfit(np.log(ns), np.log(e), 1)[0]
+
+    ok = (pa == 4 and ca == a[4] / 80 and exact == 0 and uni == (sp.Rational(1, 24),) * 2
+          and pd == 4 and ps == 4 and p4 == 4 and p2 == 2 and gap == 0
+          and fits["uniform"] > 3.9 and fits["stretched"] > 3.9 and 2.5 < fits["1:2 width jump"] < 3.5)
+    report("C19", ok, "conversion-order 4: an average is the midpoint value plus h^2 d1^2 q/24; the code's "
+           "weights are h_i^2 d1^2 q/24 exactly for a quadratic on any faces and 1/24 on equal widths; Q of "
+           "cell averages is fourth order on a uniform grid and on a smooth grid map; W(ubar - Q ubar) + "
+           "Q W(ubar) is the cell average of W(u) to O(h^4) while W(ubar) is O(h^2) with the gap "
+           "(h^2/24) d_u^2 W (d1 u)^2",
+           "average remainder %s h^4; quadratic residual %s; equal widths %s, %s; Q error h^%d (uniform) and "
+           "h^%d (smooth map); scheme remainder h^%d, plain conversion h^%d, gap matches; measured point-value "
+           "order %s" % (ca, exact, uni[0], uni[1], pd, ps, p4, p2,
+                         ", ".join("%s %.2f" % (k, v) for k, v in fits.items())))
+
+
 def main():
     for fn in (check_C1, check_C2, check_C3, check_C4, check_C5, check_C6, check_C7, check_C8, check_C9, check_C10,
-               check_C11, check_C12, check_C13, check_C14, check_C15, check_C16, check_C17, check_C18):
+               check_C11, check_C12, check_C13, check_C14, check_C15, check_C16, check_C17, check_C18,
+               check_C19):
         fn()
-    print(f"{18 - len(FAIL)}/18 claims pass")
+    print(f"{19 - len(FAIL)}/19 claims pass")
     return len(FAIL)
 
 

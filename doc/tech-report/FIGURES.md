@@ -66,6 +66,7 @@ Regenerate every figure: `python3 tools/render_figures.py` (to `build/figures/<c
 
 | figure | section file | code | data (written by) |
 |---|---|---|---|
+| `fig-ch04-conv4-stencil` | `04-spatial-discretization/_conv4.qmd` | `snapy_report/ch04/figures/fig_conv4_stencil.py` | - |
 | `fig-ch04-cp-order` | `04-spatial-discretization/_cp.qmd` | `snapy_report/ch04/figures/fig_recon_order.py` | `src/snapy_report/ch04/data/recon_orders.json` (`snapy_report/ch04/checks/recon_check.py`) |
 | `fig-ch04-dc-faces` | `04-spatial-discretization/_dc.qmd` | `snapy_report/ch04/figures/fig_ch04_schemes.py` | - |
 | `fig-ch04-deps` | `04-spatial-discretization.qmd` | `snapy_report/ch04/figures/fig_ch04_deps.py` | - |

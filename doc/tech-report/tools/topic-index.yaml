@@ -165,6 +165,9 @@ sections:
   # Chapter 4. Spatial discretization
   sec-ch04-cp:
     - reconstruction, centred: [cp3, cp5, centred polynomial]
+  sec-ch04-conv4:
+    - cell average to point value, x1 conversion: [conversion-order, fourth-order conversion, point primitives]
+    - equation of state applied to an average: [second-order conversion gap]
   sec-ch04-dc:
     - reconstruction, donor cell: [first order, dc]
   sec-ch04-divergence:

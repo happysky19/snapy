@@ -205,7 +205,7 @@
       "kind": "acronym",
       "term": "NCCL",
       "meaning": "NVIDIA Collective Communications Library",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/external/gloo/README.md#L43-L56",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/external/gloo/README.md#L43-L56",
       "section": "sec-ch14-backends",
       "not_defined_here": true
     },
@@ -842,7 +842,7 @@
       "kind": "symbol",
       "term": "$\\xi, \\eta$",
       "notation_group": "1",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/coord/gnomonic_equiangle.cpp#L56-L69",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/coord/gnomonic_equiangle.cpp#L56-L69",
       "section": "sec-appa-1"
     },
     {
@@ -886,7 +886,7 @@
       "kind": "symbol",
       "term": "$x^{\\mathrm{m}}_{1,i}$",
       "notation_group": "1",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/coord/coordinate.cpp#L439",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/coord/coordinate.cpp#L439",
       "section": "sec-appa-1"
     },
     {
@@ -899,7 +899,7 @@
       "kind": "symbol",
       "term": "$\\Delta_\\pm$",
       "notation_group": "1",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/gravity_work_radial.hpp#L66-L71",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/gravity_work_radial.hpp#L66-L71",
       "section": "sec-appa-1"
     },
     {
@@ -922,7 +922,7 @@
       "kind": "symbol",
       "term": "$\\delta_i$",
       "notation_group": "1",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/gravity_work_radial.hpp#L95-L105",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/gravity_work_radial.hpp#L95-L105",
       "section": "sec-appa-1"
     },
     {
@@ -941,14 +941,14 @@
       "kind": "symbol",
       "term": "$\\varpi_{jk}$",
       "notation_group": "1",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/coord/spherical_polar.cpp#L200-L211",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/coord/spherical_polar.cpp#L200-L211",
       "section": "sec-appa-1"
     },
     {
       "kind": "symbol",
       "term": "$V^{(1)}_i$",
       "notation_group": "1",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/coord/spherical_polar.cpp#L200-L211",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/coord/spherical_polar.cpp#L200-L211",
       "section": "sec-appa-1"
     },
     {
@@ -1037,7 +1037,7 @@
       "kind": "symbol",
       "term": "$e$",
       "notation_group": "2",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/eos/ideal_moist.cpp#L278-L281",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/eos/ideal_moist.cpp#L278-L281",
       "section": "sec-appa-2"
     },
     {
@@ -1069,7 +1069,7 @@
       "kind": "symbol",
       "term": "$\\hat h$",
       "notation_group": "2",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/eos/ideal_moist.cpp#L278-L281",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/eos/ideal_moist.cpp#L278-L281",
       "section": "sec-appa-2"
     },
     {
@@ -1118,7 +1118,7 @@
       "kind": "symbol",
       "term": "$R_{\\mathrm{d}}$, $R_n$",
       "notation_group": "2",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/eos/ideal_moist.cpp#L40-L43",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/eos/ideal_moist.cpp#L40-L43",
       "section": "sec-appa-2"
     },
     {
@@ -1163,14 +1163,14 @@
       "kind": "symbol",
       "term": "$\\theta_p$",
       "notation_group": "2",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/output/load_diag_output_data.cpp#L98-L104",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/output/load_diag_output_data.cpp#L98-L104",
       "section": "sec-appa-2"
     },
     {
       "kind": "symbol",
       "term": "$\\theta_v$",
       "notation_group": "2",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/output/load_diag_output_data.cpp#L98-L104",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/output/load_diag_output_data.cpp#L98-L104",
       "section": "sec-appa-2"
     },
     {
@@ -1183,7 +1183,7 @@
       "kind": "symbol",
       "term": "$H$",
       "notation_group": "2",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/tests/test_cubed_sphere_cell_volume.py#L70-L74",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/tests/test_cubed_sphere_cell_volume.py#L70-L74",
       "section": "sec-appa-2"
     },
     {
@@ -1196,7 +1196,7 @@
       "kind": "symbol",
       "term": "$R_n = \\mathcal R/\\mu_n$",
       "notation_group": "2a",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/eos/ideal_moist.cpp#L40-L43",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/eos/ideal_moist.cpp#L40-L43",
       "section": "sec-appa-2a"
     },
     {
@@ -1283,7 +1283,7 @@
       "kind": "symbol",
       "term": "$G_{i+1/2}$",
       "notation_group": "3",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/coord/coordinate.cpp#L731-L748",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/coord/coordinate.cpp#L731-L748",
       "section": "sec-appa-3"
     },
     {
@@ -1354,49 +1354,49 @@
       "kind": "symbol",
       "term": "$\\Delta_i[q]$",
       "notation_group": "4",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/coord/coordinate.cpp#L731-L748",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/coord/coordinate.cpp#L731-L748",
       "section": "sec-appa-4"
     },
     {
       "kind": "symbol",
       "term": "$\\nabla_{\\!1}\\!\\cdot G$",
       "notation_group": "4",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/coord/coordinate.cpp#L731-L748",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/coord/coordinate.cpp#L731-L748",
       "section": "sec-appa-4"
     },
     {
       "kind": "symbol",
       "term": "$\\mathcal N_i$",
       "notation_group": "4",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/gravity_work_radial.hpp#L60-L87",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/gravity_work_radial.hpp#L60-L87",
       "section": "sec-appa-4"
     },
     {
       "kind": "symbol",
       "term": "$s_i[q]$",
       "notation_group": "4",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/gravity_work_radial.hpp#L60-L92",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/gravity_work_radial.hpp#L60-L92",
       "section": "sec-appa-4"
     },
     {
       "kind": "symbol",
       "term": "$\\tilde s_i[q]$",
       "notation_group": "4",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/implicit/implicit_hydro.cpp#L349-L374",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/implicit/implicit_hydro.cpp#L349-L374",
       "section": "sec-appa-4"
     },
     {
       "kind": "symbol",
       "term": "$\\mathsf S$",
       "notation_group": "4",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/implicit/implicit_hydro.cpp#L349-L374",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/implicit/implicit_hydro.cpp#L349-L374",
       "section": "sec-appa-4"
     },
     {
       "kind": "symbol",
       "term": "$\\operatorname{cov}_i(a,b)$",
       "notation_group": "4",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/hydro_forward.cpp#L45-L54",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/hydro_forward.cpp#L45-L54",
       "section": "sec-appa-4"
     },
     {
@@ -1467,7 +1467,7 @@
       "kind": "symbol",
       "term": "$W_i$",
       "notation_group": "5",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/forcing/const_gravity.cpp#L48-L51",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/forcing/const_gravity.cpp#L48-L51",
       "section": "sec-appa-5"
     },
     {
@@ -1492,7 +1492,7 @@
       "kind": "symbol",
       "term": "$W^{\\mathrm{wallc}}_i$",
       "notation_group": "5",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/hydro_forward.cpp#L1101-L1108",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/hydro_forward.cpp#L1193-L1200",
       "section": "sec-appa-5"
     },
     {
@@ -1532,28 +1532,28 @@
       "kind": "symbol",
       "term": "$\\rho_{\\mathrm{sf}}, p_{\\mathrm{sf}}$",
       "notation_group": "6",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/hydro_forward.cpp#L378-L384",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/hydro_forward.cpp#L470-L476",
       "section": "sec-appa-6"
     },
     {
       "kind": "symbol",
       "term": "$\\rho' = \\rho - \\rho_{\\mathrm{ref}}$",
       "notation_group": "6",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/hydro_forward.cpp#L378-L384",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/hydro_forward.cpp#L470-L476",
       "section": "sec-appa-6"
     },
     {
       "kind": "symbol",
       "term": "$\\chi^s_i$",
       "notation_group": "6",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/hydro_ref_x1_impl.h#L89-L130",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/hydro_ref_x1_impl.h#L89-L130",
       "section": "sec-appa-6"
     },
     {
       "kind": "symbol",
       "term": "$B$",
       "notation_group": "6",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/hydro_ref_x1_impl.h#L126-L130",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/hydro_ref_x1_impl.h#L126-L130",
       "section": "sec-appa-6"
     },
     {
@@ -1579,7 +1579,7 @@
       "kind": "symbol",
       "term": "$\\mathbf U^{(s)}$",
       "notation_group": "7",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/mesh/meshblock.cpp#L817-L825",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/mesh/meshblock.cpp#L817-L825",
       "section": "sec-appa-7"
     },
     {
@@ -1668,63 +1668,63 @@
       "kind": "symbol",
       "term": "$\\epsilon_{\\mathrm{piv}}$",
       "notation_group": "7",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/math/ludcmp.h#L28-L35",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/math/ludcmp.h#L28-L35",
       "section": "sec-appa-7"
     },
     {
       "kind": "symbol",
       "term": "$\\epsilon_{\\mathrm{m}}$",
       "notation_group": "7",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/flux_positivity.cpp#L11-L14",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/flux_positivity.cpp#L11-L14",
       "section": "sec-appa-7"
     },
     {
       "kind": "symbol",
       "term": "$\\mathsf I$",
       "notation_group": "7",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/implicit/implicit_hydro.cpp#L349-L355",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/implicit/implicit_hydro.cpp#L349-L355",
       "section": "sec-appa-7"
     },
     {
       "kind": "symbol",
       "term": "$\\mu$, $\\nu$",
       "notation_group": "8",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/forcing/diffusion.cpp#L621-L626",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/forcing/diffusion.cpp#L621-L626",
       "section": "sec-appa-8"
     },
     {
       "kind": "symbol",
       "term": "$\\kappa$",
       "notation_group": "8",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/forcing/diffusion.cpp#L631-L665",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/forcing/diffusion.cpp#L631-L665",
       "section": "sec-appa-8"
     },
     {
       "kind": "symbol",
       "term": "$K_f$",
       "notation_group": "8",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/forcing/diffusion.cpp#L164-L184",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/forcing/diffusion.cpp#L164-L184",
       "section": "sec-appa-8"
     },
     {
       "kind": "symbol",
       "term": "$w_{{\\mathrm{s}},n}$",
       "notation_group": "8",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/sedimentation/sed_hydro.cpp#L18-L31",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/sedimentation/sed_hydro.cpp#L18-L31",
       "section": "sec-appa-8"
     },
     {
       "kind": "symbol",
       "term": "$\\Omega$",
       "notation_group": "8",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/forcing/coriolis.cpp#L83-L90",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/forcing/coriolis.cpp#L83-L90",
       "section": "sec-appa-8"
     },
     {
       "kind": "symbol",
       "term": "$\\tau$",
       "notation_group": "8",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/forcing/relax_bot_temp.cpp#L102-L105",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/forcing/relax_bot_temp.cpp#L102-L105",
       "section": "sec-appa-8"
     },
     {
@@ -1765,21 +1765,21 @@
       "kind": "symbol",
       "term": "$d_q = q_i - q_{\\mathrm{bg},i}$",
       "notation_group": "8a",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/bc/bc_func.cpp#L172-L176",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/bc/bc_func.cpp#L172-L176",
       "section": "sec-appa-8a"
     },
     {
       "kind": "symbol",
       "term": "$Z = \\rho_{\\mathrm{bg}}c_{s,\\mathrm{bg}}$",
       "notation_group": "8a",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/bc/bc_func.cpp#L172-L178",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/bc/bc_func.cpp#L172-L178",
       "section": "sec-appa-8a"
     },
     {
       "kind": "symbol",
       "term": "$\\alpha_{\\mathrm{adm}}$",
       "notation_group": "8a",
-      "source": "https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/bc/bc_func.cpp#L187-L203",
+      "source": "https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/bc/bc_func.cpp#L187-L203",
       "section": "sec-appa-8a"
     },
     {
@@ -1849,6 +1849,13 @@
       "term": "wb-wall-clamp",
       "meaning": "whether to clamp the well-balanced wall continuation",
       "section": "sec-ch12-yaml",
+      "not_defined_here": false
+    },
+    {
+      "kind": "key",
+      "term": "conversion-order",
+      "meaning": "order of the $x_1$ cell-average to point conversion of the primitives: 2 (default) or 4",
+      "section": "sec-ch04-conv4",
       "not_defined_here": false
     },
     {
