@@ -346,7 +346,7 @@ tracer ratio at $1.5\times10^{-14}$ and $5.1\times10^{-14}$; the radial order 4.
 gnomonic-equiangle against 2.00 without the key, and a rewritten `x1f` giving the fresh block's $\mathbf W$
 bitwise; the balanced-column order 4.95; the Straka $\theta'$ range $[-16.56, 0]$ K at the start and
 $[-9.54, +0.67]$ K at $t = 900$ s; $\lvert\Delta M\rvert/M$ of $1.7\times10^{-15}$ at the wall and
-$2.4\times10^{-15}$ across the seam, with the outflow drift equal to the reference to every printed digit; the
+$2.4\times10^{-15}$ across the seam, with the outflow drift within a few $10^{-13}$ of the reference; the
 temperature-floor arm bitwise equal; and in the moist slab $\lvert\Delta M\rvert/M$ of $1.8\times10^{-15}$ dry
 and $2.0\times10^{-15}$ water, a tracer ratio within $2.2\times10^{-15}$, every seam ghost bitwise the
 neighbour's converted cell, and the vapour sum within the printed digit of the screened run's. The margins are
@@ -354,10 +354,10 @@ not uniform. Against the script's `TOL` of $10^{-13}$ the key-4 tracer ratios si
 on the stretched grid ($5.1\times10^{-14}$) and about 7 on the uniform one ($1.5\times10^{-14}$), while the mass
 ratios sit a factor of 40 to 60 inside it. The outflow drift and the vapour sum are not identities either: each
 is a relative deviation from a constant the script carries, and both land far below their $10^{-10}$ bound, at
-$10^{-13}$ or smaller. The fitted orders are not a tolerance but a pass band, 4.50 and 4.80 against the 3.8 the
-arm requires, and the floor, `x1f` and seam-ghost arms are bitwise identities with no margin to quote. The CUDA
-twin `test_conversion_order_cuda_python` was **not run**: the
-configure this round records (@sec-appc) is `CUDA=OFF`, and against that library every arm stops in torch's
+a few $10^{-13}$ or smaller. The fitted orders are not a tolerance but a pass band, 4.50 and 4.80 against the
+3.8 the arm requires, and the floor, `x1f` and seam-ghost arms are bitwise identities with no margin to quote.
+The CUDA twin `test_conversion_order_cuda_python` was **not run**: the configure this round records
+(@sec-appc) is `CUDA=OFF`, and against that library every arm stops in torch's
 dispatch stub rather than measuring anything. **Missing evidence** for the CUDA arm; closing it needs a build of
 snapy and of kintera with CUDA on.
 
