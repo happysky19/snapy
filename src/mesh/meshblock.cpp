@@ -434,6 +434,64 @@ void MeshBlockImpl::initialize_local(Variables &vars) {
               phydro->peos->nvar(), ", ", nc3, ", ", nc2, ", ", nc1,
               "] but got ", hydro_w.sizes());
 
+  // Refuse at setup a state that already trips the solver's own floor test
+  // (happysky19/snapy#5). check_redo calls MeshBlockImpl::floor_hit after
+  // every step, and that predicate is exactly
+  // `min(rho) > 1.001 * density_floor` together with
+  // `min(p) > 1.001 * pressure_floor`; the device path in
+  // MeshBlockImpl::local_redo_flag_tensor applies the same two comparisons. A
+  // column deep enough that its TOP cell starts at or below a configured
+  // floor fails that test on its very first step, and because the state
+  // never improves, every
+  // redo fails the same way until max_redo is exhausted and the run
+  // terminates -- with the dt-halving message, which says nothing about the
+  // real cause.
+  //
+  // The threshold here is not chosen: it is the same 1.001 the step test
+  // uses, so this refuses exactly the states that could never have taken a
+  // step. That was checked rather than assumed. On an isothermal column at
+  // D = 21, holding the column and its balanced state fixed and varying only
+  // the configured floor, the predicate and the observed outcome agree at
+  // every sampled ratio, with the guard disabled so the stepping answer is
+  // independent of it:
+  //
+  //   rho_top/floor  0.9990 1.0000 1.0005 1.0009 1.0010 | 1.0011 1.0015 2.0
+  //   > 1.001?          no     no     no     no     no  |   yes    yes   yes
+  //   100 steps       TERM   TERM   TERM   TERM   TERM  |  holds  holds holds
+  //
+  // Every TERM is at step 6, when the redo budget runs out, not on step 1;
+  // and the last refused ratio is 1.0010 rather than 1.0009, because the
+  // nominal 1.0010 lands at 1.0009999999999999 in double precision. The first
+  // ratio that holds is 1.0011, at |v|/cs = 4.659e-11 for 100 steps, and
+  // every larger ratio gives that same figure. The realistic hot H2 column of
+  // this investigation sits at ratio 27.96 and is unaffected.
+  //
+  // DENSITY ONLY, deliberately. The pressure floor shows the same transition
+  // at the same 1.001 when probed the same way, but no measured failure of
+  // this kind is pressure-driven: at the D = 21 crossing the column sits at
+  // p_top / pressure-floor = 9.7e+05 while its density is already under the
+  // density floor. Guarding pressure here would also disable
+  // tests/test_abnormal_exit_floor.yaml, which sets pressure-floor above the
+  // initial pressure ON PURPOSE to force an abnormal termination, and no
+  // floor value for that deck both clears this check and still aborts during
+  // stepping (measured: it reaches its cycle limit for every floor from 1e1
+  // to 6.37e4, against an initial pressure minimum of 63790.5).
+  {
+    auto owned = part({0, 0, 0}, PartOptions().exterior(false));
+    auto wi = hydro_w.index(owned);
+    auto const &eos = phydro->peos->options;
+    double rho_min = wi[IDN].min().item<double>();
+    TORCH_CHECK(
+        rho_min > 1.001 * eos->density_floor(),
+        "initialize: the initial density minimum ", rho_min,
+        " is at or below 1.001 * density-floor (", eos->density_floor(),
+        "). The solver's own per-step floor test would fail on the first "
+        "step and keep failing, so the run would die by exhausting its step "
+        "redos. Raise density-floor's headroom, make the column shallower, "
+        "or raise the surface pressure: for an isothermal column the top "
+        "cell holds rho_top = p_s exp(-D) / (Rd T) at depth D = N dz / H.");
+  }
+
   if (pscalar->nvar() > 0) {
     TORCH_CHECK(vars.count("scalar_r"), "initialize: scalar_r is required");
     scalar_r = vars.at("scalar_r");
@@ -1590,6 +1648,14 @@ double MeshBlockImpl::_init_from_restart(Variables &vars, std::string fname) {
     apply_boundaries(
         vars, vars.at("hydro_u").clone(),
         vars.count("scalar_s") ? vars.at("scalar_s").clone() : torch::Tensor());
+  }
+
+  // H_ref of the factored x1 rows, as the run that wrote this set it at setup
+  // (MeshImpl::set_x1_href); a file without one recomputes it on the restart
+  // state (MeshImpl::initialize)
+  if (vars.count("x1_href")) {
+    if (phydro) phydro->x1_href(vars.at("x1_href").item<double>());
+    vars.erase("x1_href");
   }
 
   // remove timing data

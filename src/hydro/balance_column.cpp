@@ -14,7 +14,7 @@ namespace snap {
 std::tuple<torch::Tensor, double, int> balance_column(
     torch::Tensor const& w, torch::Tensor const& dx1f, double grav,
     bool wall_clamp, double rtol, int max_iter, std::string const& geometry,
-    bool stretched) {
+    bool stretched, double x1_ref_scale_height) {
   TORCH_CHECK(grav > 0., "balance_column: grav is a downward magnitude (> 0)");
   TORCH_CHECK(w.dim() == 4, "balance_column: w must be (nvar, nc3, nc2, nx1)");
   TORCH_CHECK(w.size(0) > IPR, "balance_column: w has no pressure channel");
@@ -68,10 +68,17 @@ std::tuple<torch::Tensor, double, int> balance_column(
                                1.e-10 * d.mean().item<double>();
   int x1_grid = stretched ? kX1RefStretched : kX1RefUniform;
   // #280 (iv): the same rows a block builds from the same widths
-  torch::Tensor rows;
-  if (stretched)
-    rows = hydro_ref_x1_stretched_rows(dxf, nc1 - 1, true, true, wall_clamp)
-               .to(w.options());
+  // H_ref as a mesh sets it (MeshImpl::set_x1_href): the smallest
+  // (p / rho) / g over the bottom cells of the columns given, unless given
+  double href = x1_ref_scale_height > 0.
+                    ? x1_ref_scale_height
+                    : (wb[IPR].narrow(-1, 0, 1) / wb[IDN].narrow(-1, 0, 1))
+                              .min()
+                              .item<double>() /
+                          grav;
+  torch::Tensor rows =
+      hydro_ref_x1_factored_rows(dxf, nc1 - 1, true, true, wall_clamp, href)
+          .to(w.options());
   auto wgt = grav * dxf;
 
   // check, then update: the residual therefore describes the state returned,
@@ -85,7 +92,8 @@ std::tuple<torch::Tensor, double, int> balance_column(
                                   wall_clamp, rows);
     auto pp = prs - pref;
     auto c = pp.narrow(-1, nc1 - 1, 1);  // one gauge per column, at its top
-    err = ((pp - c).abs() / (rho * wgt)).max().item<double>();
+    auto res = (pp - c).abs() / (rho * wgt);
+    err = res.max().item<double>();
     if (err < rtol || sweeps == max_iter) break;
     prs.copy_(pref + c);
     rho.copy_(prs / rt);
@@ -98,8 +106,20 @@ std::tuple<torch::Tensor, double, int> balance_column(
         sweeps, " -- the column is diverging, not converging.");
   }
 
-  TORCH_CHECK(err < rtol, "balance_column: no discrete balance after ", sweeps,
-              " sweeps; residual bound on |a|/g is ", err, " > ", rtol);
+  if (!(err < rtol)) {
+    // name the worst cell and its dz/H, H = p / (rho g) of that cell
+    auto pp = prs - pref;
+    auto res = ((pp - pp.narrow(-1, nc1 - 1, 1)).abs() / (rho * wgt)).cpu();
+    int64_t at = res.reshape(-1).argmax().item<int64_t>();
+    int i = static_cast<int>(at % nc1);
+    double dzh =
+        (wgt.cpu()[i] * rho.cpu().reshape(-1)[at] / prs.cpu().reshape(-1)[at])
+            .item<double>();
+    TORCH_CHECK(false, "balance_column: no discrete balance after ", sweeps,
+                " sweeps; residual bound on |a|/g is ", err, " > ", rtol,
+                ", largest at x1 cell ", i, " where dz/H = ", dzh,
+                " with H = p / (rho g) of that cell.");
+  }
   return {wb, err, sweeps};
 }
 

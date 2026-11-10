@@ -97,14 +97,29 @@ void face_floor_uses_adjacent_density(torch::Device device) {
 // and keeps the kernel's reference, which does not follow the dip; the
 // overshoot is then floored to the adjacent density, as with the switch off:
 // the same flux in every arm (with the linear/ln wall continuation of rho/p)
+//
+// This is the one deck in the suite where EVERY cell's six-face row is
+// rejected by the bracket test, so the cell reference is the fallback
+// throughout and this flux measures the fallback directly. It moved from
+// 2.83191e-8 to 2.9449159572e-8, by 4.0%, when the fallback became the
+// log-mean of the cell's own faces rather than their arithmetic mean, and
+// the top face became average-consistent (happysky19/snapy#5). Both arms
+// agree to all ten digits, as the comment above requires.
+// It moved again, to 3.1424080142e-8 (+6.7%), when a clamped wall pair came
+// to be judged as one polynomial: the top cell's row is inside its bracket,
+// but its partner, the dipped cell, is far outside, so the top cell takes the
+// log-mean too.
+// And to 2.5853902197e-8 (-17.7%) when the rows came to factor out a fixed
+// exponential (p = P exp(-z / H_ref)): every row on this 1 H-per-cell deck
+// changes value, and those next to the dip most.
 void face_floor_fires_on_an_unresolved_column(torch::Device device) {
   auto block = dipped_column(device, 10.);
   int dipped = block->pcoord->iu() - 1;
   double dipped_mass =
       block->phydro->flux1()[IDN].select(-1, dipped).item<double>();
-  std::printf("wb_ref4 %d, p = 10 e^{-x/2}: dipped face mass flux %.4e\n",
+  std::printf("wb_ref4 %d, p = 10 e^{-x/2}: dipped face mass flux %.10e\n",
               static_cast<int>(HydroImpl::wb_ref4()), dipped_mass);
-  EXPECT_NEAR(dipped_mass, 2.83191e-8, 1.e-5 * 2.83191e-8);
+  EXPECT_NEAR(dipped_mass, 2.5853902197e-8, 1.e-5 * 2.5853902197e-8);
 }
 
 }  // namespace

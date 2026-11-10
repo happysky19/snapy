@@ -33,10 +33,27 @@ inline DISPATCH_MACRO void hydro_ref_x1_scan_impl(T const* w, T const* dx1f,
   if (anchor) {
     top_anchor = anchor[column];
   } else {
+    // Average-consistent top face (happysky19/snapy#5). The scan has no face
+    // above the top cell, so it has to invent one from that cell alone. The
+    // half-cell extrapolation this replaced, p_top exp(-thick/2), is the face
+    // above a POINT value sitting at the cell centre, but every cell
+    // reference below reads w[IPR] as the cell AVERAGE. The two agree only as
+    // the cell thins, so the gauge p' = p - pref that the solver reconstructs
+    // carried a thickness-dependent offset, and the restored face pressure
+    // p' + psf went negative at the top wall on thick columns.
+    //
+    // Inverting the cell average instead: for the log-linear profile through
+    // a cell's two faces, average = dp / ln(lo/hi) with lo = hi + dp, so the
+    // face consistent with the top cell's own stored average is
+    //     A = dp_top / (exp(thick_top) - 1),   thick_top = dp_top / p_top,
+    // which is expm1 for accuracy as thick_top -> 0. The two forms differ by
+    // thick/(2 sinh(thick/2)) = 1 - thick^2/24 + O(thick^4), so this is a
+    // second-order correction on thin cells and a factor of two by 4 H.
     T rho_top = w[IDN * ncells + flat + iu];
     T pres_top = w[IPR * ncells + flat + iu];
-    T rdt_top = pres_top / rho_top;
-    top_anchor = pres_top * exp(-grav * T(0.5) * dx1f[iu] / rdt_top);
+    T dp_top = grav * rho_top * dx1f[iu];
+    T thick_top = dp_top / pres_top;
+    top_anchor = dp_top / expm1(thick_top);
   }
 
   T face = top_anchor;
@@ -176,9 +193,24 @@ inline DISPATCH_MACRO void hydro_ref_x1_cell_impl(
   bool clamp_out = wall_out && fits && !(thin && phys_in);
   T lo = psf_lo[flat + i];
   T hi = psf_hi[flat + i];
-  T cell_pref = T(0.5) * (lo + hi);
+  // The value a cell keeps when the bracket test below rejects its quadrature
+  // row, or when it has no row to take: the average of the log-linear profile
+  // through its own two faces, which is what the kX1RefNonUniform branch has
+  // always computed. The arithmetic mean that used to sit here is not the
+  // average of a hydrostatic cell, so a row being rejected moved the
+  // reference by a finite amount and took the gauge with it -- the branch
+  // flip. The log-mean lies strictly inside [hi, lo] by construction, so the
+  // fallback can never itself be out of bracket. Where the row IS accepted,
+  // which is every cell of every deck thin enough for the quadrature to stay
+  // in bracket, this value is overwritten and nothing changes.
+  T dp_cell = grav * w[IDN * ncells + flat + i] * dx1f[i];
+  T ratio_cell = lo / hi;
+  T cell_pref = fabs(ratio_cell - T(1)) < T(1.e-6) ? T(0.5) * (lo + hi)
+                                                   : dp_cell / log(ratio_cell);
 
-  if (uniform) {
+  // a rows table, when given, holds every row (stretched grids, and the
+  // factored-exponential rows on any grid): the table branch below
+  if (uniform && !rows) {
     constexpr double w6[6] = {11. / 1440., -31. / 480., 401. / 720.,
                               401. / 720., -31. / 480., 11. / 1440.};
     T lower = lo < hi ? lo : hi;
@@ -192,6 +224,24 @@ inline DISPATCH_MACRO void hydro_ref_x1_cell_impl(
       }
       if (value >= lower && value <= upper) cell_pref = value;
     };
+    // The two cells at a clamped wall average ONE polynomial, the one through
+    // the same six faces, so the bracket test judges that polynomial, and a
+    // cell drops it when its partner's average leaves the partner's bracket.
+    // Judged per cell, the top cell fell back while the cell below kept the
+    // rejected polynomial; that mixed reference balances the isothermal
+    // five-cell column far from hydrostatic (p3/p4 = 2.1 for e^1.46 = 4.3),
+    // within 0.07 of a bracket of cell 3's edge at 1.46 H and past it from
+    // 1.49 H, so balance_column cycled between the branches.
+    auto partner_kept = [&](int j, int start, double const* weights,
+                            bool reverse) {
+      T value = T(0);
+      for (int m = 0; m < 6; ++m) {
+        value += T(weights[reverse ? 5 - m : m]) *
+                 hydro_ref_x1_face(psf_lo, psf_hi, flat, start + m, nc1);
+      }
+      T a = psf_lo[flat + j], b = psf_hi[flat + j];
+      return value >= (a < b ? a : b) && value <= (a > b ? a : b);
+    };
     if (i >= 2 && i < nc1 - 2 && !wall_in && !wall_out) {
       use_six_faces(i - 2, w6);
     }
@@ -204,12 +254,14 @@ inline DISPATCH_MACRO void hydro_ref_x1_cell_impl(
     };
     if (clamp_in) {
       int sigma = i - il;
-      use_six_faces(il, w6e[sigma]);
+      if (partner_kept(il + 1 - sigma, il, w6e[1 - sigma], false))
+        use_six_faces(il, w6e[sigma]);
     }
     if (clamp_out) {
       int s = iu + 1 - 5;
       int row = 4 - (i - s);
-      use_six_faces(s, w6e[row], true);
+      if (partner_kept(iu - 1 + row, s, w6e[1 - row], true))
+        use_six_faces(s, w6e[row], true);
     }
     if (!phys_in && i < 2) {
       use_six_faces(0, w6e[i]);
@@ -219,24 +271,33 @@ inline DISPATCH_MACRO void hydro_ref_x1_cell_impl(
       int row = 4 - sigma;
       use_six_faces(nc1 - 5, w6e[row], true);
     }
-  } else if (x1_grid == kX1RefStretched) {
+  } else if (rows) {
     T lower = lo < hi ? lo : hi;
     T upper = lo > hi ? lo : hi;
     int start = static_cast<int>(rows[7 * i]);
+    // a clamped wall pair shares one polynomial here too (partner_kept above)
+    int j = clamp_in ? 2 * il + 1 - i : (clamp_out ? 2 * iu - 1 - i : i);
     if (start >= 0) {
-      T value = T(0);
-      for (int m = 0; m < 6; ++m) {
-        value += rows[7 * i + 1 + m] *
-                 hydro_ref_x1_face(psf_lo, psf_hi, flat, start + m, nc1);
+      T value = T(0), partner = T(0);
+      if (j == i) {
+        for (int m = 0; m < 6; ++m)
+          value += rows[7 * i + 1 + m] *
+                   hydro_ref_x1_face(psf_lo, psf_hi, flat, start + m, nc1);
+        partner = value;
+      } else {
+        for (int m = 0; m < 6; ++m) {
+          T face = hydro_ref_x1_face(psf_lo, psf_hi, flat, start + m, nc1);
+          value += rows[7 * i + 1 + m] * face;
+          partner += rows[7 * j + 1 + m] * face;
+        }
       }
-      if (value >= lower && value <= upper) cell_pref = value;
+      T a = psf_lo[flat + j], b = psf_hi[flat + j];
+      bool kept = partner >= (a < b ? a : b) && partner <= (a > b ? a : b);
+      if (kept && value >= lower && value <= upper) cell_pref = value;
     }
-  } else {
-    T dp = grav * w[IDN * ncells + flat + i] * dx1f[i];
-    T ratio = lo / hi;
-    cell_pref =
-        fabs(ratio - T(1)) < T(1.e-6) ? T(0.5) * (lo + hi) : dp / log(ratio);
   }
+  // kX1RefNonUniform keeps the log-mean seeded above: the value this branch
+  // used to recompute here.
 
   pref[flat + i] = cell_pref;
   int jlo = (wall_clamp && phys_in) ? il : 0;

@@ -46,8 +46,42 @@ namespace snap {
 //!                 faces BELOW the wall -- ghost faces, which a ghost-free
 //!                 column does not have -- so the fixed point found here would
 //!                 not be the one the solver later enforces.
-//! \param rtol     bound on the residual below, dimensionless.
-//! \param max_iter sweeps before giving up.
+//! \param rtol     bound on the residual below, dimensionless. The default is
+//!                 1e-13 rather than a looser value because the leftover
+//!                 imbalance is what the solver then has to carry: on the hot
+//!                 H2 column a 1e-10 start grows to max |w|/c = 3.7e-7, while
+//!                 a 1e-13 start stays at 2.4e-10.
+//! \param max_iter sweeps before giving up. The two defaults are paired: a
+//!                 tighter residual costs sweeps, and they come out of this
+//!                 budget.
+//!
+//!                 An earlier revision of this line justified 450 with "450
+//!                 covers every column measured for #5 -- the worst, dz/H =
+//!                 1.25 at nx1 = 5, needs 434". That figure is not reproducible
+//!                 and the sentence does not describe this kernel. With the
+//!                 factored rows an ISOTHERMAL column is an exact fixed point
+//!                 of this iteration: measured here over dz/H = 0.25 to 4 at
+//!                 nx1 = 5, 20 and 64, every such column returns after 0
+//!                 sweeps with a residual at round-off (4e-17 to 1.4e-15). The
+//!                 isothermal ladder costs no sweeps at all, so no isothermal
+//!                 column can be the one this budget is sized for.
+//!
+//!                 What costs sweeps is a temperature gradient, which the rows
+//!                 are not exact for. Over T_top/T_bot in {0.8, 0.5, 0.3},
+//!                 nx1 in {5, 20, 64} and the same dz/H ladder, the worst
+//!                 column that converges WITHIN this budget takes 386 sweeps
+//!                 (nx1 = 20, T_top/T_bot = 0.5, dz/H = 1.30). 450 is about
+//!                 17% of headroom over that, not a wide margin.
+//!
+//!                 It is a budget, not a guarantee, and raising it is not a
+//!                 fix. The next column of that family (dz/H = 1.40) needs
+//!                 1621 sweeps and is refused here; everything above it stalls
+//!                 at a residual of 1e-2 to 1 and reaches no balance at 450 or
+//!                 at 5000. A column that does not converge is refused, which
+//!                 is what the throw below is for. balance_column runs once per
+//!                 column at initialisation, so the sweeps cost well under a
+//!                 millisecond and only columns that would otherwise throw
+//!                 reach the larger budget at all.
 //!
 //! \return (balanced w, residual, sweeps). The residual is
 //!         max |p' - C| / (rho g dz), which bounds what the leftover imbalance
@@ -100,8 +134,16 @@ namespace snap {
 //! `coord->options->stretched_x1()` of the grid the column comes from. A
 //! stretched x1 is non-uniform in every block whatever its widths, and its
 //! cell pressure is the six-face degree-5 Lagrange cell average with per-cell
-//! rows (hydro_ref_x1_stretched_rows); a column of unequal widths takes them
-//! whatever the flag.
+//! rows; a column of unequal widths takes them whatever the flag. The rows
+//! this kernel builds are the FACTORED ones (hydro_ref_x1_factored_rows,
+//! balance_column.cpp), on every grid, uniform or not -- the name
+//! hydro_ref_x1_stretched_rows this line used to carry is the previous
+//! builder, which no production path calls any more.
+//!
+//! `x1_ref_scale_height` is H_ref of the factored rows, p = P exp(-z/H_ref):
+//! pass the deck's dynamics/x1-ref-scale-height when it sets one. 0 takes
+//! what a mesh would take, the smallest (p / rho) / g over the bottom cells
+//! of the columns given -- the same value when the columns are the mesh's.
 //!
 //! Under SNAP_X1_CENTROID_EXACT a spherical-polar block's reference works on
 //! plain means converted from its r^2 means, which this column does not model:
@@ -109,7 +151,8 @@ namespace snap {
 //! spherical-polar, whose rest state is the solver's own) is refused.
 std::tuple<torch::Tensor, double, int> balance_column(
     torch::Tensor const& w, torch::Tensor const& dx1f, double grav,
-    bool wall_clamp = true, double rtol = 1.e-10, int max_iter = 120,
-    std::string const& geometry = "", bool stretched = false);
+    bool wall_clamp = true, double rtol = 1.e-13, int max_iter = 450,
+    std::string const& geometry = "", bool stretched = false,
+    double x1_ref_scale_height = 0.);
 
 }  // namespace snap

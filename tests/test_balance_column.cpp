@@ -93,11 +93,18 @@ Ref reference(torch::Tensor const& w, torch::Tensor const& dx1f, int iu,
   Ref r{torch::empty(sizes, w.options()), torch::empty(sizes, w.options()),
         torch::empty(sizes, w.options()), torch::empty(sizes, w.options()),
         torch::empty(sizes, w.options())};
-  torch::Tensor anchor, rows;
-  if (!uniform)  // unequal widths: the stretched rows, as balance_column
-    rows = snap::hydro_ref_x1_stretched_rows(dx1f, iu, phys_in, phys_out,
-                                             wall_clamp)
-               .to(w.options());
+  // the factored rows with balance_column's H_ref: the smallest (p / rho) / g
+  // over the bottom interior cells, on either grid
+  torch::Tensor anchor;
+  int il = w.size(-1) - 1 - iu;
+  double href =
+      (w[snap::IPR].narrow(-1, il, 1) / w[snap::IDN].narrow(-1, il, 1))
+          .min()
+          .item<double>() /
+      kGrav;
+  auto rows = snap::hydro_ref_x1_factored_rows(dx1f, iu, phys_in, phys_out,
+                                               wall_clamp, href)
+                  .to(w.options());
   at::native::call_hydro_ref_x1(
       w.device().type(), w.contiguous(), dx1f.contiguous(), anchor, r.psf_lo,
       r.psf_hi, r.pref, r.dsf, r.dref, iu, kGrav,
@@ -513,6 +520,25 @@ TEST(BalanceColumn, x1_centroid_switch_balances_only_a_cartesian_column_cuda) {
   if (!snapy_cuda_test_enabled()) GTEST_SKIP() << "CUDA is not available";
   x1_centroid_switch_balances_only_a_cartesian_column(
       torch::Device(torch::kCUDA, 0));
+}
+
+//! An isothermal five-cell column 1.46-1.50 scale heights per cell. The two
+//! cells under the top wall average one six-face polynomial; the top cell
+//! rejected it while the cell below kept it, and the sweeps cycled between
+//! the bracket branches (residual 5.5e-2 at 1.46 H after 120 sweeps).
+TEST(BalanceColumn, a_thick_isothermal_five_cell_column_converges) {
+  for (auto dev : {torch::kCPU, torch::kCUDA}) {
+    if (dev == torch::kCUDA && !snapy_cuda_test_enabled()) continue;
+    auto opt = torch::TensorOptions().dtype(torch::kFloat64).device(dev);
+    for (double a : {1.46, 1.48, 1.50}) {
+      auto dx1f = torch::full({5}, a * kRd * kTs / kGrav, opt);
+      auto p = kPs * torch::exp(-(torch::arange(5, opt) + 0.5) * a);
+      auto w = torch::zeros({snap::IPR + 1, 1, 1, 5}, opt);
+      w[snap::IPR].copy_(p.view({1, 1, 5}));
+      w[snap::IDN].copy_((p / (kRd * kTs)).view({1, 1, 5}));
+      EXPECT_NO_THROW(balance(w, dx1f, kGrav)) << "a=" << a << " " << dev;
+    }
+  }
 }
 
 }  // namespace

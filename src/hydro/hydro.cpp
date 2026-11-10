@@ -1,4 +1,5 @@
 #include <kintera/utils/format.hpp>
+#include <limits>
 
 // C/C++
 #include <algorithm>
@@ -231,6 +232,20 @@ bool HydroImpl::is_x1_wall(int f) const {
   return pmb->options->is_physical_boundary(0, 0, f == 0 ? -1 : 1) &&
          !(f < static_cast<int>(nm.size()) &&
            nm[f].compare(0, 8, "periodic") == 0);
+}
+
+double HydroImpl::x1_href_candidate(torch::Tensor const& w) const {
+  double inf = std::numeric_limits<double>::infinity();
+  if (!options->grav() || !(-options->grav()->grav1() > 0.)) return inf;
+  if (!pmb->options->is_physical_boundary(0, 0, -1)) return inf;
+  auto pc = pmb->pcoord;
+  using torch::indexing::Slice;
+  auto row = [&](int v) {
+    return w[v].index({Slice(pc->kl(), pc->ku() + 1),
+                       Slice(pc->jl(), pc->ju() + 1), pc->il()});
+  };
+  double rt = (row(IPR) / row(IDN)).min().item<double>();
+  return rt / -options->grav()->grav1();
 }
 
 void HydroImpl::_check_stretched_x1(torch::Tensor const& u) const {
@@ -599,12 +614,25 @@ HydroImpl::_hydro_ref_x1(torch::Tensor const& w) const {
   bool phys_out = pmb->options->is_physical_boundary(0, 0, 1);
 
   auto dx1f = pcoord->dx1f.contiguous();
-  if (stretched && !x1_rows_.defined()) {
-    x1_rows_ = hydro_ref_x1_stretched_rows(pcoord->dx1f, iu, phys_in, phys_out,
-                                           options->wb_wall_clamp());
+  if (!x1_rows_.defined()) {
+    // H_ref, in order: the deck's dynamics/x1-ref-scale-height; the mesh's
+    // one value, set at setup (MeshImpl::initialize); or, for a block run
+    // outside a mesh, this block's own candidate. Fixed for the run after.
+    if (options->x1_ref_scale_height() > 0.) {
+      x1_href_ = options->x1_ref_scale_height();
+    } else if (!(x1_href_ > 0.)) {
+      x1_href_ = x1_href_candidate(w);
+      if (!std::isfinite(x1_href_)) {  // no x1-inner wall here: its own row
+        auto rt = (w[IPR] / w[IDN]).narrow(-1, is, 1);
+        x1_href_ = rt.min().item<double>() / g;
+      }
+    }
+    x1_rows_ = hydro_ref_x1_factored_rows(pcoord->dx1f, iu, phys_in, phys_out,
+                                          options->wb_wall_clamp(), x1_href_)
+                   .to(w.options())
+                   .contiguous();
   }
-  torch::Tensor rows;
-  if (stretched) rows = x1_rows_.to(w.options()).contiguous();
+  torch::Tensor rows = x1_rows_;
   at::native::call_hydro_ref_x1(
       w.device().type(), w, dx1f, anchor, psf_lo, psf_hi, pref, dsf, dref, iu,
       g, x1_grid, phys_in, phys_out, options->wb_wall_clamp(), rows);
@@ -698,6 +726,60 @@ HydroImpl::_hydro_ref_x1(torch::Tensor const& w) const {
   if (wb4_flag.defined()) wb_ref4_faces(*wb_ref4_, dref, dsf, wb4_flag);
 
   return {psf_lo, pref, dsf, dref};
+}
+
+void HydroImpl::_check_x1_reference(torch::Tensor const& w,
+                                    torch::Tensor const& psf_lo,
+                                    torch::Tensor const& pref) const {
+  auto pc = pmb->pcoord;
+  int is = pc->il(), n = pc->iu() - is + 1;
+  using torch::indexing::Slice;
+  auto own = [&](torch::Tensor const& t, int i0, int m) {
+    return t.index({Slice(pc->kl(), pc->ku() + 1),
+                    Slice(pc->jl(), pc->ju() + 1), Slice(i0, i0 + m)});
+  };
+  auto p = own(w[IPR], is, n), rho = own(w[IDN], is, n);
+  auto cell = own(pref, is, n);
+  auto face = own(psf_lo, is, n + 1);  // the n + 1 faces of the owned cells
+  // the face pressure the reconstruction restores at the top wall, p' + psf
+  auto top = p.narrow(-1, n - 1, 1) - cell.narrow(-1, n - 1, 1) +
+             face.narrow(-1, n, 1);
+  bool wall_out = pmb->options->is_physical_boundary(0, 0, 1);
+  auto bad = [](torch::Tensor const& t) {
+    return (t > 0.).logical_not().logical_or(t.isfinite().logical_not());
+  };
+  // one device-to-host read when all is well
+  auto none = torch::zeros({}, top.options().dtype(torch::kBool));
+  auto any = torch::stack({bad(cell).any(), bad(face).any(),
+                           wall_out ? bad(top).any() : none})
+                 .cpu();
+  auto a = any.accessor<bool, 1>();
+  if (!a[0] && !a[1] && !a[2]) return;
+
+  char const* what[3] = {
+      "cell reference pressure", "reference face pressure",
+      "restored top-face pressure p_top - pref_top + psf_top"};
+  int which = a[0] ? 0 : (a[1] ? 1 : 2);
+  auto t = (which == 0 ? cell : (which == 1 ? face : top)).cpu();
+  auto loc = bad(t).nonzero()[0];
+  int k = loc[0].item<int>(), j = loc[1].item<int>();
+  // the owned cell named: the cell itself, the cell above a face (the top
+  // face names the top cell), or the top cell
+  int i = which == 2 ? n - 1 : std::min<int>(loc[2].item<int>(), n - 1);
+  double value =
+      t.index({k, j, which == 2 ? 0 : loc[2].item<int>()}).item<double>();
+  double pi = p.index({k, j, i}).item<double>();
+  double ri = rho.index({k, j, i}).item<double>();
+  double dz = pc->dx1f[is + i].item<double>();
+  double g = -options->grav()->grav1();
+  double H = pi / (ri * g);
+  TORCH_CHECK(false, "x1 hydrostatic reference: the ", what[which], " is ",
+              value, " (not positive and finite) at owned x1 cell ", i,
+              " (array index ", is + i, "), x2 ", pc->jl() + j, ", x3 ",
+              pc->kl() + k, ", where dz/H = ", dz / H,
+              " with H = p / (rho g) of that cell. The six-face reference "
+              "rows cannot hold a column at rest across cells this thick; "
+              "make dz/H smaller there.");
 }
 
 std::shared_ptr<HydroImpl> HydroImpl::create(HydroOptions const& opts,

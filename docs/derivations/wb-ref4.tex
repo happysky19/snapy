@@ -53,13 +53,69 @@ The kernel (\texttt{hydro\_ref\_x1\_impl.h}) builds:
 \begin{itemize}
 \item \textbf{face pressure} by a top-down scan, $p_{{\rm sf},i-1/2} = p_{{\rm sf},i+1/2} + g\bar\rho_i\Delta z_i$: the
   discrete hydrostatic balance itself;
-\item \textbf{cell pressure} $p_{\rm ref}$: on a uniform grid the cell average of the quintic through six face
-  pressures, $(11, -93, 802, 802, -93, 11)/1440$, one-sided rows at clamped walls; on a non-uniform grid the
-  log-mean $\Delta p / \ln(p_{\rm lo}/p_{\rm hi})$;
+\item \textbf{cell pressure} $p_{\rm ref}$: the cell average of $P\,w$ with $w(z) = e^{-z/H_{\rm ref}}$ fixed and $P$ the
+  quintic through the six face values $p_m/w(z_m)$ (one-sided windows at clamped walls), i.e. a row of six
+  weights per cell, $p_{\rm ref} = \sum_m c_m p_m$ (section 1a); a row whose value leaves the cell's
+  $[p_{\rm hi}, p_{\rm lo}]$ bracket, or whose wall partner's does, keeps the log-mean
+  $\Delta p / \ln(p_{\rm lo}/p_{\rm hi})$;
 \item \textbf{cell density} $\rho_{{\rm ref},i} = p_{{\rm ref},i}\, r^s_i$, with $r_i = \bar\rho_i/\bar p_i$ smoothed by the
   binomial $B = (1, 4, 6, 4, 1)/16$ (edge replicated at a clamped wall);
 \item \textbf{face density} $\rho_{{\rm sf},f} = p_{{\rm sf},f}\,\tfrac12(r^s_{f-1} + r^s_f)$.
 \end{itemize}
+
+\section*{1a. The factored cell-pressure rows}
+
+The rows interpolate $P = p\,e^{z/H_{\rm ref}}$ instead of $p$. With $L_m$ the Lagrange basis on the six faces
+$z_s \ldots z_{s+5}$ of cell $i$'s window,
+\begin{equation*}
+p_{{\rm ref},i} = \frac{1}{\Delta z_i}\int_{\rm cell}\sum_m L_m(z)\,\frac{p_m}{w(z_m)}\,w(z)\,dz
+               = \sum_m c_m(i)\,p_m, \qquad
+c_m(i) = \frac{1}{\Delta z_i}\int_{\rm cell} L_m(z)\,e^{-(z - z_m)/H_{\rm ref}}\,dz ,
+\end{equation*}
+which depends on the grid and $H_{\rm ref}$ only (\texttt{hydro\_ref\_x1\_factored\_rows}, sixteen-point
+Gauss-Legendre in long double, built once into the stretched-rows table format; each stage does the same
+six multiply-adds as the linear rows). As $H_{\rm ref} \to \infty$ it is the linear row of the previous
+version. The rows are exact for $p = (\text{polynomial of degree} \le 5)\,e^{-z/H_{\rm ref}}$, the family an
+atmosphere sits near, and no longer for a polynomial $p$; on a smooth column the error is $O(\Delta z^6)$ in
+$P$, which varies on the scale of the departure of $H$ from $H_{\rm ref}$, not on $H$ itself. On a five-cell
+isothermal column this is what holds a 1.25-scale-height cell at rest (restored top face $+0.50\,p_{\rm top}$;
+the linear rows gave $-29.07$ Pa and no balance).
+
+\textbf{Validity range, and the guard.} $c_m(i)$ carries $e^{(t_{\max} - t_{\min})\Delta z_i/H_{\rm ref}}$, so it is
+bounded by the cell's *own* thickness while $H_{\rm ref}$ is one value for the run: a strongly stretched $x_1$
+with a wide top is the exposure (nothing in-tree is near it -- the repository's stretched decks are
+$x_{1}$rat $1.05$–$1.058$ and $4^{1/(n_{x1}-1)}$, i.e. $\le 4\times$ over the whole column). Measured on
+\texttt{hydro\_ref\_x1\_factored\_rows} itself, uniform column, the row evaluated on the $e^{-z/H_{\rm ref}}$ it is built
+to be exact for, worst cell of $n_{c1} = 5$ and $9$:
+
+\begin{longtable}{lllllllllll}
+\toprule
+$\Delta z/H_{\rm ref}$ & 0.25 & 5 & 10 & 20 & 25 & 30 & 40 & 80 & 120 & 150 \\
+\midrule
+largest weight & 1.1e+00 & 2.6e+08 & 6.9e+18 & 1.1e+40 & 5.2e+50 & 2.7e+61 & 8.1e+82 & 1.5e+169 & 5.1e+255 & inf \\
+relative error & 1.3e-16 & 0 & 1.4e-16 & 4.2e-16 & 5.0e-14 & 2.7e-12 & 8.2e-10 & 2.6e-05 & 1.4e-03 & 6.9e-03 \\
+\bottomrule
+\end{longtable}
+
+The row therefore holds to round-off up to $\Delta z/H_{\rm ref} = 20$ and is the declared validity range;
+\texttt{kX1RefMaxFactoredThickness = 20} (\texttt{hydro\_dispatch.hpp}) refuses a row past it, handing the cell back with
+$\texttt{start} < 0$. The kernel then keeps that cell's log-mean $\Delta p/\ln(p_{\rm lo}/p_{\rm hi})$, which
+is *exact* for a column that is $e^{-z/H_{\rm ref}}$, so the guard costs nothing on the reference profile and
+only gives up the quintic's extra reach on the departure from it. A non-finite $H_{\rm ref}$ takes the same
+path. What the guard buys is the band in between: past $\Delta z/H_{\rm ref} \approx 140$ the weights are
+$\pm\infty$ and the row is already discarded, because the bracket test compares a NaN and a NaN comparison is
+false -- but from 25 to 140 the weights are finite and the row's value is in bracket, so it is *accepted*
+while carrying up to $10^{-3}$ relative, which is worse than the log-mean it displaces. The guard makes that
+band take the fallback, once at build time, instead of silently (\texttt{tests/test\_hydro\_ref\_x1.cpp},
+\texttt{the\_factored\_rows\_refuse\_a\_cell\_past\_the\_validity\_bound}).
+
+\textbf{$H_{\rm ref}$ is one value per run.} It is part of the operator, so two blocks of one column must share it:
+\texttt{MeshImpl::set\_x1\_href} takes the smallest $(\bar p/\bar\rho)/g$ over the bottom-wall cells of the setup
+state, reduced over the local blocks and the processes (a split column then keeps the one-block state to
+round-off: $5\times10^{-16}$ against $1.3\times10^{-4}$ with a per-block value). A deck may set it with
+\texttt{dynamics/x1-ref-scale-height}; \texttt{balance\_column} takes the same rule (or the deck's value). The restart file
+carries it (\texttt{x1\_href}), so a restart does not recompute it from bottom cells that have moved: a run stopped and
+resumed matches the straight run bitwise (\texttt{tests/run\_restart\_x1\_href.py}).
 
 \section*{2. The base face-density offset is $O(\Delta z^2)$}
 
@@ -154,29 +210,27 @@ exchange, so a column split along x1 gets the same faces as one block. The in-pr
 
 \section*{5. Non-uniform x1 grids: the cell pressure}
 
-The log-mean is exact only for an isothermal cell. With the switch, on a non-uniform grid the cell pressure is
-the cell average of the cubic through the four face pressures at faces $i-1..i+2$ (window inside the owned
-faces at a clamped wall), evaluated by three-point Gauss-Legendre, which is exact for a cubic (check 6). The
-kernel's guard is kept: a value outside $[\min, \max]$ of the cell's two face pressures keeps the log-mean.
-On a uniform grid the six-face $p_{\rm ref}$ is kept as it is.
-
-This moves the discrete fixed point of a non-uniform column by $O(\Delta z^2)$. \texttt{balance\_column} therefore
-iterates against the switched $p_{\rm ref}$ when the switch is set (the density reference does not enter
-there), so a balanced column is the fixed point the solver enforces.
+A keyed stretched x1 (\texttt{cells/x1rat} or \texttt{geometry/x1f}, \#280) already has a
+sixth-order cell pressure: the factored rows of section 1a, built from the widths (\#280 (iv)). There the switch keeps it, so REF4 contributes only the density reference of section 3
+and the face density of section 4, and \texttt{balance\_column} does not run REF4: the stretched rest state is the
+same with the switch on or off. $F$ stays in cell-index units; on a keyed
+stretched family the measured order of $N^2_{\rm eff}$ is 4.06/4.04 (1 e-fold) and 3.78/3.89 (3 e-folds) at
+$h_{\max}/h_{\min} = 4$. On a Cartesian x1 \texttt{SNAP\_X1\_CENTROID\_EXACT} has no content of its own and runs as
+\texttt{SNAP\_WB\_REF4}.
 
 \section*{6. Exact discrete balance is kept}
 
 At rest $p' = $ const, so $p_L = p_R = p_{\rm sf} + c$, $\bar u = 0$ and the LMARS face pressure is
 $p_{\rm sf} + c$; the momentum-flux difference across cell $i$ is $g\bar\rho_i\Delta z_i$ and cancels the gravity
 source exactly. The density reference is not part of this pairing: with $\bar u = 0$ the mass flux and the
-face gravity work vanish whatever the face density is. The fix never changes $p_{\rm sf}$; on a uniform grid
-it never changes $p_{\rm ref}$, so the discrete rest state $\bar p = p_{\rm ref} + c$ is the base's; on a
-non-uniform grid it is the switched one, found by \texttt{balance\_column} as above.
+face gravity work vanish whatever the face density is. The fix never changes $p_{\rm sf}$ or $p_{\rm ref}$, so
+the discrete rest state $\bar p = p_{\rm ref} + c$ is the base's.
 
 Why $p_{\rm ref} = \bar p + c + O(\Delta z^6)$ on a hydrostatic background: the scan gives
 $p_{{\rm sf},i-1/2} - p_{{\rm sf},i+1/2} = g\bar\rho_i\Delta z_i = \int_{\rm cell} g\rho\,dz$ exactly, so the scan
 faces are the exact face pressures up to one column constant $c$ (the top anchor); the six-face quadrature
-then has error $O(\Delta z^6)$. The constant changes $\rho_{\rm ref}$ by the smooth $cR$, which section 4
+of section 1a then has error $O(\Delta z^6)$ in $P$ (none for $p \propto e^{-z/H_{\rm ref}}$). The constant $c$ is not of
+that form, so the row carries it to $O(\Delta z^6)$ only, which the fixed point $p' = $ const absorbs. The constant changes $\rho_{\rm ref}$ by the smooth $cR$, which section 4
 carries consistently because the face value is taken of the same $\rho_{\rm ref}$.
 
 \section*{7. Guards}
@@ -198,7 +252,10 @@ A guarded cell or face keeps the kernel's value. None fires on a resolved smooth
   $\ge 3$ (checked at setup) the two sides of an x1 seam agree, except at an exact tie
   $\lvert\ln(p_{{\rm sf},i-1/2}/p_{{\rm sf},i+1/2})\rvert = 0.5$, where the two scans' last-ulp difference can
   put the cell on either side (\texttt{test\_x1\_seam\_split\_wb\_ref4}: the flag switching on next to a seam).
-\item A block with a clamped wall and fewer than four owned cells keeps the kernel's reference.
+\item A block with a clamped wall and fewer than four owned cells keeps the kernel's reference. Its stencil cache
+  is then "not usable" and holds no weights, so the check that rebuilds the cache for another device or dtype
+  (\texttt{WbRef4Stencils::stale}) never reads them; before \#298 it read the device of the undefined weight tensor and
+  the second RK stage threw (\texttt{tests/test\_stencil\_cache\_small\_block.py}: nx1 2–5 per block now run).
 \end{itemize}
 
 The threshold, the dilation and the margin are design choices, not derived.
@@ -292,16 +349,14 @@ different projection), so its numbers are not comparable digit by digit with the
 What this implementation adds over 473db21: the face part after the seam exchange (473db21 built faces before
 it, one-sided at block ends, so a split column could differ from one block); the per-cell resolution flag
 instead of a whole-column 2-cells-per-$H$ test; the range guards of the spec with the $10^{-10}$ margin;
-physical-spacing face weights; the non-uniform cell pressure with \texttt{balance\_column} following it.
+physical-spacing face weights.
 
 \section*{11. Tests that pin the kernel's reference}
 
 Both run unchanged with the switch off and a second time with it set (\texttt{*\_wb\_ref4} ctests):
 
 \begin{itemize}
-\item \texttt{test\_balance\_column}: on the stretched column the switch moves the fixed point, and \texttt{balance\_column} finds
-  the switched one; the residual audit now applies the same switched cell pressure (against the kernel's
-  alone the balanced column reads $1.6\times10^{-3}$ instead of $< 10^{-10}$).
+\item \texttt{test\_balance\_column}: the switch changes no cell pressure, so the balanced columns are the kernel's.
 \item \texttt{test\_face\_floor}: with the switch the density reference follows the dipped cell, so $\rho'$ stays small,
   the reconstructed face densities either side stay positive (about $1.4\times10^{-8}$ and $5.6\times10^{-8}$,
   where the kernel's reference gives $-4.2\times10^{-8}$) and the floor does not fire; the switched mass and
@@ -312,7 +367,6 @@ Both run unchanged with the switch off and a second time with it set (\texttt{*\
 
 \begin{itemize}
 \item The $r^2$-measure (spherical-polar, cubed-sphere) version of sections 3-5.
-\item Non-uniform x1 is exercised only through \texttt{balance\_column} and its test; no stretched-grid dynamics test.
 \item Multi-species columns use the dry-density channel, as the kernel does; untested with the switch.
 \item Multi-process x1 seams are covered only by the in-process split test.
 \end{itemize}

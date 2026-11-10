@@ -42,12 +42,15 @@ RefOutput tensor_reference(torch::Tensor const& w, torch::Tensor const& dx1f,
   auto rho = w[snap::IDN];
   auto dp = grav * rho * dx1f;
   auto cum = torch::cumsum(dp, -1);
+  // the average-consistent top face, as hydro_ref_x1_scan_impl builds it:
+  // A = dp_top / expm1(dp_top / p_top). This mirrors the kernel on purpose --
+  // the test compares the two implementations against each other -- so it has
+  // to track any change to that formula.
+  auto dp_top = grav * rho.select(-1, iu) * dx1f[iu];
   auto anchor =
       anchor_in.defined()
           ? anchor_in
-          : (w[snap::IPR].select(-1, iu) *
-             torch::exp(-grav * 0.5 * dx1f[iu] /
-                        (w[snap::IPR].select(-1, iu) / rho.select(-1, iu))))
+          : (dp_top / torch::expm1(dp_top / w[snap::IPR].select(-1, iu)))
                 .unsqueeze(-1);
 
   auto out = allocate_output(w);
@@ -56,8 +59,16 @@ RefOutput tensor_reference(torch::Tensor const& w, torch::Tensor const& dx1f,
   out.psf_lo.clamp_min_(std::numeric_limits<double>::min());
   out.psf_hi.clamp_min_(std::numeric_limits<double>::min());
 
+  // the cell value a rejected quadrature row falls back to, as
+  // hydro_ref_x1_cell_impl seeds it: the log-mean of the cell's own faces,
+  // with the arithmetic mean as its ratio -> 1 limit. Mirrors the kernel.
+  auto ratio_cell = out.psf_lo / out.psf_hi;
+  auto seed_pref = torch::where((ratio_cell - 1.).abs() < 1.e-6,
+                                0.5 * (out.psf_lo + out.psf_hi),
+                                dp / torch::log(ratio_cell));
+
   if (uniform) {
-    out.pref.copy_(0.5 * (out.psf_lo + out.psf_hi));
+    out.pref.copy_(seed_pref);
     auto faces =
         torch::cat({out.psf_lo, out.psf_hi.narrow(-1, nc1 - 1, 1)}, -1);
     constexpr double w6[6] = {11. / 1440., -31. / 480., 401. / 720.,
@@ -401,6 +412,99 @@ TEST(HydroRefX1Dispatch, cuda_matches_cpu_on_the_stretched_rows) {
             << " ULP (max rel " << d.max_rel << ") at x1 index "
             << d.worst_index;
       }
+    }
+  }
+}
+
+// The factored rows (p = P exp(-z / H_ref)) are a table of the stretched rows
+// format that hydro.cpp and balance_column move to the state's device: the
+// GPU must reproduce the CPU reference, on a uniform and a stretched x1.
+TEST(HydroRefX1Dispatch, cuda_matches_cpu_on_the_factored_rows) {
+  if (!snapy_cuda_test_enabled()) {
+    GTEST_SKIP() << "CUDA is not available";
+  }
+  constexpr int64_t kMaxUlp = 32;
+  constexpr int nc3 = 2, nc2 = 3;
+  for (bool stretched : {false, true}) {
+    for (int nc1 : {24, 1025}) {
+      auto f64 = torch::TensorOptions().dtype(torch::kFloat64);
+      auto w = torch::zeros({snap::IPR + 1, nc3, nc2, nc1}, f64);
+      auto z = (torch::arange(nc1, f64) / double(nc1 - 1)).view({1, 1, nc1});
+      auto column = torch::arange(nc3 * nc2, f64).view({nc3, nc2, 1});
+      w[snap::IDN].copy_(1.0 + 0.5 * (1.0 - z) + 0.002 * column);
+      w[snap::IPR].copy_(100.0 * torch::exp(-2.0 * z) + 0.03 * column);
+      w = w.contiguous();
+      auto dx1f = stretched ? stretched_dx1f(nc1, torch::kFloat64)
+                            : torch::full({nc1}, 1.0 / nc1, f64);
+      int iu = nc1 - 4;
+      auto rows = snap::hydro_ref_x1_factored_rows(dx1f, iu, true, true, true,
+                                                   /*href=*/0.5)
+                      .contiguous();
+      int grid = stretched ? snap::kX1RefStretched : snap::kX1RefUniform;
+      auto expected = allocate_output(w);
+      at::native::call_hydro_ref_x1(torch::kCPU, w, dx1f, torch::Tensor(),
+                                    expected.psf_lo, expected.psf_hi,
+                                    expected.pref, expected.dsf, expected.dref,
+                                    iu, 1.0, grid, true, true, true, rows);
+      auto wg = w.to(torch::kCUDA).contiguous();
+      auto actual = allocate_output(wg);
+      at::native::call_hydro_ref_x1(
+          torch::kCUDA, wg, dx1f.to(torch::kCUDA), torch::Tensor(),
+          actual.psf_lo, actual.psf_hi, actual.pref, actual.dsf, actual.dref,
+          iu, 1.0, grid, true, true, true, rows.to(torch::kCUDA));
+      torch::cuda::synchronize();
+      for (auto const& p : std::vector<
+               std::pair<char const*, std::pair<torch::Tensor, torch::Tensor>>>{
+               {"pref", {expected.pref, actual.pref}},
+               {"dref", {expected.dref, actual.dref}},
+               {"psf_lo", {expected.psf_lo, actual.psf_lo}}}) {
+        auto d = ulp_diff(p.second.first, p.second.second, nc1);
+        EXPECT_EQ(d.nan_mismatch, 0) << p.first;
+        EXPECT_LE(d.max_ulp, kMaxUlp)
+            << p.first << " nc1 = " << nc1 << " stretched " << stretched << ": "
+            << d.max_ulp << " ULP at x1 index " << d.worst_index;
+      }
+    }
+  }
+}
+
+// The factored row's weights carry e^{(t_max - t_min) dz_i / H_ref}: they are
+// bounded only by the cell's own thickness, while H_ref is one value for the
+// run, so a strongly stretched x1 with a wide top is the exposure. The guard
+// (kX1RefMaxFactoredThickness) hands such a cell back with no row, and the
+// kernel then keeps the log-mean of its two faces -- which is exact for a
+// column that IS e^{-z/H_ref}, so nothing is lost on the reference profile.
+// Without the guard the row at dz/H_ref = 200 is not even finite.
+TEST(HydroRefX1Dispatch,
+     the_factored_rows_refuse_a_cell_past_the_validity_bound) {
+  constexpr int nc1 = 9;
+  constexpr double kBound = snap::kX1RefMaxFactoredThickness;
+  auto f64 = torch::TensorOptions().dtype(torch::kFloat64);
+  auto dx1f = torch::ones({nc1}, f64);  // unit cells: dz / H_ref = 1 / href
+  for (double s : {0.5 * kBound, kBound, 1.0001 * kBound, 10.0 * kBound}) {
+    auto rows = snap::hydro_ref_x1_factored_rows(dx1f, nc1 - 1, true, true,
+                                                 true, 1. / s);
+    auto r = rows.accessor<double, 2>();
+    bool past = s > kBound;
+    for (int i = 0; i < nc1; ++i) {
+      int start = static_cast<int>(r[i][0]);
+      if (past) {
+        EXPECT_EQ(start, -1) << "dz/H_ref = " << s << ", cell " << i
+                             << ": a row past the bound was handed out";
+        continue;
+      }
+      ASSERT_GE(start, 0) << "dz/H_ref = " << s << ", cell " << i;
+      // the row on the exponential it is built to be exact for: face start + m
+      // sits (start + m - i) unit cells above cell i's lower face
+      double value = 0.;
+      for (int m = 0; m < 6; ++m) {
+        EXPECT_TRUE(std::isfinite(r[i][1 + m])) << "dz/H_ref = " << s;
+        value += r[i][1 + m] * std::exp(-(start + m - i) * s);
+      }
+      double exact = (1. - std::exp(-s)) / s;  // mean of e^{-x s} over [0, 1]
+      EXPECT_NEAR(value, exact, 2e-15 * exact)
+          << "dz/H_ref = " << s << ", cell " << i << ": the row leaves "
+          << std::abs(value - exact) / exact << " relative on its own profile";
     }
   }
 }

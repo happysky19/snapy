@@ -38,6 +38,12 @@ void RestartOutput::write_output_file(MeshBlockImpl* pmb, Variables const& vars,
   // store last time and cycle
   out_vars["last_time"] = torch::tensor({current_time}, torch::kFloat64);
   out_vars["last_cycle"] = torch::tensor({(int64_t)pmb->cycle}, torch::kInt64);
+  // H_ref of the factored x1 reference rows: set once at setup from the bottom
+  // cells, so a restart must not recompute it from the cells it finds then
+  if (pmb->phydro && pmb->phydro->x1_href() > 0.) {
+    out_vars["x1_href"] =
+        torch::tensor({pmb->phydro->x1_href()}, torch::kFloat64);
+  }
 
   // save file number and next time for each output type
   std::vector<int> output_file_numbers;

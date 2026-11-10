@@ -49,12 +49,15 @@ HydroOptions HydroOptionsImpl::from_yaml(std::string const& filename,
       check_keys(dyn, "dynamics",
                  {"equation-of-state", "reconstruct", "riemann-solver",
                   "verbose", "disable-flux-x1", "disable-flux-x2",
-                  "disable-flux-x3", "wb-wall-clamp"});
+                  "disable-flux-x3", "wb-wall-clamp", "x1-ref-scale-height"});
       op->verbose() = dyn["verbose"].as<bool>(verbose);
       op->disable_flux_x1() = dyn["disable-flux-x1"].as<bool>(false);
       op->disable_flux_x2() = dyn["disable-flux-x2"].as<bool>(false);
       op->disable_flux_x3() = dyn["disable-flux-x3"].as<bool>(false);
       op->wb_wall_clamp() = dyn["wb-wall-clamp"].as<bool>(true);
+      op->x1_ref_scale_height() = dyn["x1-ref-scale-height"].as<double>(0.);
+      TORCH_CHECK(op->x1_ref_scale_height() >= 0.,
+                  "HydroOptions: dynamics/x1-ref-scale-height must be >= 0");
     }
   }
 
