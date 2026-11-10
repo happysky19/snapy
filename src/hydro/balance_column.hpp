@@ -46,8 +46,20 @@ namespace snap {
 //!                 faces BELOW the wall -- ghost faces, which a ghost-free
 //!                 column does not have -- so the fixed point found here would
 //!                 not be the one the solver later enforces.
-//! \param rtol     bound on the residual below, dimensionless.
-//! \param max_iter sweeps before giving up.
+//! \param rtol     bound on the residual below, dimensionless. The default is
+//!                 1e-13 rather than a looser value because the leftover
+//!                 imbalance is what the solver then has to carry: on the hot
+//!                 H2 column a 1e-10 start grows to max |w|/c = 3.7e-7, while
+//!                 a 1e-13 start stays at 2.4e-10.
+//! \param max_iter sweeps before giving up. The two defaults are paired: a
+//!                 tighter residual costs sweeps, and they come out of this
+//!                 budget. 450 covers every column measured for #5 -- the
+//!                 worst, dz/H = 1.25 at nx1 = 5, needs 434 -- where the old
+//!                 120 left dz/H = 1.10 and 1.30 throwing at 1e-13 despite
+//!                 converging at 1e-10. balance_column runs once per column at
+//!                 initialisation, so the extra sweeps cost well under a
+//!                 millisecond and only columns that would otherwise throw
+//!                 reach the larger budget at all.
 //!
 //! \return (balanced w, residual, sweeps). The residual is
 //!         max |p' - C| / (rho g dz), which bounds what the leftover imbalance
@@ -109,7 +121,7 @@ namespace snap {
 //! spherical-polar, whose rest state is the solver's own) is refused.
 std::tuple<torch::Tensor, double, int> balance_column(
     torch::Tensor const& w, torch::Tensor const& dx1f, double grav,
-    bool wall_clamp = true, double rtol = 1.e-10, int max_iter = 120,
+    bool wall_clamp = true, double rtol = 1.e-13, int max_iter = 450,
     std::string const& geometry = "", bool stretched = false);
 
 }  // namespace snap
