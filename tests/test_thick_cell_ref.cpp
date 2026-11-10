@@ -87,13 +87,20 @@ TEST(ThickCellRef, top_face_is_average_consistent) {
 }
 
 //! A column whose top cell starts at or below the configured density floor
-//! fails check_redo's floor_hit, min(rho) > 1.001 * density_floor
-//! (src/mesh/meshblock.cpp:1302), on its first step and on every redo after,
-//! so the run dies by exhausting its redo budget with a dt-halving message
-//! that names no cause. Refuse it at setup on that same factor. Measured on
-//! this column, varying only the floor: 1.0009 terminates on step 1, 1.0010
-//! holds rest at |v|/cs = 4.66e-11 over 100 steps, as does every ratio to
-//! 100. 27.96 is this investigation's realistic hot H2 column.
+//! fails MeshBlockImpl::floor_hit, min(rho) > 1.001 * density_floor, on its
+//! first step and on every redo after, so the run dies by exhausting its redo
+//! budget with a dt-halving message that names no cause. Refuse it at setup
+//! on that same factor.
+//!
+//! The factor is the solver's, not a chosen margin, and the two agree at
+//! every sampled point. Measured on this column with the guard disabled, so
+//! the stepping answer does not depend on it: ratios 0.9990, 1.0000, 1.0005,
+//! 1.0009 and 1.0010 all terminate, each at step 6 when the redo budget runs
+//! out; 1.0011 is the first that holds, at |v|/cs = 4.659e-11 over 100 steps,
+//! and every larger ratio gives that same figure. Nominal 1.0010 is refused
+//! because it lands at 1.0009999999999999 in double precision. The ratios
+//! below stay clear of that boundary on purpose. 27.96 is this
+//! investigation's realistic hot H2 column.
 //! RED at the parent: every ratio initializes without complaint.
 TEST(ThickCellRef, the_density_floor_guard_refuses_only_unsteppable_columns) {
   auto opt = torch::TensorOptions().dtype(torch::kFloat64);

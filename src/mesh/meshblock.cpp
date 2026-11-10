@@ -435,24 +435,36 @@ void MeshBlockImpl::initialize_local(Variables &vars) {
               "] but got ", hydro_w.sizes());
 
   // Refuse at setup a state that already trips the solver's own floor test
-  // (happysky19/snapy#5). check_redo calls floor_hit() after every step, and
-  // floor_hit is exactly `min(rho) > 1.001 * density_floor` and
-  // `min(p) > 1.001 * pressure_floor` (this file, :1302-1305, and the device
-  // twin at :1398-1402). A column deep enough that its TOP cell starts at or
-  // below a configured floor therefore fails that test on its very first
-  // step, and because the state never improves, every redo fails the same way
-  // until max_redo is exhausted and the run terminates -- with the dt-halving
-  // message, which says nothing about the real cause.
+  // (happysky19/snapy#5). check_redo calls MeshBlockImpl::floor_hit after
+  // every step, and that predicate is exactly
+  // `min(rho) > 1.001 * density_floor` together with
+  // `min(p) > 1.001 * pressure_floor`; the device path in
+  // MeshBlockImpl::local_redo_flag_tensor applies the same two comparisons. A
+  // column deep enough that its TOP cell starts at or below a configured
+  // floor fails that test on its very first step, and because the state
+  // never improves, every
+  // redo fails the same way until max_redo is exhausted and the run
+  // terminates -- with the dt-halving message, which says nothing about the
+  // real cause.
   //
   // The threshold here is not chosen: it is the same 1.001 the step test
   // uses, so this refuses exactly the states that could never have taken a
-  // step and nothing else. Measured on an isothermal column at D = 21,
-  // holding the column fixed and varying only the configured floor, the
-  // transition sits exactly at that factor -- at rho_top/floor = 1.0009 the
-  // run terminates on step 1, at 1.0010 it holds rest at |v|/cs = 4.66e-11
-  // for 100 steps, and every ratio from there to 100 gives the identical
-  // figure. The realistic hot H2 column of worker2/realcol-20261109 sits at
-  // ratio 27.96 and is unaffected.
+  // step. That was checked rather than assumed. On an isothermal column at
+  // D = 21, holding the column and its balanced state fixed and varying only
+  // the configured floor, the predicate and the observed outcome agree at
+  // every sampled ratio, with the guard disabled so the stepping answer is
+  // independent of it:
+  //
+  //   rho_top/floor  0.9990 1.0000 1.0005 1.0009 1.0010 | 1.0011 1.0015 2.0
+  //   > 1.001?          no     no     no     no     no  |   yes    yes   yes
+  //   100 steps       TERM   TERM   TERM   TERM   TERM  |  holds  holds holds
+  //
+  // Every TERM is at step 6, when the redo budget runs out, not on step 1;
+  // and the last refused ratio is 1.0010 rather than 1.0009, because the
+  // nominal 1.0010 lands at 1.0009999999999999 in double precision. The first
+  // ratio that holds is 1.0011, at |v|/cs = 4.659e-11 for 100 steps, and
+  // every larger ratio gives that same figure. The realistic hot H2 column of
+  // this investigation sits at ratio 27.96 and is unaffected.
   //
   // DENSITY ONLY, deliberately. The pressure floor shows the same transition
   // at the same 1.001 when probed the same way, but no measured failure of
