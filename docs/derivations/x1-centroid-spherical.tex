@@ -186,13 +186,20 @@ step):
 
 \begin{itemize}
 \item \textbf{Cartesian:} the rows are exact and no $r^2$ conversion runs, so round-off: switch on
-  $\max|\rho v_1|/(\Delta t\,g\rho) < 10^{-10}$ (measured $1.9\times10^{-15}$ to $6.6\times10^{-15}$).
+  $\max|\rho v_1|/(\Delta t\,g\rho) < 10^{-10}$ (measured at $n_z = 32$: at most $6.6\times10^{-15}$ over the
+  eight arms, the largest being the interior with the explicit scheme and the full pressure force).
 \item \textbf{Spherical, $r_0/H = 5$:} the conversions above are exact for polynomials only, so what is left is their
   truncation. Asserted as an order: from $n_z = 32$ to 64 it falls at an observed order $\ge 4.5$. Measured
   on main fe2edaa3 (linear rows) 5.05 to 5.35 interior and 5.07 to 5.08 at the walls (5.12 / 4.99 from 64 to
   128); with the factored rows 5.03 to 5.15 and 4.92 to 4.93, at errors 4 to 5 times smaller (wall, $n_z = 32$:
   $4.5\times10^{-9}$ against $1.8\times10^{-8}$). Switch off, $> 10^{-8}$ at $n_z = 32$ (an ignored or misspelled
   switch fails).
+\item \textbf{Spherical, $r_0/H = 1000$, $n_z = 32$:} the same absolute floor as the Cartesian arm, which is what pins
+  the statement above that the floor does not depend on $r_0$. Switch on, measured: $5.2\times10^{-13}$ to
+  $1.1\times10^{-12}$ in the interior and $2.3\times10^{-12}$ to $2.8\times10^{-11}$ at the walls. This arm
+  carries no order and no switch-off control: at this radius the conversions are themselves near the floor, so
+  the switch-off values ($6.5\times10^{-10}$ with the full pressure force, $1.2\times10^{-12}$ hydrostatic-split)
+  fall below the $10^{-8}$ the control asserts.
 \end{itemize}
 
 \section*{6. What is left of the $1/R$ term}

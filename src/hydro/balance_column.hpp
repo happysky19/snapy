@@ -134,8 +134,11 @@ namespace snap {
 //! `coord->options->stretched_x1()` of the grid the column comes from. A
 //! stretched x1 is non-uniform in every block whatever its widths, and its
 //! cell pressure is the six-face degree-5 Lagrange cell average with per-cell
-//! rows (hydro_ref_x1_stretched_rows); a column of unequal widths takes them
-//! whatever the flag.
+//! rows; a column of unequal widths takes them whatever the flag. The rows
+//! this kernel builds are the FACTORED ones (hydro_ref_x1_factored_rows,
+//! balance_column.cpp), on every grid, uniform or not -- the name
+//! hydro_ref_x1_stretched_rows this line used to carry is the previous
+//! builder, which no production path calls any more.
 //!
 //! `x1_ref_scale_height` is H_ref of the factored rows, p = P exp(-z/H_ref):
 //! pass the deck's dynamics/x1-ref-scale-height when it sets one. 0 takes

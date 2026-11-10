@@ -11,13 +11,21 @@ force (non-hydrostatic 1) and hydrostatic-split (0).
 The x1 reference rows factor out exp(-x / H_ref) and interpolate the rest with a quintic, so the column is the
 pure exponential p = exp(-x / H), rho = p / H, with dynamics/x1-ref-scale-height = H:
   (a) Cartesian: the rows hold this column exactly and no r^2 conversion is involved, so f must be round-off,
-      f < TOL_ON = 1e-10, in the interior and at the walls (measured 2.4e-15 to 2.9e-14).
+      f < TOL_ON = 1e-10, in the interior and at the walls (measured here at nz = 32: at most 6.6e-15, the
+      largest of the eight arms being the interior, explicit, full pressure force).
   (b) spherical-polar at r0 / H = 5: the r^2 <-> plain-mean conversions of the switch are exact for polynomials
       only, so f is their truncation, not round-off. Asserted as a convergence order: between nz = 32 and 64, f
       must fall at an observed order of at least ORDER - ORDER_TOL. ORDER = 5 is measured on main (fe2edaa3, p
       rows): walls 5.08 and interior 5.24 between 32 and 64, 4.99 and 5.12 between 64 and 128; the factored rows
       give 4.92 / 5.10 and 4.96 / 4.99. A regression shows as a lost order. The switch-off control stays: at
       nz = 32 the uniform-measure formulas must leave f > TOL_OFF, so an ignored switch fails.
+  (c) spherical-polar at r0 / H = R0_FAR = 1000, nz = 32: the same absolute floor as (a). This is the arm that
+      pins the claim of docs/derivations/x1-centroid-spherical.md section 5 -- that the floor the switch leaves,
+      larger at the walls because of the one-sided wall closure, does not depend on r0 -- and it is the coverage
+      PR #6 carries as R0S = (5.0, 1000.0). It has no order arm and no switch-off control, because there is
+      nothing left for them to measure: at this radius the conversions themselves are near the floor, so the
+      switch-off values (6.5e-10 interior with the full pressure force, 1.2e-12 hydrostatic-split) sit below
+      TOL_OFF. Switch on, measured here: 5.2e-13 to 1.1e-12 interior, 2.3e-12 to 2.8e-11 at the walls.
 The switch is read once per process, so each arm runs in its own process.
 
   python test_x1_centroid_rest.py [--device cpu|cuda]
@@ -34,7 +42,8 @@ import numpy as np
 import torch
 
 NZS = (32, 64)
-R0 = 5.0  # spherical r0 / H
+R0 = 5.0  # spherical r0 / H, where curvature is strong
+R0_FAR = 1000.0  # spherical r0 / H, where it is not (the floor is r0-independent)
 SCHEMES = (0, 1)
 NHS = (1.0, 0.0)
 LZ = 2.0
@@ -46,11 +55,11 @@ NG, IV1 = 3, 1
 GLX, GLW = np.polynomial.legendre.leggauss(6)
 
 
-def config(geom, nz, scheme, nh):
+def config(geom, r0, nz, scheme, nh):
     half = 0.05
-    bounds = ({"x1min": R0, "x1max": R0 + LZ, "x2min": 0.5 * math.pi - half, "x2max": 0.5 * math.pi + half,
+    bounds = ({"x1min": r0, "x1max": r0 + LZ, "x2min": 0.5 * math.pi - half, "x2max": 0.5 * math.pi + half,
                "x3min": 0.0, "x3max": 2.0 * half} if geom == "spherical-polar" else
-              {"x1min": R0, "x1max": R0 + LZ, "x2min": 0.0, "x2max": 1.0, "x3min": 0.0, "x3max": 1.0})
+              {"x1min": r0, "x1max": r0 + LZ, "x2min": 0.0, "x2max": 1.0, "x3min": 0.0, "x3max": 1.0})
     return {"geometry": {"type": geom, "bounds": bounds,
                          "cells": {"nx1": nz, "nx2": 4, "nx3": 4, "nghost": NG}},
             "dynamics": {"equation-of-state": {"type": "ideal-gas", "gammad": 1.4, "weight": 8.31446,
@@ -68,25 +77,25 @@ def config(geom, nz, scheme, nh):
             "forcing": {"const-gravity": {"grav1": -1.0, "non-hydrostatic": nh}}}
 
 
-def column(r):
+def column(r, r0):
     """rho and p of the hydrostatic column (g = 1)"""
-    p = np.exp(-(r - R0) / H)
+    p = np.exp(-(r - r0) / H)
     return p / H, p
 
 
-def means(rf, geom):
+def means(rf, geom, r0):
     """the cell averages of rho and p on cells [rf_i, rf_i+1], r^2-weighted on the sphere"""
     c, h = 0.5 * (rf[1:] + rf[:-1]), 0.5 * (rf[1:] - rf[:-1])
     r = c[:, None] + h[:, None] * GLX[None, :]
     w = GLW[None, :] * (r * r if geom == "spherical-polar" else np.ones_like(r))
-    return tuple((q * w).sum(1) / w.sum(1) for q in column(r))
+    return tuple((q * w).sum(1) / w.sum(1) for q in column(r, r0))
 
 
-def imbalance(geom, nz, scheme, nh, device):
+def imbalance(geom, r0, nz, scheme, nh, device):
     import yaml
     from snapy import MeshBlock, MeshBlockOptions, kIDN, kIPR
     with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False, dir=os.getcwd()) as f:
-        yaml.safe_dump(config(geom, nz, scheme, nh), f)
+        yaml.safe_dump(config(geom, r0, nz, scheme, nh), f)
         tmp = f.name
     try:
         block = MeshBlock(MeshBlockOptions.from_yaml(tmp))
@@ -96,7 +105,7 @@ def imbalance(geom, nz, scheme, nh, device):
     rf = block.buffer("coord.x1f").cpu().numpy()
     w = block.buffer("hydro.D").clone().zero_()
     # interior means; ghosts get the same formula (the reflecting walls refill them)
-    rho, p = (torch.from_numpy(q).to(w) for q in means(rf, geom))
+    rho, p = (torch.from_numpy(q).to(w) for q in means(rf, geom, r0))
     w[kIDN] = rho
     w[kIPR] = p
     bv, _ = block.initialize({"hydro_w": w})
@@ -110,11 +119,20 @@ def imbalance(geom, nz, scheme, nh, device):
     return {"interior": float(f[NG:-NG].max()), "wall": float(torch.cat((f[:NG], f[-NG:])).max())}
 
 
+def key(geom, r0, nz, scheme, nh):
+    return f"{geom}/{r0:g}/{nz}/{scheme}/{nh:g}"
+
+
 def child(device):
-    out = {f"cartesian/{nz}/{s}/{nh:g}": imbalance("cartesian", nz, s, nh, device)
+    out = {key("cartesian", R0, nz, s, nh): imbalance("cartesian", R0, nz, s, nh, device)
            for nz in NZS[:1] for s in SCHEMES for nh in NHS}
-    out.update({f"spherical-polar/{nz}/{s}/{nh:g}": imbalance("spherical-polar", nz, s, nh, device)
+    out.update({key("spherical-polar", R0, nz, s, nh): imbalance("spherical-polar", R0, nz, s, nh, device)
                 for nz in NZS for s in SCHEMES for nh in NHS})
+    # the far-radius arm: one grid, judged against the same absolute floor as
+    # Cartesian, which is the claim of x1-centroid-spherical.md section 5
+    out.update({key("spherical-polar", R0_FAR, nz, s, nh):
+                imbalance("spherical-polar", R0_FAR, nz, s, nh, device)
+                for nz in NZS[:1] for s in SCHEMES for nh in NHS})
     return out
 
 
@@ -145,19 +163,20 @@ def main():
     with tempfile.TemporaryDirectory(dir=os.getcwd()) as tmp:
         res = {s: run(s, a.device, tmp) for s in (None, "1")}
     on, off = res["1"], res[None]
-    for key, v in on.items():
-        geom, nz, scheme, nh = key.split("/")
-        print(f"{geom:15s} nz {nz:>3s} implicit-scheme {scheme} non-hydrostatic {nh}: "
+    for k, v in on.items():
+        geom, r0, nz, scheme, nh = k.split("/")
+        print(f"{geom:15s} r0/H {r0:>6s} nz {nz:>3s} implicit-scheme {scheme} non-hydrostatic {nh}: "
               "max |rho v1|/(dt g rho), interior / wall: "
-              f"off {off[key]['interior']:.3e} / {off[key]['wall']:.3e}  on {v['interior']:.3e} / {v['wall']:.3e}",
+              f"off {off[k]['interior']:.3e} / {off[k]['wall']:.3e}  on {v['interior']:.3e} / {v['wall']:.3e}",
               flush=True)
-        if geom == "cartesian":  # (a) round-off
+        # (a) and (c) round-off: Cartesian, and the sphere where curvature no longer matters
+        if geom == "cartesian" or float(r0) == R0_FAR:
             for part in ("interior", "wall"):
                 if not v[part] < TOL_ON:
-                    failures.append(f"{key} {part}, switch on: {v[part]:.3e} >= {TOL_ON}")
+                    failures.append(f"{k} {part}, switch on: {v[part]:.3e} >= {TOL_ON}")
     for scheme in SCHEMES:  # (b) the order of the conversions, and the off control
         for nh in NHS:
-            k0, k1 = (f"spherical-polar/{nz}/{scheme}/{nh:g}" for nz in NZS)
+            k0, k1 = (key("spherical-polar", R0, nz, scheme, nh) for nz in NZS)
             for part in ("interior", "wall"):
                 order = math.log(on[k0][part] / on[k1][part]) / math.log(NZS[1] / NZS[0])
                 print(f"spherical-polar r0/H {R0:g} implicit-scheme {scheme} non-hydrostatic {nh:g} {part}: "

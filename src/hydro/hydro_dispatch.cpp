@@ -283,6 +283,14 @@ torch::Tensor hydro_ref_x1_factored_rows(torch::Tensor const& dx1f, int iu,
         hydro_ref_x1_six_face_start(i, nc1, iu, phys_in, phys_out, wall_clamp);
     r[i][0] = start;
     if (start < 0) continue;
+    // Validity guard (kX1RefMaxFactoredThickness, hydro_dispatch.hpp): a cell
+    // too thick for its own factored row -- or one reached with a non-finite
+    // href -- is handed back with no row, so the kernel keeps its log-mean
+    // instead of a row of overflowing weights. The negated form catches NaN.
+    if (!(hp[i] <= kX1RefMaxFactoredThickness * href)) {
+      r[i][0] = -1;
+      continue;
+    }
     long double t[6];
     for (int k = 0; k < 6; ++k) {
       long double o = 0.0L;

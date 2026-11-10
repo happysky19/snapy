@@ -468,6 +468,47 @@ TEST(HydroRefX1Dispatch, cuda_matches_cpu_on_the_factored_rows) {
   }
 }
 
+// The factored row's weights carry e^{(t_max - t_min) dz_i / H_ref}: they are
+// bounded only by the cell's own thickness, while H_ref is one value for the
+// run, so a strongly stretched x1 with a wide top is the exposure. The guard
+// (kX1RefMaxFactoredThickness) hands such a cell back with no row, and the
+// kernel then keeps the log-mean of its two faces -- which is exact for a
+// column that IS e^{-z/H_ref}, so nothing is lost on the reference profile.
+// Without the guard the row at dz/H_ref = 200 is not even finite.
+TEST(HydroRefX1Dispatch,
+     the_factored_rows_refuse_a_cell_past_the_validity_bound) {
+  constexpr int nc1 = 9;
+  constexpr double kBound = snap::kX1RefMaxFactoredThickness;
+  auto f64 = torch::TensorOptions().dtype(torch::kFloat64);
+  auto dx1f = torch::ones({nc1}, f64);  // unit cells: dz / H_ref = 1 / href
+  for (double s : {0.5 * kBound, kBound, 1.0001 * kBound, 10.0 * kBound}) {
+    auto rows = snap::hydro_ref_x1_factored_rows(dx1f, nc1 - 1, true, true,
+                                                 true, 1. / s);
+    auto r = rows.accessor<double, 2>();
+    bool past = s > kBound;
+    for (int i = 0; i < nc1; ++i) {
+      int start = static_cast<int>(r[i][0]);
+      if (past) {
+        EXPECT_EQ(start, -1) << "dz/H_ref = " << s << ", cell " << i
+                             << ": a row past the bound was handed out";
+        continue;
+      }
+      ASSERT_GE(start, 0) << "dz/H_ref = " << s << ", cell " << i;
+      // the row on the exponential it is built to be exact for: face start + m
+      // sits (start + m - i) unit cells above cell i's lower face
+      double value = 0.;
+      for (int m = 0; m < 6; ++m) {
+        EXPECT_TRUE(std::isfinite(r[i][1 + m])) << "dz/H_ref = " << s;
+        value += r[i][1 + m] * std::exp(-(start + m - i) * s);
+      }
+      double exact = (1. - std::exp(-s)) / s;  // mean of e^{-x s} over [0, 1]
+      EXPECT_NEAR(value, exact, 2e-15 * exact)
+          << "dz/H_ref = " << s << ", cell " << i << ": the row leaves "
+          << std::abs(value - exact) / exact << " relative on its own profile";
+    }
+  }
+}
+
 // A block too thin to carry a one-sided row (4 interior cells) must still keep
 // the ghosts out of its interior -- it falls back to the 2-point mean. This is
 // the case the `wide` guard exists for, and a version that lets the interior

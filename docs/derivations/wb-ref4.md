@@ -61,6 +61,30 @@ $P$, which varies on the scale of the departure of $H$ from $H_{\rm ref}$, not o
 isothermal column this is what holds a 1.25-scale-height cell at rest (restored top face $+0.50\,p_{\rm top}$;
 the linear rows gave $-29.07$ Pa and no balance).
 
+**Validity range, and the guard.** $c_m(i)$ carries $e^{(t_{\max} - t_{\min})\Delta z_i/H_{\rm ref}}$, so it is
+bounded by the cell's *own* thickness while $H_{\rm ref}$ is one value for the run: a strongly stretched $x_1$
+with a wide top is the exposure (nothing in-tree is near it -- the repository's stretched decks are
+$x_{1}$rat $1.05$–$1.058$ and $4^{1/(n_{x1}-1)}$, i.e. $\le 4\times$ over the whole column). Measured on
+`hydro_ref_x1_factored_rows` itself, uniform column, the row evaluated on the $e^{-z/H_{\rm ref}}$ it is built
+to be exact for, worst cell of $n_{c1} = 5$ and $9$:
+
+| $\Delta z/H_{\rm ref}$ | 0.25 | 5 | 10 | 20 | 25 | 30 | 40 | 80 | 120 | 150 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| largest weight | 1.1e+00 | 2.6e+08 | 6.9e+18 | 1.1e+40 | 5.2e+50 | 2.7e+61 | 8.1e+82 | 1.5e+169 | 5.1e+255 | inf |
+| relative error | 1.3e-16 | 0 | 1.4e-16 | 4.2e-16 | 5.0e-14 | 2.7e-12 | 8.2e-10 | 2.6e-05 | 1.4e-03 | 6.9e-03 |
+
+The row therefore holds to round-off up to $\Delta z/H_{\rm ref} = 20$ and is the declared validity range;
+`kX1RefMaxFactoredThickness = 20` (`hydro_dispatch.hpp`) refuses a row past it, handing the cell back with
+$\texttt{start} < 0$. The kernel then keeps that cell's log-mean $\Delta p/\ln(p_{\rm lo}/p_{\rm hi})$, which
+is *exact* for a column that is $e^{-z/H_{\rm ref}}$, so the guard costs nothing on the reference profile and
+only gives up the quintic's extra reach on the departure from it. A non-finite $H_{\rm ref}$ takes the same
+path. What the guard buys is the band in between: past $\Delta z/H_{\rm ref} \approx 140$ the weights are
+$\pm\infty$ and the row is already discarded, because the bracket test compares a NaN and a NaN comparison is
+false -- but from 25 to 140 the weights are finite and the row's value is in bracket, so it is *accepted*
+while carrying up to $10^{-3}$ relative, which is worse than the log-mean it displaces. The guard makes that
+band take the fallback, once at build time, instead of silently (`tests/test_hydro_ref_x1.cpp`,
+`the_factored_rows_refuse_a_cell_past_the_validity_bound`).
+
 **$H_{\rm ref}$ is one value per run.** It is part of the operator, so two blocks of one column must share it:
 `MeshImpl::set_x1_href` takes the smallest $(\bar p/\bar\rho)/g$ over the bottom-wall cells of the setup
 state, reduced over the local blocks and the processes (a split column then keeps the one-block state to
