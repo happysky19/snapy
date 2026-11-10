@@ -34,12 +34,40 @@ The kernel (`hydro_ref_x1_impl.h`) builds:
 
 - **face pressure** by a top-down scan, $p_{{\rm sf},i-1/2} = p_{{\rm sf},i+1/2} + g\bar\rho_i\Delta z_i$: the
   discrete hydrostatic balance itself;
-- **cell pressure** $p_{\rm ref}$: on a uniform grid the cell average of the quintic through six face
-  pressures, $(11, -93, 802, 802, -93, 11)/1440$, one-sided rows at clamped walls; on a non-uniform grid the
-  log-mean $\Delta p / \ln(p_{\rm lo}/p_{\rm hi})$;
+- **cell pressure** $p_{\rm ref}$: the cell average of $P\,w$ with $w(z) = e^{-z/H_{\rm ref}}$ fixed and $P$ the
+  quintic through the six face values $p_m/w(z_m)$ (one-sided windows at clamped walls), i.e. a row of six
+  weights per cell, $p_{\rm ref} = \sum_m c_m p_m$ (section 1a); a row whose value leaves the cell's
+  $[p_{\rm hi}, p_{\rm lo}]$ bracket, or whose wall partner's does, keeps the log-mean
+  $\Delta p / \ln(p_{\rm lo}/p_{\rm hi})$;
 - **cell density** $\rho_{{\rm ref},i} = p_{{\rm ref},i}\, r^s_i$, with $r_i = \bar\rho_i/\bar p_i$ smoothed by the
   binomial $B = (1, 4, 6, 4, 1)/16$ (edge replicated at a clamped wall);
 - **face density** $\rho_{{\rm sf},f} = p_{{\rm sf},f}\,\tfrac12(r^s_{f-1} + r^s_f)$.
+
+## 1a. The factored cell-pressure rows
+
+The rows interpolate $P = p\,e^{z/H_{\rm ref}}$ instead of $p$. With $L_m$ the Lagrange basis on the six faces
+$z_s \ldots z_{s+5}$ of cell $i$'s window,
+$$
+p_{{\rm ref},i} = \frac{1}{\Delta z_i}\int_{\rm cell}\sum_m L_m(z)\,\frac{p_m}{w(z_m)}\,w(z)\,dz
+               = \sum_m c_m(i)\,p_m, \qquad
+c_m(i) = \frac{1}{\Delta z_i}\int_{\rm cell} L_m(z)\,e^{-(z - z_m)/H_{\rm ref}}\,dz ,
+$$
+which depends on the grid and $H_{\rm ref}$ only (`hydro_ref_x1_factored_rows`, sixteen-point
+Gauss-Legendre in long double, built once into the stretched-rows table format; each stage does the same
+six multiply-adds as the linear rows). As $H_{\rm ref} \to \infty$ it is the linear row of the previous
+version. The rows are exact for $p = (\text{polynomial of degree} \le 5)\,e^{-z/H_{\rm ref}}$, the family an
+atmosphere sits near, and no longer for a polynomial $p$; on a smooth column the error is $O(\Delta z^6)$ in
+$P$, which varies on the scale of the departure of $H$ from $H_{\rm ref}$, not on $H$ itself. On a five-cell
+isothermal column this is what holds a 1.25-scale-height cell at rest (restored top face $+0.50\,p_{\rm top}$;
+the linear rows gave $-29.07$ Pa and no balance).
+
+**$H_{\rm ref}$ is one value per run.** It is part of the operator, so two blocks of one column must share it:
+`MeshImpl::set_x1_href` takes the smallest $(\bar p/\bar\rho)/g$ over the bottom-wall cells of the setup
+state, reduced over the local blocks and the processes (a split column then keeps the one-block state to
+round-off: $5\times10^{-16}$ against $1.3\times10^{-4}$ with a per-block value). A deck may set it with
+`dynamics/x1-ref-scale-height`; `balance_column` takes the same rule (or the deck's value). The restart file
+carries it (`x1_href`), so a restart does not recompute it from bottom cells that have moved: a run stopped and
+resumed matches the straight run bitwise (`tests/run_restart_x1_href.py`).
 
 ## 2. The base face-density offset is $O(\Delta z^2)$
 
@@ -131,8 +159,7 @@ exchange, so a column split along x1 gets the same faces as one block. The in-pr
 ## 5. Non-uniform x1 grids: the cell pressure
 
 A keyed stretched x1 (`cells/x1rat` or `geometry/x1f`, #280) already has a
-sixth-order cell pressure: the cell average of the degree-5 interpolant through six faces, built from the
-widths (#280 (iv)). There the switch keeps it, so REF4 contributes only the density reference of section 3
+sixth-order cell pressure: the factored rows of section 1a, built from the widths (#280 (iv)). There the switch keeps it, so REF4 contributes only the density reference of section 3
 and the face density of section 4, and `balance_column` does not run REF4: the stretched rest state is the
 same with the switch on or off. $F$ stays in cell-index units; on a keyed
 stretched family the measured order of $N^2_{\rm eff}$ is 4.06/4.04 (1 e-fold) and 3.78/3.89 (3 e-folds) at
@@ -150,7 +177,8 @@ the discrete rest state $\bar p = p_{\rm ref} + c$ is the base's.
 Why $p_{\rm ref} = \bar p + c + O(\Delta z^6)$ on a hydrostatic background: the scan gives
 $p_{{\rm sf},i-1/2} - p_{{\rm sf},i+1/2} = g\bar\rho_i\Delta z_i = \int_{\rm cell} g\rho\,dz$ exactly, so the scan
 faces are the exact face pressures up to one column constant $c$ (the top anchor); the six-face quadrature
-then has error $O(\Delta z^6)$. The constant changes $\rho_{\rm ref}$ by the smooth $cR$, which section 4
+of section 1a then has error $O(\Delta z^6)$ in $P$ (none for $p \propto e^{-z/H_{\rm ref}}$). The constant $c$ is not of
+that form, so the row carries it to $O(\Delta z^6)$ only, which the fixed point $p' = $ const absorbs. The constant changes $\rho_{\rm ref}$ by the smooth $cR$, which section 4
 carries consistently because the face value is taken of the same $\rho_{\rm ref}$.
 
 ## 7. Guards

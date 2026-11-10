@@ -28,8 +28,8 @@ $$
 
 so the stored value sits at the centroid $x_{1v} = \bar r_i + \delta_i$, not at the mid-radius. Every x1
 cell-to-face map in the solver is a uniform-measure formula: the WENO5 reconstruction, the hydrostatic scan
-$p_{i-1/2} = p_{i+1/2} + g h_i \rho_i$, the cell pressure reference (the cell average of the quintic through
-six faces) and Leg W's density reference. Fed $r^2$ means they are off by $\delta_i q' = O(h^2/r)$:
+$p_{i-1/2} = p_{i+1/2} + g h_i \rho_i$, the cell pressure reference (the factored six-face rows of `wb-ref4.md`
+section 1a) and Leg W's density reference. Fed $r^2$ means they are off by $\delta_i q' = O(h^2/r)$:
 
 - (i) the face values of the reconstruction carry $O(h^2/r)$;
 - (ii) the scan step is $g h\langle\rho\rangle$ where hydrostatics needs $g\int\rho\,dr = g h\overline\rho$, so the
@@ -154,12 +154,22 @@ $1.0\times10^{-9}$ / $1.8\times10^{-8}$, which is the level of the base at $r_0/
 ($1.4\times10^{-9}$ / $1.4\times10^{-8}$), where curvature no longer matters: that floor, larger at the walls
 (the reference's one-sided wall closure), does not depend on $r_0$.
 
-The oracle (`tests/test_x1_centroid_rest.py`) therefore uses a column the design is exact for: a linear
-density $\rho = 1 - 0.3\,(r - r_0)$ (quadratic $p$), cells initialised with their $r^2$ means, at $r_0/H = 5$
-and $1000$, $n_z = 32$, explicit and vertically implicit, one RK3 step; asserted: switch on,
-$\max|\rho v_1|/(\Delta t\,g\rho) < 10^{-10}$ in the interior and wall cells; switch off, $> 10^{-8}$ at
-$r_0/H = 5$ (an ignored or misspelled switch fails). Measured: on, $1\times10^{-14}$ to $3\times10^{-14}$
-everywhere; off, $2.4\times10^{-5}$ ($r_0/H = 5$) and $6.5\times10^{-10}$ ($r_0/H = 1000$).
+The oracle (`tests/test_x1_centroid_rest.py`) was a column the linear rows were exact for: a linear density
+$\rho = 1 - 0.3\,(r - r_0)$ (quadratic $p$), with the switch on at $1\times10^{-14}$ to $3\times10^{-14}$. The
+factored rows (`wb-ref4.md` section 1a) are exact for $p = $ polynomial $\times\,e^{-z/H_{\rm ref}}$ instead and leave
+$2.9\times10^{-9}$ on that column, which is their truncation, not a defect. The oracle is now the pure
+exponential $p = e^{-(r - r_0)/H}$, $\rho = p/H$, with `x1-ref-scale-height` $= H$, split by what each part
+holds ($n_z = 32$ and 64, explicit and vertically implicit, full and hydrostatic-split pressure force, one RK3
+step):
+
+- **Cartesian:** the rows are exact and no $r^2$ conversion runs, so round-off: switch on
+  $\max|\rho v_1|/(\Delta t\,g\rho) < 10^{-10}$ (measured $1.9\times10^{-15}$ to $6.6\times10^{-15}$).
+- **Spherical, $r_0/H = 5$:** the conversions above are exact for polynomials only, so what is left is their
+  truncation. Asserted as an order: from $n_z = 32$ to 64 it falls at an observed order $\ge 4.5$. Measured
+  on main fe2edaa3 (linear rows) 5.05 to 5.35 interior and 5.07 to 5.08 at the walls (5.12 / 4.99 from 64 to
+  128); with the factored rows 5.03 to 5.15 and 4.92 to 4.93, at errors 4 to 5 times smaller (wall, $n_z = 32$:
+  $4.5\times10^{-9}$ against $1.8\times10^{-8}$). Switch off, $> 10^{-8}$ at $n_z = 32$ (an ignored or misspelled
+  switch fails).
 
 ## 6. What is left of the $1/R$ term
 
