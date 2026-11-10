@@ -257,9 +257,12 @@ if __name__ == '__main__':
                     and abs(out['mass']) < 1e-12 and out['clamp'] == 0
                     and (work == 'cell' and not fixer or abs(out['epe_drift']) < tall.EPE_TOL)):
                 failures.append(f'tall column {nz}: {out}')
-        # the face arm runs until its instability reaches the redo: p rows and
-        # ln p redid at attempted step 25 and 24, the factored rows (balanced
-        # to 8.7e-12 m/s instead of 6.3e-6 after one step) at 44
+        # The face arm is redo-path coverage: this column is unstable on every
+        # build (main fe2edaa3: max w 6.9 m/s by step 20, 189 m/s by 24), and it
+        # passes by its redo restoring the step's input. Main and the p rows
+        # redo at attempted step 25, ln p at 24, the factored rows -- balanced
+        # to 8.7e-12 m/s after one step instead of 4.2e-6 -- at 44, so the arm
+        # runs 80 steps; the stability branch below is reached by no build.
         out = tall_run(45, 40, 9, work, 80 if work == 'face' else 40, 1500, fixer=fixer)
         if work == 'face':
             # Rollback coverage only; a retry does not establish stability.
