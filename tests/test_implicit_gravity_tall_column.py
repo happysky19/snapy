@@ -14,7 +14,7 @@ The face ladder runs twice, each in a child process (the switch is read once per
 process): with SNAP_GRAVITY_WORK_RADIAL_EXACT=0, and with it on (the corrected-PE
 work of docs/derivations/curved-gravity-work-weight.md sec 7, booked inside the
 implicit operator, #296). Every rung must stay below W_TOL, end the run below
-W_SETTLED, and, with the switch on, peak at most ON_OFF times its switch-off rung.
+W_SETTLED, and, with the switch on, peak at most W_EPS above its switch-off rung.
 A child that exits non-zero or prints an incomplete ladder fails the parent (#299).
 """
 import argparse
@@ -34,7 +34,18 @@ COURANTS = (6.6, 65.6, 100.0, 197.0, 250.0)
 RADIUS = 7.e7
 W_TOL = 1.0e-7  # m/s
 W_SETTLED = 1.0e-10  # m/s, max w at the last step: the column has settled
-ON_OFF = 1.1  # switch on: max w at most this times the switch-off rung's
+# Switch on: max w at most the switch-off rung's plus round-off. The switch moves
+# no balance, so it may only add the floating-point noise of one column at rest.
+# Pressure: the reference faces come from a scan down N cells, two roundings each
+# (g rho dz, then the sum), accumulating to 2 N eps |p|; the six-weight cell row
+# adds 11 roundings and p' + psf at a face 2 more, unaccumulated. So the pressure
+# imbalance is at most (2 N + 13) eps |p| <= 3 N eps |p| (N >= 13): c = 3. A
+# pressure jump dp drives at most dp / (rho cs) of velocity (the acoustic
+# impedance), and |p| / (rho cs) = cs / gamma for an ideal gas, so
+#   W_EPS = 3 eps N cs / gamma
+# = 4.2e-11 m/s here. Measured excess (on - off, worst rung): main -1.6e-11,
+# p rows -1.7e-11, factored rows +1.65e-13 (cartesian, Courant 250).
+W_EPS = 3.0 * 2.220446049250313e-16 * NZ * math.sqrt(GAMMA * RD * T0) / GAMMA
 
 
 def config(geometry="cartesian", cell_work=False):
@@ -192,7 +203,7 @@ def main():
                 failures.append(("child", value, out.returncode, "missing rows", missing))
         for (arm, geometry, courant), on in ladder.items():
             off = ladder.get(("face", geometry, courant))
-            if arm == "radial-exact" and off and on["max_w"] > ON_OFF * off["max_w"]:
+            if arm == "radial-exact" and off and on["max_w"] > off["max_w"] + W_EPS:
                 failures.append((arm, geometry, courant, "max w", on["max_w"], "off", off["max_w"]))
     for geometry in (geometries if args.ladder else ()):
         first_failure = None
