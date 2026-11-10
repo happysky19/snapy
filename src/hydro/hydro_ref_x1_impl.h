@@ -205,9 +205,8 @@ inline DISPATCH_MACRO void hydro_ref_x1_cell_impl(
   // in bracket, this value is overwritten and nothing changes.
   T dp_cell = grav * w[IDN * ncells + flat + i] * dx1f[i];
   T ratio_cell = lo / hi;
-  T cell_pref = fabs(ratio_cell - T(1)) < T(1.e-6)
-                    ? T(0.5) * (lo + hi)
-                    : dp_cell / log(ratio_cell);
+  T cell_pref = fabs(ratio_cell - T(1)) < T(1.e-6) ? T(0.5) * (lo + hi)
+                                                   : dp_cell / log(ratio_cell);
 
   if (uniform) {
     constexpr double w6[6] = {11. / 1440., -31. / 480., 401. / 720.,

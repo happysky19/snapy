@@ -63,9 +63,9 @@ RefOutput tensor_reference(torch::Tensor const& w, torch::Tensor const& dx1f,
   // hydro_ref_x1_cell_impl seeds it: the log-mean of the cell's own faces,
   // with the arithmetic mean as its ratio -> 1 limit. Mirrors the kernel.
   auto ratio_cell = out.psf_lo / out.psf_hi;
-  auto seed_pref =
-      torch::where((ratio_cell - 1.).abs() < 1.e-6,
-                   0.5 * (out.psf_lo + out.psf_hi), dp / torch::log(ratio_cell));
+  auto seed_pref = torch::where((ratio_cell - 1.).abs() < 1.e-6,
+                                0.5 * (out.psf_lo + out.psf_hi),
+                                dp / torch::log(ratio_cell));
 
   if (uniform) {
     out.pref.copy_(seed_pref);

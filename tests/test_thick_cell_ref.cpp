@@ -1,18 +1,16 @@
 // The x1 top face on a hydrostatic column, and the guard for a column deep
 // enough to reach the configured density floor. happysky19/snapy#5.
 // Both assertions are RED at the parent of this commit.
+#include <gtest/gtest.h>
+#include <snap/snap.h>
+#include <unistd.h>
+
 #include <cmath>
 #include <fstream>
 #include <iomanip>
-#include <vector>
-
-#include <unistd.h>
-
-#include <gtest/gtest.h>
-
-#include <snap/snap.h>
 #include <snap/hydro/hydro_dispatch.hpp>
 #include <snap/mesh/meshblock.hpp>
+#include <vector>
 
 #include "cuda_test_gate.hpp"
 
@@ -102,8 +100,8 @@ TEST(ThickCellRef, the_density_floor_guard_refuses_only_unsteppable_columns) {
   for (double ratio : {0.5, 0.9, 1.0, 1.002, 2.0, 27.96}) {
     auto blk = block_at_floor_ratio(ratio);
     auto co = blk->pcoord->options;
-    auto w = torch::zeros({snap::IPR + 1, co->nc3(), co->nc2(), co->nc1()},
-                          opt);
+    auto w =
+        torch::zeros({snap::IPR + 1, co->nc3(), co->nc2(), co->nc1()}, opt);
     w.narrow(-1, blk->pcoord->il(), kN).copy_(column(kA, kN, opt));
     snap::Variables v{{"hydro_w", w}};
     if (ratio > 1.001) {
