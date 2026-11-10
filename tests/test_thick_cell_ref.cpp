@@ -61,7 +61,7 @@ snap::MeshBlock block_at_floor_ratio(double ratio) {
 //! reads w[IPR] as a cell AVERAGE, so the log-mean of the top cell's own two
 //! faces must be its stored pressure. RED at the parent, whose half-cell
 //! extrapolation is the face above a POINT value at the cell centre: it
-//! misses by 1.0e-02 relative at dz/H = 0.35 and 4.5e-01 at 3.0.
+//! misses by 4.3130e-03 relative at dz/H = 0.35 and 1.2345e-01 at 3.0.
 TEST(ThickCellRef, top_face_is_average_consistent) {
   for (auto dev : {torch::kCPU, torch::kCUDA}) {
     if (dev == torch::kCUDA && !snapy_cuda_test_enabled()) continue;
