@@ -211,12 +211,13 @@ converted ones. The block therefore refills every ghost from the converted owned
 this order ({{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}):
 
 1. the block's own exchange on `hydro_w`, with `interpolate` and the primitive representation, which fills the
-   $x_2$ and $x_3$ halos, and in the `cubed` layout the $x_1$ halos of a neighbour on the same board as well;
-   the `slab` and `cubed-sphere` layouts carry nine exchange buffers rather than 27, so `exchange_dz_bounds`
-   returns a zero $x_1$ range for them and step 2 is what fills their $x_1$ halos;
+   $x_2$ and $x_3$ halos and, in the `cubed` layout, the $x_1$ halos, from neighbours in this process and in
+   others alike; the `slab` and `cubed-sphere` layouts have one block along $x_1$ ($p_z = 1$), so their $x_1$
+   ghosts are physical boundaries, written in step 3;
 2. `_x1_ghost_rows` ({{< code src/hydro/hydro.cpp HydroImpl::_x1_ghost_rows >}}) with the ghost depth, which
    copies the $x_1$ neighbour's outermost owned rows again across the **whole** $x_2$/$x_3$ extent, so the
-   corner columns past an $x_1$ seam are the neighbour's converted cells and not stale;
+   corner columns past an $x_1$ seam are the neighbour's converted cells and not stale; it returns at once
+   where the block has no $x_1$ neighbour, which is every block of those two layouts;
 3. every installed boundary function on `hydro_w` as a primitive fill, over all ghost layers.
 
 An outflow $x_1$ face is skipped in step 3 unless the stage carries a saved background
@@ -348,13 +349,14 @@ $[-9.54, +0.67]$ K at $t = 900$ s; $\lvert\Delta M\rvert/M$ of $1.7\times10^{-15
 $2.4\times10^{-15}$ across the seam, with the outflow drift equal to the reference to every printed digit; the
 temperature-floor arm bitwise equal; and in the moist slab $\lvert\Delta M\rvert/M$ of $1.8\times10^{-15}$ dry
 and $2.0\times10^{-15}$ water, a tracer ratio within $2.2\times10^{-15}$, every seam ghost bitwise the
-neighbour's converted cell, and the vapour sum equal to the screened run's. The margins are not uniform. Against
-the script's `TOL` of $10^{-13}$ the key-4 tracer ratios sit a factor of about 2 inside it on the stretched grid
-($5.1\times10^{-14}$) and about 7 on the uniform one ($1.5\times10^{-14}$), while the mass ratios sit a factor
-of 40 to 60 inside it; the outflow drift and the vapour sum are exactly zero against their $10^{-10}$ bound. The
-fitted orders are not a tolerance but a pass band, 4.50 and 4.80 against the 3.8 the arm requires, and the
-floor, `x1f` and seam-ghost arms are bitwise identities with no margin to quote. The CUDA twin
-`test_conversion_order_cuda_python` was **not run**: the
+neighbour's converted cell, and the vapour sum within the printed digit of the screened run's. The margins are
+not uniform. Against the script's `TOL` of $10^{-13}$ the key-4 tracer ratios sit a factor of about 2 inside it
+on the stretched grid ($5.1\times10^{-14}$) and about 7 on the uniform one ($1.5\times10^{-14}$), while the mass
+ratios sit a factor of 40 to 60 inside it. The outflow drift and the vapour sum are not identities either: each
+is a relative deviation from a constant the script carries, and both land far below their $10^{-10}$ bound, at
+$10^{-13}$ or smaller. The fitted orders are not a tolerance but a pass band, 4.50 and 4.80 against the 3.8 the
+arm requires, and the floor, `x1f` and seam-ghost arms are bitwise identities with no margin to quote. The CUDA
+twin `test_conversion_order_cuda_python` was **not run**: the
 configure this round records (@sec-appc) is `CUDA=OFF`, and against that library every arm stops in torch's
 dispatch stub rather than measuring anything. **Missing evidence** for the CUDA arm; closing it needs a build of
 snapy and of kintera with CUDA on.
