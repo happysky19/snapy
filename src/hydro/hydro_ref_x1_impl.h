@@ -208,7 +208,9 @@ inline DISPATCH_MACRO void hydro_ref_x1_cell_impl(
   T cell_pref = fabs(ratio_cell - T(1)) < T(1.e-6) ? T(0.5) * (lo + hi)
                                                    : dp_cell / log(ratio_cell);
 
-  if (uniform) {
+  // a rows table, when given, holds every row (stretched grids, and the
+  // factored-exponential rows on any grid): the table branch below
+  if (uniform && !rows) {
     constexpr double w6[6] = {11. / 1440., -31. / 480., 401. / 720.,
                               401. / 720., -31. / 480., 11. / 1440.};
     T lower = lo < hi ? lo : hi;
@@ -269,7 +271,7 @@ inline DISPATCH_MACRO void hydro_ref_x1_cell_impl(
       int row = 4 - sigma;
       use_six_faces(nc1 - 5, w6e[row], true);
     }
-  } else if (x1_grid == kX1RefStretched) {
+  } else if (rows) {
     T lower = lo < hi ? lo : hi;
     T upper = lo > hi ? lo : hi;
     int start = static_cast<int>(rows[7 * i]);
@@ -277,10 +279,17 @@ inline DISPATCH_MACRO void hydro_ref_x1_cell_impl(
     int j = clamp_in ? 2 * il + 1 - i : (clamp_out ? 2 * iu - 1 - i : i);
     if (start >= 0) {
       T value = T(0), partner = T(0);
-      for (int m = 0; m < 6; ++m) {
-        T face = hydro_ref_x1_face(psf_lo, psf_hi, flat, start + m, nc1);
-        value += rows[7 * i + 1 + m] * face;
-        partner += rows[7 * j + 1 + m] * face;
+      if (j == i) {
+        for (int m = 0; m < 6; ++m)
+          value += rows[7 * i + 1 + m] *
+                   hydro_ref_x1_face(psf_lo, psf_hi, flat, start + m, nc1);
+        partner = value;
+      } else {
+        for (int m = 0; m < 6; ++m) {
+          T face = hydro_ref_x1_face(psf_lo, psf_hi, flat, start + m, nc1);
+          value += rows[7 * i + 1 + m] * face;
+          partner += rows[7 * j + 1 + m] * face;
+        }
       }
       T a = psf_lo[flat + j], b = psf_hi[flat + j];
       bool kept = partner >= (a < b ? a : b) && partner <= (a > b ? a : b);

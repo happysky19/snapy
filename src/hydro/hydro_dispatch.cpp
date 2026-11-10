@@ -246,6 +246,65 @@ torch::Tensor hydro_ref_x1_stretched_rows(torch::Tensor const& dx1f, int iu,
   return rows;
 }
 
+//! Factored-exponential rows (experiment): p = P w with w = exp(-z / href), P
+//! interpolated by the six-face degree-5 Lagrange polynomial, so the cell
+//! average is sum_m c_m p_m with
+//!   c_m = (1/h_i) int_cell L_m(z) exp(-(z - z_m) / href) dz,
+//! by 16-point Gauss-Legendre (grid-time only). Exact for p ~ exp(-z/href).
+torch::Tensor hydro_ref_x1_factored_rows(torch::Tensor const& dx1f, int iu,
+                                         bool phys_in, bool phys_out,
+                                         bool wall_clamp, double href) {
+  auto h = dx1f.to(torch::kCPU, torch::kFloat64).contiguous();
+  int nc1 = h.size(0);
+  auto hp = h.data_ptr<double>();
+  auto rows = torch::zeros({nc1, 7}, torch::kFloat64);
+  auto r = rows.accessor<double, 2>();
+  constexpr int NG = 16;
+  long double xg[NG], wg[NG];
+  for (int k = 0; k < NG; ++k) {  // Gauss-Legendre on [-1, 1] by Newton
+    long double x = std::cos(M_PI * (k + 0.75L) / (NG + 0.5L)), dp = 0.L;
+    for (int it = 0; it < 100; ++it) {
+      long double p0 = 1.L, p1 = x;
+      for (int n = 2; n <= NG; ++n) {
+        long double p2 = ((2 * n - 1) * x * p1 - (n - 1) * p0) / n;
+        p0 = p1;
+        p1 = p2;
+      }
+      dp = NG * (x * p1 - p0) / (x * x - 1.L);
+      long double dx = p1 / dp;
+      x -= dx;
+      if (std::fabs((double)dx) < 1e-19) break;
+    }
+    xg[k] = 0.5L * (x + 1.L);                 // node on [0, 1]
+    wg[k] = 1.L / ((1.L - x * x) * dp * dp);  // weight on [0, 1] (= w/2)
+  }
+  for (int i = 0; i < nc1; ++i) {
+    int start =
+        hydro_ref_x1_six_face_start(i, nc1, iu, phys_in, phys_out, wall_clamp);
+    r[i][0] = start;
+    if (start < 0) continue;
+    long double t[6];
+    for (int k = 0; k < 6; ++k) {
+      long double o = 0.0L;
+      for (int j = i; j < start + k; ++j) o += hp[j];
+      for (int j = start + k; j < i; ++j) o -= hp[j];
+      t[k] = o / hp[i];
+    }
+    long double s = hp[i] / href;  // cell width over href
+    for (int m = 0; m < 6; ++m) {
+      long double wm = 0.0L;
+      for (int q = 0; q < NG; ++q) {
+        long double l = 1.0L;
+        for (int k = 0; k < 6; ++k)
+          if (k != m) l *= (xg[q] - t[k]) / (t[m] - t[k]);
+        wm += wg[q] * l * std::exp(-(xg[q] - t[m]) * s);
+      }
+      r[i][1 + m] = static_cast<double>(wm);
+    }
+  }
+  return rows;
+}
+
 }  // namespace snap
 
 namespace at::native {

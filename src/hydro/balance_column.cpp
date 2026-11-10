@@ -68,10 +68,13 @@ std::tuple<torch::Tensor, double, int> balance_column(
                                1.e-10 * d.mean().item<double>();
   int x1_grid = stretched ? kX1RefStretched : kX1RefUniform;
   // #280 (iv): the same rows a block builds from the same widths
-  torch::Tensor rows;
-  if (stretched)
-    rows = hydro_ref_x1_stretched_rows(dxf, nc1 - 1, true, true, wall_clamp)
-               .to(w.options());
+  // factored-exponential experiment: href from the first column's bottom cell
+  double href = (wb[IPR].flatten(0, 1)[0][0] / wb[IDN].flatten(0, 1)[0][0])
+                    .item<double>() /
+                grav;
+  torch::Tensor rows =
+      hydro_ref_x1_factored_rows(dxf, nc1 - 1, true, true, wall_clamp, href)
+          .to(w.options());
   auto wgt = grav * dxf;
 
   // check, then update: the residual therefore describes the state returned,

@@ -109,6 +109,9 @@ void face_floor_uses_adjacent_density(torch::Device device) {
 // to be judged as one polynomial: the top cell's row is inside its bracket,
 // but its partner, the dipped cell, is far outside, so the top cell takes the
 // log-mean too.
+// And to 2.5853902197e-8 (-17.7%) when the rows came to factor out a fixed
+// exponential (p = P exp(-z / H_ref)): every row on this 1 H-per-cell deck
+// changes value, and those next to the dip most.
 void face_floor_fires_on_an_unresolved_column(torch::Device device) {
   auto block = dipped_column(device, 10.);
   int dipped = block->pcoord->iu() - 1;
@@ -116,7 +119,7 @@ void face_floor_fires_on_an_unresolved_column(torch::Device device) {
       block->phydro->flux1()[IDN].select(-1, dipped).item<double>();
   std::printf("wb_ref4 %d, p = 10 e^{-x/2}: dipped face mass flux %.10e\n",
               static_cast<int>(HydroImpl::wb_ref4()), dipped_mass);
-  EXPECT_NEAR(dipped_mass, 3.1424080142e-8, 1.e-5 * 3.1424080142e-8);
+  EXPECT_NEAR(dipped_mass, 2.5853902197e-8, 1.e-5 * 2.5853902197e-8);
 }
 
 }  // namespace

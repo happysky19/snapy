@@ -93,11 +93,18 @@ Ref reference(torch::Tensor const& w, torch::Tensor const& dx1f, int iu,
   Ref r{torch::empty(sizes, w.options()), torch::empty(sizes, w.options()),
         torch::empty(sizes, w.options()), torch::empty(sizes, w.options()),
         torch::empty(sizes, w.options())};
-  torch::Tensor anchor, rows;
-  if (!uniform)  // unequal widths: the stretched rows, as balance_column
-    rows = snap::hydro_ref_x1_stretched_rows(dx1f, iu, phys_in, phys_out,
-                                             wall_clamp)
-               .to(w.options());
+  // the factored rows with balance_column's H_ref: the smallest (p / rho) / g
+  // over the bottom interior cells, on either grid
+  torch::Tensor anchor;
+  int il = w.size(-1) - 1 - iu;
+  double href =
+      (w[snap::IPR].narrow(-1, il, 1) / w[snap::IDN].narrow(-1, il, 1))
+          .min()
+          .item<double>() /
+      kGrav;
+  auto rows = snap::hydro_ref_x1_factored_rows(dx1f, iu, phys_in, phys_out,
+                                               wall_clamp, href)
+                  .to(w.options());
   at::native::call_hydro_ref_x1(
       w.device().type(), w.contiguous(), dx1f.contiguous(), anchor, r.psf_lo,
       r.psf_hi, r.pref, r.dsf, r.dref, iu, kGrav,

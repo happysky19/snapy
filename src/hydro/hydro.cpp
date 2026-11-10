@@ -599,12 +599,18 @@ HydroImpl::_hydro_ref_x1(torch::Tensor const& w) const {
   bool phys_out = pmb->options->is_physical_boundary(0, 0, 1);
 
   auto dx1f = pcoord->dx1f.contiguous();
-  if (stretched && !x1_rows_.defined()) {
-    x1_rows_ = hydro_ref_x1_stretched_rows(pcoord->dx1f, iu, phys_in, phys_out,
-                                           options->wb_wall_clamp());
+  if (!x1_rows_.defined()) {
+    // factored-exponential experiment: href from this block's first column,
+    // bottom interior cell, at the first call (the setup state); fixed after
+    int js = w.size(2) > 1 ? pcoord->jl() : 0,
+        ks = w.size(1) > 1 ? pcoord->kl() : 0;
+    double rt = (w[IPR][ks][js][is] / w[IDN][ks][js][is]).item<double>();
+    x1_rows_ = hydro_ref_x1_factored_rows(pcoord->dx1f, iu, phys_in, phys_out,
+                                          options->wb_wall_clamp(), rt / g)
+                   .to(w.options())
+                   .contiguous();
   }
-  torch::Tensor rows;
-  if (stretched) rows = x1_rows_.to(w.options()).contiguous();
+  torch::Tensor rows = x1_rows_;
   at::native::call_hydro_ref_x1(
       w.device().type(), w, dx1f, anchor, psf_lo, psf_hi, pref, dsf, dref, iu,
       g, x1_grid, phys_in, phys_out, options->wb_wall_clamp(), rows);

@@ -15,6 +15,9 @@ enum X1RefGrid : int {
 torch::Tensor hydro_ref_x1_stretched_rows(torch::Tensor const& dx1f, int iu,
                                           bool phys_in, bool phys_out,
                                           bool wall_clamp);
+torch::Tensor hydro_ref_x1_factored_rows(torch::Tensor const& dx1f, int iu,
+                                         bool phys_in, bool phys_out,
+                                         bool wall_clamp, double href);
 
 }  // namespace snap
 
