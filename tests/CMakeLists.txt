@@ -150,8 +150,9 @@ if(CUDA)
            radial_exact_split_gap_cuda)
   seam_arm(_wb_ref4_cuda "SNAP_WB_REF4=1"
            wb_ref4_flag_at_the_seam_split_matches_one_block_cuda)
+  seam_arm(_factored_href_cuda "" factored_href_split_matches_one_block_cuda)
   foreach(_a _x1_centroid_cuda _radial_exact_cuda _radial_exact_off_cuda
-             _wb_ref4_cuda)
+             _wb_ref4_cuda _factored_href_cuda)
     set_tests_properties(
       test_x1_seam_split${_a}.${buildl}
       PROPERTIES SKIP_REGULAR_EXPRESSION "\\[  SKIPPED \\] 1 test")

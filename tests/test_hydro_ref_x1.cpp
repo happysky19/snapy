@@ -416,6 +416,58 @@ TEST(HydroRefX1Dispatch, cuda_matches_cpu_on_the_stretched_rows) {
   }
 }
 
+// The factored rows (p = P exp(-z / H_ref)) are a table of the stretched rows
+// format that hydro.cpp and balance_column move to the state's device: the
+// GPU must reproduce the CPU reference, on a uniform and a stretched x1.
+TEST(HydroRefX1Dispatch, cuda_matches_cpu_on_the_factored_rows) {
+  if (!snapy_cuda_test_enabled()) {
+    GTEST_SKIP() << "CUDA is not available";
+  }
+  constexpr int64_t kMaxUlp = 32;
+  constexpr int nc3 = 2, nc2 = 3;
+  for (bool stretched : {false, true}) {
+    for (int nc1 : {24, 1025}) {
+      auto f64 = torch::TensorOptions().dtype(torch::kFloat64);
+      auto w = torch::zeros({snap::IPR + 1, nc3, nc2, nc1}, f64);
+      auto z = (torch::arange(nc1, f64) / double(nc1 - 1)).view({1, 1, nc1});
+      auto column = torch::arange(nc3 * nc2, f64).view({nc3, nc2, 1});
+      w[snap::IDN].copy_(1.0 + 0.5 * (1.0 - z) + 0.002 * column);
+      w[snap::IPR].copy_(100.0 * torch::exp(-2.0 * z) + 0.03 * column);
+      w = w.contiguous();
+      auto dx1f = stretched ? stretched_dx1f(nc1, torch::kFloat64)
+                            : torch::full({nc1}, 1.0 / nc1, f64);
+      int iu = nc1 - 4;
+      auto rows = snap::hydro_ref_x1_factored_rows(dx1f, iu, true, true, true,
+                                                   /*href=*/0.5)
+                      .contiguous();
+      int grid = stretched ? snap::kX1RefStretched : snap::kX1RefUniform;
+      auto expected = allocate_output(w);
+      at::native::call_hydro_ref_x1(torch::kCPU, w, dx1f, torch::Tensor(),
+                                    expected.psf_lo, expected.psf_hi,
+                                    expected.pref, expected.dsf, expected.dref,
+                                    iu, 1.0, grid, true, true, true, rows);
+      auto wg = w.to(torch::kCUDA).contiguous();
+      auto actual = allocate_output(wg);
+      at::native::call_hydro_ref_x1(
+          torch::kCUDA, wg, dx1f.to(torch::kCUDA), torch::Tensor(),
+          actual.psf_lo, actual.psf_hi, actual.pref, actual.dsf, actual.dref,
+          iu, 1.0, grid, true, true, true, rows.to(torch::kCUDA));
+      torch::cuda::synchronize();
+      for (auto const& p : std::vector<
+               std::pair<char const*, std::pair<torch::Tensor, torch::Tensor>>>{
+               {"pref", {expected.pref, actual.pref}},
+               {"dref", {expected.dref, actual.dref}},
+               {"psf_lo", {expected.psf_lo, actual.psf_lo}}}) {
+        auto d = ulp_diff(p.second.first, p.second.second, nc1);
+        EXPECT_EQ(d.nan_mismatch, 0) << p.first;
+        EXPECT_LE(d.max_ulp, kMaxUlp)
+            << p.first << " nc1 = " << nc1 << " stretched " << stretched << ": "
+            << d.max_ulp << " ULP at x1 index " << d.worst_index;
+      }
+    }
+  }
+}
+
 // A block too thin to carry a one-sided row (4 interior cells) must still keep
 // the ghosts out of its interior -- it falls back to the 2-point mean. This is
 // the case the `wide` guard exists for, and a version that lets the interior
