@@ -1,7 +1,7 @@
 ## The Riemann solver framework and the face-local frame (`dynamics/riemann-solver`) {#sec-ch04-riemann}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md 4.8; src/riemann/riemann_solver.cpp, src/riemann/riemann_solver.hpp, src/riemann/*_impl.h,
          src/riemann/lmars.cpp, hllc.cpp, roe.cpp, shallow_roe.cpp, plume_roe.cpp, src/hydro/hydro_forward.cpp,
          src/hydro/hydro.cpp, src/scalar/scalar.cpp, examples/*.yaml at the pin
@@ -16,7 +16,7 @@ solver also returns the face pressure the $x_1$ pressure force and the well-bala
 six cannot. The shipped decks name `lmars` (7), `hllc` (6) or `shallow-roe` (9).
 
 <!-- generated reader-reference: riemann -->
-For hydrodynamics, omitting the `riemann-solver` block preserves `hllc` ([`src/riemann/riemann_solver.hpp:33`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/riemann/riemann_solver.hpp#L33)); a present block without `type` selects `roe` ([`src/riemann/riemann_solver.cpp:27`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/riemann/riemann_solver.cpp#L27)). These are distinct parser paths at source pin `3c891cb20614260351944fb8007cbc9bd50d22a3`.
+For hydrodynamics, omitting the `riemann-solver` block preserves `hllc` ([`src/riemann/riemann_solver.hpp:33`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/riemann/riemann_solver.hpp#L33)); a present block without `type` selects `roe` ([`src/riemann/riemann_solver.cpp:27`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/riemann/riemann_solver.cpp#L27)). These are distinct parser paths at source pin `919936da07d80a310b98ab11da184972a3203274`.
 <!-- end reader-reference: riemann -->
 
 ::: {.callout-note title="At a glance"}

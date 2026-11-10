@@ -1,7 +1,7 @@
 ## Step acceptance and redo: six causes, one collective decision, halving up to `max_redo` (`check_redo`) {#sec-ch07-redo}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy); pyharp@4721715855e937c1e8b218e964c0655f46e56e29
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy); pyharp@4721715855e937c1e8b218e964c0655f46e56e29
 sources: OUTLINE.md 7.4; src/mesh/meshblock.cpp; src/mesh/mesh.cpp; src/eos/equation_of_state.cpp; examples/run_hydro.cpp;
          tests/test_check_redo_vapor_deficit.cpp; tests/test_fix_vapor_stale_count.py;
          sources/canoe__POSITIVITY_TECH_REPORT.md §9-10; sources/gh__ISSUE_THREADS_251-294.md (#263)

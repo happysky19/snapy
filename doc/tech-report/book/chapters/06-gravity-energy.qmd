@@ -1,8 +1,8 @@
 # Gravity and energy {#sec-ch06}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (code_pin.yml)
-sources: OUTLINE.md 6; docs/derivations/curved-gravity-work-weight.md@3c891cb20614260351944fb8007cbc9bd50d22a3 §§1-4;
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (code_pin.yml)
+sources: OUTLINE.md 6; docs/derivations/curved-gravity-work-weight.md@919936da07d80a310b98ab11da184972a3203274 §§1-4;
          sources/gw__GRAVITY_WORK_TECH_REPORT_draft.md; sources/gw__NEXTPR_indep_cartesian_gravity_work_weight.md
 status: draft
 author: Linfeng Li
@@ -52,7 +52,7 @@ continuity equation by $\phi$[^rg-e45e827c3f36] and integrate over the cell, usi
 $\phi\,\nabla\cdot(\rho\mathbf v) = \nabla\cdot(\phi\rho\mathbf v) - \rho\mathbf v\cdot\nabla\phi$ and the divergence
 theorem. Only the $x_1$ faces matter: on Cartesian, spherical-polar and gnomonic-equiangle grids the $x_2$, $x_3$
 faces join cells of the same $x_1$ level (on the cubed sphere, the same radius:
-`docs/derivations/curved-gravity-work-weight.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §12.6), so their terms
+`docs/derivations/curved-gravity-work-weight.md@919936da07d80a310b98ab11da184972a3203274` §12.6), so their terms
 are mass fluxes times one value of $\phi$, which @sec-ch06-dwork treats with the horizontal directions. Rearranged,
 the exact gravity work in a cell is
 

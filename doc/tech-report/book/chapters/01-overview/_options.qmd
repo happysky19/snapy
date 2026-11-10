@@ -1,7 +1,7 @@
 ## Build options from YAML and reject unknown keys (`from_yaml`) {#sec-ch01-options}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md entry 1.11; src/add_arg.h; src/input/check_keys.cpp; src/mesh/meshblock_options.cpp; src/layout/layout.cpp;
          src/scalar/scalar_options.cpp; tests/test_yaml_keys.cpp
 status: draft

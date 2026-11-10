@@ -1,8 +1,8 @@
 ## The $1/r$ remainder on spherical-polar grids: what is left after the corrections (no switch) {#sec-ch05-oneoverr}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy)
-sources: OUTLINE.md 5.9; docs/derivations/x1-centroid-spherical.md@3c891cb20614260351944fb8007cbc9bd50d22a3 §6;
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy)
+sources: OUTLINE.md 5.9; docs/derivations/x1-centroid-spherical.md@919936da07d80a310b98ab11da184972a3203274 §6;
          sources/study__next-1overR_README.md §§0-3; sources/gw__ONEOVERR_split_RESULT.md §§1-2;
          sources/study__next-1overR-remainder_README.md §§0-4; ISSUES.md item 5
 status: draft
@@ -77,7 +77,7 @@ same holds for $T=p/\rho$ and for $\chi$ inside the reference filter. The remain
 stratification with the signature $+g/(6c_pr_0)$, and the face fluxes are complete to $O(\Delta x_1^4)$ including
 $\Delta x_1^2/r$.[^ch05-1r-src]
 
-[^ch05-1r-src]: The expansion follows `docs/derivations/x1-centroid-spherical.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §6; the harness and the
+[^ch05-1r-src]: The expansion follows `docs/derivations/x1-centroid-spherical.md@919936da07d80a310b98ab11da184972a3203274` §6; the harness and the
     signature are in `sources/study__next-1overR_README.md` §§0-3; the completeness of the face fluxes is
     `sources/gw__ONEOVERR_split_RESULT.md` §§1-2.
 

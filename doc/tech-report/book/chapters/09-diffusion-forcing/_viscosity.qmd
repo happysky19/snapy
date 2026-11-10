@@ -1,7 +1,7 @@
 ## Isotropic viscosity and heat conduction (`forcing/diffusion`) {#sec-ch09-viscosity}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml); pyharp@4721715855e937c1e8b218e964c0655f46e56e29
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml); pyharp@4721715855e937c1e8b218e964c0655f46e56e29
 sources: OUTLINE.md 9.4; src/forcing/diffusion.cpp, src/hydro/hydro.cpp, src/mesh/meshblock.cpp, tests/test_diffusion.cpp,
          tests/test_diffusion_moist.cpp, tests/test_stretched_x1_ref.cpp at the pin; sources/canoe__diffusion_ghost_TECH_REPORT.md
 status: draft
@@ -395,17 +395,17 @@ coefficient by a factor of about 500 (@sec-ch09-wallcoef). No species or tracer 
 
 [^rg-c881080d630d]: kappa_iso — isotropic thermal transport coefficient, interpreted according to dynamic
 
-[^rg-e72046dad063]: $\kappa$ — thermal diffusivity (or conductivity, stated); [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/forcing/diffusion.cpp#L631-L665)
+[^rg-e72046dad063]: $\kappa$ — thermal diffusivity (or conductivity, stated); [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/forcing/diffusion.cpp#L631-L665)
 
-[^rg-6149e61825cb]: $\mu$, $\nu$ — dynamic and kinematic viscosity; [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/forcing/diffusion.cpp#L621-L626)
+[^rg-6149e61825cb]: $\mu$, $\nu$ — dynamic and kinematic viscosity; [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/forcing/diffusion.cpp#L621-L626)
 
 [^rg-0527910bf49b]: $c_v, c_p$ — mixture specific heats **per unit total mass**, $c_v = \sum_n y_n c_{v,n}$ over dry air and every species [J kg$^{-1}$ K$^{-1}$]; a chapter that needs the per-dry-mass form writes it out and says so
 
 [^rg-ca98cd88ebb0]: $n_1, n_2, n_3$ — interior cells per block in each direction
 
-[^rg-d9c30f993349]: $\tau$ — a relaxation time scale (named); [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/forcing/relax_bot_temp.cpp#L102-L105)
+[^rg-d9c30f993349]: $\tau$ — a relaxation time scale (named); [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/forcing/relax_bot_temp.cpp#L102-L105)
 
-[^rg-520b6f3f3b47]: $R_{\mathrm{d}}$, $R_n$ — specific gas constants of dry air and species $n$ [J kg$^{-1}$ K$^{-1}$]; [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/eos/ideal_moist.cpp#L40-L43)
+[^rg-520b6f3f3b47]: $R_{\mathrm{d}}$, $R_n$ — specific gas constants of dry air and species $n$ [J kg$^{-1}$ K$^{-1}$]; [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/eos/ideal_moist.cpp#L40-L43)
 
 [^rg-2608062c5408]: $g_1, g_2, g_3$ — constant gravity components [m s$^{-2}$]; $g_1<0$ points to decreasing $x_1$
 

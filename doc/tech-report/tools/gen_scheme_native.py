@@ -14,7 +14,7 @@ import code_anchors
 
 REPORT = Path(__file__).resolve().parent.parent
 TARGET = 'book/chapters/04-spatial-discretization/_howto-native.qmd'
-PIN = '3c891cb20614260351944fb8007cbc9bd50d22a3'
+PIN = '919936da07d80a310b98ab11da184972a3203274'
 
 
 def generate(report):

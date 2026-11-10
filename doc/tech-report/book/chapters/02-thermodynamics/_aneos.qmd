@@ -1,7 +1,7 @@
 ## External tabulated EOS interface (`aneos`) {#sec-ch02-aneos}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md section 2; src/eos/aneos.cpp, src/eos/aneos/aneos_thermo.hpp,
          src/eos/aneos/aneos_thermo_dummy.cpp at the pin
 status: draft

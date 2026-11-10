@@ -1,7 +1,7 @@
 ## Gravity-work fixer budget: the meters, the accounting and `fixgrav=` (`gravity-work-fixer`) {#sec-ch13-fixgrav}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy)
 sources: OUTLINE.md 13.4; src/hydro/hydro_forward.cpp; src/hydro/hydro.hpp; src/hydro/hydro.cpp; src/mesh/meshblock.cpp;
          src/mesh/mesh.cpp; src/forcing/const_gravity.cpp; tests/test_gravity_work_fixer.py;
          tests/test_flux_covariance_seams.py; tests/CMakeLists.txt

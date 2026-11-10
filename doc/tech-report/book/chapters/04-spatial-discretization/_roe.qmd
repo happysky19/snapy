@@ -1,7 +1,7 @@
 ## Roe, with a Lax–Friedrichs positivity fallback (`type: roe`) {#sec-ch04-roe}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md 4.11; src/riemann/roe_impl.h, src/riemann/roe.cpp, src/riemann/riemann_solver.cpp,
          src/eos/ideal_moist_impl.h, tests/test_riemann.cpp at the pin
 status: draft

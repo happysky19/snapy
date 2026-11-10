@@ -1,45 +1,44 @@
-## Fourth-order, cell/face-consistent density reference (`SNAP_WB_REF4`) {#sec-ch05-wbref4}
+## Fourth-order, cell-consistent face density reference (`SNAP_WB_REF4`) {#sec-ch05-wbref4}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy)
 sources: OUTLINE.md 5.7; src/hydro/wb_ref4.cpp; src/hydro/hydro.cpp; src/hydro/balance_column.cpp;
-         docs/derivations/wb-ref4.md@3c891cb20614260351944fb8007cbc9bd50d22a3 §§2-9; sources/gw__NEXTPR_spec_wbref_exact.md
+         docs/derivations/wb-ref4.md@919936da07d80a310b98ab11da184972a3203274 §§2-9; sources/gw__NEXTPR_spec_wbref_exact.md
 status: draft
 -->
 
 ### Summary
 
-The kernel's density reference is second order: the binomial smoothing biases $\chi=\rho/p$ by $\tfrac{\Delta x_1^2}{2}\partial_1^2\chi$,
-and its face density is not the face value of its own cell density, so the solver's face density carries the
-offset @eq-ch05-refkernel-offset. That offset enters the $x_1$ mass flux at linear order and, through it, the gravity work. The
-switch removes it with two operators: a five-point filter with zero second and third moments, which keeps the
-reference fourth order while still removing the two-cell mode, and a face value taken from the quartic through the
-primitive of the cell reference, so that face and cell are consistent by construction. It never changes a pressure,
-on any grid: the cell and face pressures, and so the rest state, are the kernel's.
+The kernel's face density is not the face value of its own cell density, so the solver's face density carries
+the offset @eq-ch05-refkernel-offset. That offset enters the $x_1$ mass flux at linear order and, through it, the
+gravity work. The switch removes it with one operator: it replaces the face density by the face value of the
+kernel's own cell density, taken from the quartic through the primitive of that cell field, so that face and cell
+are consistent by construction. Nothing else is replaced. The cell density reference, the cell pressure and the
+face pressures, and so the rest state, are the kernel's on any grid.
 
 ::: {.callout-note title="At a glance"}
-**Purpose.** Makes the reference density fourth order and its face value consistent with its cell value, @eq-ch05-wbref4-dref.
+**Purpose.** Makes the reference face density the face value of the kernel's own cell density, @eq-ch05-wbref4-face.
 
-**Data.** Reads $\chi$, $p_{\mathrm{ref}}$ and $p_{\mathrm{sf}}$ of the kernel; replaces $\rho_{\mathrm{ref}}$ and $\rho_{\mathrm{sf}}$.
+**Data.** Reads $\rho_{\mathrm{ref}}$ and $p_{\mathrm{sf}}$ of the kernel; replaces $\rho_{\mathrm{sf}}$ only.
 
-**Placement.** Inside `HydroImpl::_hydro_ref_x1`: cells before the seam exchange, faces after it.
+**Placement.** Inside `HydroImpl::_hydro_ref_x1`: the resolution flag right after the kernel, the faces after the seam exchange.
 
 **Activation.** Environment variable `SNAP_WB_REF4` (or `SNAP_X1_CENTROID_EXACT`), default off; needs $n_g\ge3$.
 
-**Guarantee / limits.** $\eta_{\rho,f}=O(\Delta x_1^4)$ where no guard fires; $p_{\mathrm{sf}}$ and so the rest balance are unchanged.
+**Guarantee / limits.** $\eta_{\rho,f}=O(\Delta x_1^4)$ where no guard fires; $\rho_{\mathrm{ref}}$, $p_{\mathrm{sf}}$ and so the rest balance are unchanged.
 
 **Evidence.** The Tests layer below, @tbl-ch05-wbref4-tests.
 :::
 
-Local symbols: $\mathsf F$ [-] the five-point filter; $\Pi$ [kg m$^{-2}$] the primitive of the cell reference
+Local symbols: $\Pi$ [kg m$^{-2}$] the primitive of the cell reference
 density; $i_0$ the first cell of a stencil window, $l$ the cell offset in it and $l_{\mathrm f}$ the face offset; $\ell_{l_{\mathrm f}}$
 the Lagrange basis polynomial of face $i_0+l_{\mathrm f}$; $\tilde p$ [Pa] the cubic through four face pressures; $\zeta$ a
 Gauss-Legendre node; $n_{\mathrm{poly}}$ the polytropic index and $\mathcal S_i$ [J kg$^{-1}$ K$^{-1}$ s$^{-1}$] the entropy
 tendency of cell $i$, both in the order test. $\vartheta$[^rg-3739b5b2fec3], $\lambda_w$[^rg-cf66429c8e8b], $\chi$, $\eta_{\rho,f}$, $\mathcal W$, $\Delta x_1$, $n_g$ and $\epsilon_{\mathrm m}$ are defined in @sec-appa
 or @sec-ch05-refkernel.
 
-Guards keep the kernel's values wherever the new ones would leave the local range or the column is under-resolved,
-and the cell part runs before the seam exchange of @sec-ch05-seam, the face part after it. With the corrected-PE[^rg-36523dc32e4e] face
+Guards keep the kernel's face value wherever the new one would leave the range of its two neighbouring cells or
+the column is under-resolved, and the face part runs after the seam exchange of @sec-ch05-seam. With the corrected-PE[^rg-36523dc32e4e] face
 work of @sec-ch06 on (its default with `gravity-work: face`), the one-step spurious stratification of a neutral column
 converges at about fourth order with the switch and second order without it.
 
@@ -52,39 +51,19 @@ converges at about fourth order with the switch and second order without it.
 Notation as in @sec-ch05-refkernel; indices are cell indices and $\chi_i=\overline\rho_i/\overline p_i$. The derivation is
 that of the derivation note,[^ch05-wb4-note] re-written here and checked by `[C3]`, `[C7]`, `[C8]`, `[C14]`.
 
-[^ch05-wb4-note]: `docs/derivations/wb-ref4.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §§2-7.
+[^ch05-wb4-note]: `docs/derivations/wb-ref4.md@919936da07d80a310b98ab11da184972a3203274` §§2-7.
 
-#### Cell density
+#### Why only the face value
 
-$$
-\begin{aligned}
-\rho_{\mathrm{ref},i} &= p_{\mathrm{ref},i}\,(\mathsf F\chi)_i, \\
-\mathsf F &= \tfrac1{16}(-1,\,4,\,10,\,4,\,-1).
-\end{aligned}
-$$ {#eq-ch05-wbref4-dref}
-
-$\mathsf F$ has unit sum, zero first, second and third moments and fourth moment $-\tfrac32$ in cell units, and zero response
-to the two-cell mode, wavelength $\lambda_w=2\Delta x_1$ ($\vartheta=\pi/2$) (`[C3]`), so $\mathsf F\chi=\chi+O(\Delta x_1^4)$ for smooth $\chi$ and the two-cell mode is still removed; its reach, $\pm2$, is
-the binomial's, so ghost depth and seam exchange are unchanged. With $p_{\mathrm{ref}}=\overline p+c+O(\Delta x_1^6)$
-(@sec-ch05-refkernel) the cell reference is $\overline\rho+c\chi+O(\Delta x_1^4)$, and the smooth $c\chi$ is carried
-consistently by the face value below. @eq-ch05-wbref4-dref is built in `wb_ref4_stencils` as the filter row `F` ($\mathsf F$)
-({{< code src/hydro/wb_ref4.cpp wb_ref4_stencils >}})
-and applied in `wb_ref4_cells` as `fr`
-({{< code src/hydro/wb_ref4.cpp wb_ref4_cells >}}).
-
-At a clamped wall the two values past the wall are cubic extrapolations of the four owned cells nearest it,
-$\chi_0..\chi_3$ counted from the wall:
-
-$$
-\begin{aligned}
-\chi_{-1} &= 4\chi_0 - 6\chi_1 + 4\chi_2 - \chi_3, \\
-\chi_{-2} &= 10\chi_0 - 20\chi_1 + 15\chi_2 - 4\chi_3 .
-\end{aligned}
-$$ {#eq-ch05-wbref4-cubic}
-
-All five stencil values of the first two cells then lie on one cubic, which $\mathsf F$ reproduces, so $(\mathsf F\chi)_0=\chi_0$ and
-$(\mathsf F\chi)_1=\chi_1$ for any data (`[C7]`): filtering with these wall values and leaving the two end cells unfiltered are the
-same reference. Ghosts are never read.
+$\eta_{\rho,f}=\rho_{\mathrm{sf},f}-\mathcal W[\rho_{\mathrm{ref}}]_f$ of @eq-ch05-refkernel-offset is the offset
+between the kernel's face density and the face value of the kernel's own cell density. What the solver puts on the face is
+$\mathcal W[\overline\rho-\rho_{\mathrm{ref}}]_f+\rho_{\mathrm{sf},f}=\mathcal W[\overline\rho]_f+\eta_{\rho,f}$, by
+linearity of the reconstruction. So the face density is a consistent high-order face value exactly when
+$\rho_{\mathrm{sf}}$ is the face value of the cell field $\rho_{\mathrm{ref}}$, **whatever the accuracy of
+$\rho_{\mathrm{ref}}$ itself**: a bias shared by the cell reference and its face value is subtracted and added back
+and cannot reach the flux. One operator therefore closes the offset, and the switch replaces nothing else. The
+cell density reference stays the kernel's $p_{\mathrm{ref}}\chi^{s}$ of @eq-ch05-refkernel-dens, and so does
+every pressure.
 
 #### Face density
 
@@ -109,64 +88,62 @@ that level measures round-off, not truncation). @eq-ch05-wbref4-face is built as
 and applied by `wb_ref4_faces`
 ({{< code src/hydro/wb_ref4.cpp wb_ref4_faces >}}).
 
-#### Cell pressure
+#### Cell pressure and cell density
 
-The switch changes no cell pressure, on any grid: `wb_ref4_cells` reads the kernel's $p_{\mathrm{ref}}$ and writes only
-$\rho_{\mathrm{ref}}$ ({{< code src/hydro/wb_ref4.cpp wb_ref4_cells >}}). On a uniform grid that is the six-face
-pressure of @eq-ch05-refkernel-pref; on a keyed stretched $x_1$ it is already the six-face average built from the
-widths, @eq-ch05-refkernel-stretched, of sixth order, so the switch contributes only the density reference and the
-face density there. The rest state is therefore the kernel's with the switch on or off, and `balance_column` does not
-call the switch (@sec-ch05-balcol). The stencils of the face part use the face positions (physical spacing), so they
-apply to a stretched $x_1$ as built.
+The switch changes no cell value, on any grid: `wb_ref4_faces` writes only $\rho_{\mathrm{sf}}$
+({{< code src/hydro/wb_ref4.cpp wb_ref4_faces >}}), and `wb_ref4_flag` reads the scan pressures and returns a
+boolean ({{< code src/hydro/wb_ref4.cpp wb_ref4_flag >}}). On a uniform grid the cell pressure is the six-face
+pressure of @eq-ch05-refkernel-pref; on a keyed stretched $x_1$ it is the six-face average built from the widths,
+@eq-ch05-refkernel-stretched, of sixth order. The rest state is therefore the kernel's with the switch on or off,
+and `balance_column` does not call the switch (@sec-ch05-balcol). The stencils of the face part use the face
+positions (physical spacing), so they apply to a stretched $x_1$ as built.
 
 #### Guards and rest balance
 
-A cell whose $(\mathsf F\chi)_i$ lies outside $[\min,\max]$ of $\chi$ over cells $i-1..i+1$, with relative margin $10^{-10}$, keeps the
-kernel's ratio; a face outside its two neighbouring cell references keeps the kernel's face. A cell with
-$\lvert\ln(p_{\mathrm{sf},i-1/2}/p_{\mathrm{sf},i+1/2})\rvert>0.5$, fewer than two cells per pressure scale height, is
-flagged, the flag is dilated by two cells, and flagged cells and faces next to them keep the kernel's values; ghosts
-past a clamped wall do not count. The flag reads $p_{\mathrm{sf}}$ at most three cells away, which is why $n_g\ge3$ is
-required: then both sides of an $x_1$ seam compute the same flag. The threshold, dilation and margin are design
-choices, not derived. Since neither $p_{\mathrm{sf}}$ nor $p_{\mathrm{ref}}$ is changed, the rest state
+A face whose new value lies outside the range of its two neighbouring cell references keeps the kernel's face,
+with relative margin $10^{-10}$. A cell with $\lvert\ln(p_{\mathrm{sf},i-1/2}/p_{\mathrm{sf},i+1/2})\rvert>0.5$,
+fewer than two cells per pressure scale height, is flagged, the flag is dilated by two cells, and a face with a
+flagged cell on either side keeps the kernel's value; ghosts past a clamped wall do not count. The flag reads
+$p_{\mathrm{sf}}$ at most three cells away, which is why $n_g\ge3$ is required: then both sides of an $x_1$ seam
+compute the same flag. The threshold, dilation and margin are design choices, not derived. Since neither
+$p_{\mathrm{sf}}$ nor $p_{\mathrm{ref}}$ nor $\rho_{\mathrm{ref}}$ is changed, the rest state
 @eq-ch05-wbx1-rest is the kernel's.
 
-*Why the two sides of an $x_1$ seam agree.* Four steps.
+*Why the two sides of an $x_1$ seam agree.* Three steps.
 
-1. *The cell part runs before the exchange.* `wb_ref4_cells` is called before `pass_x1_anchor`, so the ghost rows a
-   neighbour receives already hold the replaced $\rho_{\mathrm{ref}}$.
-2. *The face part reads only exchanged cells.* `wb_ref4_faces` runs after the exchange, and its four-cell window at an
-   interior face reaches two cells past the face, inside $n_g\ge2$.
-3. *The flag reads three cells.* The flag of a cell uses its own $p_{\mathrm{sf}}$ ratio, dilated by two cells
-   (`max_pool1d` of width 5), so a face next to a seam depends on scan pressures up to three cells away. With $n_g\ge3$
-   both blocks hold them, which is the setup check.
-4. *The guards do not flip on round-off.* `in_range` widens each bound by `kMargin` $=10^{-10}$ relative, far above the
-   round-off of the next paragraph, so a split column and one block take the same branch on a flat profile, where the
-   two bounds coincide.
+1. *The flag is local.* `wb_ref4_flag` reads only the block's own scan pressures, so it needs no exchange; it is
+   built right after the kernel ({{< code src/hydro/wb_ref4.cpp wb_ref4_flag >}}).
+2. *The face part reads only exchanged cells.* `wb_ref4_faces` runs after the seam exchange of
+   $(p_{\mathrm{ref}},\rho_{\mathrm{ref}})$, and its four-cell window at an interior face reaches two cells past the
+   face, inside $n_g\ge2$. The flag of a cell is dilated by two cells (`max_pool1d` of width 5), so a face next to a
+   seam depends on scan pressures up to three cells away; with $n_g\ge3$ both blocks hold them, which is the setup
+   check.
+3. *The guard does not flip on round-off.* `in_range` widens each bound by `kMargin` $=10^{-10}$ relative, far above
+   the round-off of the next paragraph, so a split column and one block take the same branch on a flat profile,
+   where the two bounds coincide.
 
-*Round-off.* The interior filter weights are multiples of $1/16$ and exact in binary; `apply` sums five products, so by
-the standard dot-product bound $(\mathsf F\chi)_i$ is off by at most $5\epsilon_{\mathrm m}\sum_l\lvert\mathsf F_l\rvert\max\chi
-=\tfrac{25}{4}\epsilon_{\mathrm m}\max\chi$, $1.4\times10^{-15}\max\chi$ in double, plus one rounding for the product with
-$p_{\mathrm{ref}}$. The face weights are computed in double by `lagrange_deriv`, so they carry a rounding of their own
+*Round-off.* The face weights are computed in double by `lagrange_deriv`, so they carry a rounding of their own
 that is not bounded here; their four-term sum adds at most $4\epsilon_{\mathrm m}\sum_l\lvert a_l\rvert\max\rho_{\mathrm{ref}}
 =\tfrac{16}{3}\epsilon_{\mathrm m}\max\rho_{\mathrm{ref}}$ in the interior, with $\sum_l\lvert a_l\rvert=16/12$ for the
-weights $a_l=(-1,7,7,-1)/12$. The $n_1=256$ level of `[C14]`, at round-off level, lies inside both.
+weights $a_l=(-1,7,7,-1)/12$. The $n_1=256$ level of `[C14]`, at round-off level, lies inside it.
 
-*Exact and truncated.* Exact: the end-cell identity, the face weights for cubics.
-$O(\Delta x_1^4)$: $\rho_{\mathrm{ref}}$ and $\eta_{\rho,f}$ in the interior. At the three faces next to a wall the note
-gives $O(\Delta x_1^3)$ (the anchor constant through the even ghosts); not re-checked here.
+*Exact and truncated.* Exact: the face weights for cubics. $O(\Delta x_1^4)$: $\eta_{\rho,f}$ in the interior. At the
+three faces next to a wall the note gives $O(\Delta x_1^3)$ (the anchor constant through the even ghosts); not
+re-checked here. The cell reference keeps the kernel's second-order bias, which @eq-ch05-refkernel-dens carries and
+which cancels out of the face value by the argument above.
 
 ### Numerical method
 
-The stencils are shown in @fig-ch05-wbref4-stencils. The stencils and weights are built once per block, on the CPU in double
+The stencil is shown in @fig-ch05-wbref4-stencils. The stencils and weights are built once per block, on the CPU in double
 precision, and cached until device or dtype changes; application is a gather and a weighted sum on the block's device.
-The cell part runs right after the kernel in `_hydro_ref_x1`, before the seam ghost-row exchange; the face part runs
-after it, so a column split along $x_1$ gets the same faces as one block. A block with a clamped wall and fewer than
+The resolution flag is built right after the kernel in `_hydro_ref_x1`; the face part runs after the seam ghost-row
+exchange, so a column split along $x_1$ gets the same faces as one block. A block with a clamped wall and fewer than
 four owned cells keeps the kernel's reference.
 
 ```{python}
 #| label: fig-ch05-wbref4-stencils
-#| fig-cap: "The `SNAP_WB_REF4` stencils at a bottom wall (thick black line), $x_1$ to the right. Top: the filter $\\mathsf F$ on the wall cell $i_s$ reads two values past the wall (bluish-green diamonds $E_1$, $E_2$), which are cubic extrapolations of the four owned cells nearest it (sky-blue circles), never the hatched ghosts; with them the filtered ratio equals $\\chi$ in the end cell. Bottom: the face density at the wall face from the quartic primitive over the four owned cells next to the wall (orange triangles at the five faces); interior faces use the centred weights $(-1, 7, 7, -1)/12$."
-#| fig-alt: "Two rows of cells beside a wall with hatched ghosts; in the top row diamonds sit in two ghost cells and circles in four interior cells under a bracket of five cells; in the bottom row triangles mark five faces under a bracket of four cells."
+#| fig-cap: "The `SNAP_WB_REF4` face stencil at a bottom wall (thick black line), $x_1$ to the right. The face density at the wall face comes from the quartic primitive over the four owned cells next to the wall (orange triangles at the five faces, sky-blue circles at the cell references the weights read); the window is kept inside the owned cells there, so the hatched ghosts are never read. Interior faces use the centred weights $(-1, 7, 7, -1)/12$."
+#| fig-alt: "A row of cells beside a wall with hatched ghosts, triangles marking five faces and circles marking four cell values, under a bracket of four cells."
 #| echo: false
 from snapy_report.ch05.figures.fig_wbref4_stencils import make_fig
 make_fig()
@@ -200,7 +177,7 @@ values $-0.2254$, $-0.1193$ differ from the note's $-0.2257$, $-0.1194$ in the f
 therefore removed by the corrected-PE face work, tested by switching that work off and on with everything else fixed,
 not derived.
 
-[^ch05-wb4-tab]: `docs/derivations/wb-ref4.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §9.
+[^ch05-wb4-tab]: `docs/derivations/wb-ref4.md@919936da07d80a310b98ab11da184972a3203274` §9.
 
 ### Code
 
@@ -234,35 +211,34 @@ cells a block does not hold, and the two sides of a seam could disagree. Values 
 fewer than five cells in all, is not refused: its stencils are marked unusable
 ({{< code src/hydro/wb_ref4.cpp wb_ref4_stencils >}}) and it keeps the kernel's reference.
 
-**The lines that implement @eq-ch05-wbref4-dref and @eq-ch05-wbref4-face.** From `wb_ref4_cells` and
-`wb_ref4_faces`:
+**The lines that implement @eq-ch05-wbref4-face.** From `wb_ref4_flag` and `wb_ref4_faces`:
 
 ```cpp
-auto r = w[IDN] / w[IPR];
-auto fr = apply(r, st.fidx, st.fwt);
-...
-dref.narrow(-1, st.is, nown)
-    .copy_(torch::where(fl, d_old, torch::where(ok, p_new * fr, keep)));
+auto bad = ((psf_lo / psf_hi).log().abs() > kMaxLogDrop) & st.counted;
+return torch::max_pool1d(bad.to(psf_lo.dtype()).reshape({-1, 1, st.nc1}), 5,
+                         1, 2).reshape(sizes) > 0.;
 ...
 auto face = apply(dref, st.aidx, st.awt);
-...
+auto ok = in_range(face, torch::minimum(dl, dr), torch::maximum(dl, dr)) &
+          ~flag.narrow(-1, st.is - 1, nf) & ~flag.narrow(-1, st.is, nf);
 d.copy_(torch::where(ok, face, d));
 ```
 
-`r` is $\chi$, `fr` is $\mathsf F\chi$ and `p_new * fr` the first line of @eq-ch05-wbref4-dref; `fl` is the dilated
-flag, which keeps the kernel's `d_old`, and `ok` the range guard, which also keeps `d_old`; `p_new` is the kernel's
-cell pressure, unchanged ({{< code src/hydro/wb_ref4.cpp wb_ref4_cells >}}). `face` is $\partial_1\Pi(x_{1,f})$ of
-@eq-ch05-wbref4-face with the weights `awt`, written to $\rho_{\mathrm{sf}}$ (`d`) where its own guard passes.
+`bad` is the under-resolution test and `max_pool1d` the two-cell dilation, together the flag
+({{< code src/hydro/wb_ref4.cpp wb_ref4_flag >}}). `face` is $\partial_1\Pi(x_{1,f})$ of @eq-ch05-wbref4-face with
+the weights `awt`, read from the kernel's cell reference `dref`, which is never written; `ok` is the range guard
+and the flag of the two cells beside the face, and where it fails the kernel's $\rho_{\mathrm{sf}}$ (`d`) stays
+({{< code src/hydro/wb_ref4.cpp wb_ref4_faces >}}).
 
 | what | code link | symbol | switch |
 |--------|----------|----------|------|
 | the switch, implied by the centroid switch | {{< code src/hydro/wb_ref4.cpp wb_ref4_enabled >}} | `wb_ref4_enabled` | `SNAP_WB_REF4` |
 | margin and resolution threshold | {{< code src/hydro/wb_ref4.cpp kMaxLogDrop >}} | `kMaxLogDrop`, `kMargin` | |
 | stencils and weights | {{< code src/hydro/wb_ref4.cpp wb_ref4_stencils >}} | `wb_ref4_stencils` | |
-| cell part and flag | {{< code src/hydro/wb_ref4.cpp wb_ref4_cells >}} | `wb_ref4_cells` | |
+| resolution flag | {{< code src/hydro/wb_ref4.cpp wb_ref4_flag >}} | `wb_ref4_flag` | |
 | face part | {{< code src/hydro/wb_ref4.cpp wb_ref4_faces >}} | `wb_ref4_faces` | |
 | ghost-depth check | {{< code src/hydro/hydro.cpp HydroImpl::reset >}} | `wb_ref4_enabled` | $n_g\ge3$ |
-| calls around the seam exchange | {{< code src/hydro/hydro.cpp HydroImpl::_hydro_ref_x1 >}} | `wb_ref4_cells` | |
+| calls around the seam exchange | {{< code src/hydro/hydro.cpp HydroImpl::_hydro_ref_x1 >}} | `wb_ref4_flag` | |
 | face part after the exchange | {{< code src/hydro/hydro.cpp HydroImpl::_hydro_ref_x1 >}} | `wb_ref4_faces` | |
 
 : Code map of `SNAP_WB_REF4`. {#tbl-ch05-wbref4-code}
@@ -272,8 +248,8 @@ cell pressure, unchanged ({{< code src/hydro/wb_ref4.cpp wb_ref4_cells >}}). `fa
    ({{< code src/hydro/wb_ref4.cpp wb_ref4_enabled >}}).
 2. At setup, with gravity on, $n_g<3$ fails the `TORCH_CHECK` that names `wb_ref4_enabled`
    ({{< code src/hydro/hydro.cpp HydroImpl::reset >}}).
-3. In `_hydro_ref_x1` the stencils are built once per block from the face positions and `wb_ref4_cells` replaces
-   $\rho_{\mathrm{ref}}$ and returns the resolution flag
+3. In `_hydro_ref_x1` the stencils are built once per block from the face positions and `wb_ref4_flag` returns
+   the resolution flag; the cell reference is left as the kernel built it
    ({{< code src/hydro/hydro.cpp HydroImpl::_hydro_ref_x1 >}}).
 4. After the seam exchange `wb_ref4_faces` replaces $\rho_{\mathrm{sf}}$
    ({{< code src/hydro/hydro.cpp HydroImpl::_hydro_ref_x1 >}}).
@@ -290,17 +266,17 @@ The only user-facing error is the ghost-depth check of step 2.
 | `test_x1_seam_split_mp_wb_ref4` (2 ranks) | two ranks equal two blocks and one block | $10^{-13}$ | round-off |
 | `test_balance_column_wb_ref4`, `test_face_floor_wb_ref4` | the `balance_column` tests pass with the switch set; switched dipped-face fluxes $-1.19257\times10^{-7}$ and $0.0303502$ | as in @sec-ch05-balcol; $10^{-3}$ relative, $10^{-6}$ | pinned values |
 | `tests/test_stretched_x1_ref.cpp` (`test_stretched_x1_ref_wb_ref4.release`), `wb_ref4_switch_runs`, `balance_column_wb_ref4_runs` | with the switch, a reflecting deck on a keyed stretched $x_1$ builds and steps; a stretched column balances | runs; residual $<10^{-13}$ | test bound |
-| this chapter's check, `wbref_check.py` | `[C3]`, `[C7]`, `[C8]`, `[C14]` | per claim | stated in the check |
+| this chapter's check, `wbref_check.py` | `[C8]`, `[C14]` | per claim | stated in the check |
 
 : Tests of `SNAP_WB_REF4`. {#tbl-ch05-wbref4-tests}
 
-`[C3]` confirms the moments of $\mathsf F$ (unit sum, zero first to third, fourth $-\tfrac32$) and its zero response at
-the two-cell mode, $\vartheta=\pi/2$. `[C7]` confirms the two cubic wall rows and that the two end cells keep $\chi$ exactly. `[C8]`
-derives the three face rows, interior, wall and next, in exact rationals. `[C14]` measures the face offset quoted in
-the Derivation, order 2.00 for the kernel and about 6 with the switch until round-off.
+`[C8]` derives the three face rows, interior, wall and next, in exact rationals. `[C14]` measures the face offset
+quoted in the Derivation, order 2.00 for the kernel and about 6 with the switch until round-off. The check also
+carries `[C3]` and `[C7]`, which verify the moments of a five-point filter and a cubic wall continuation; no
+operator of this section uses them, and no claim here rests on them.
 
 ::: {.callout-important title="Test"}
-**Evidence.** Check numbers come from `wbref_check.py` (`[C3]`, `[C7]`, `[C8]`, `[C14]`).[^ch05-wb4-chk] At the pin
+**Evidence.** Check numbers come from `wbref_check.py` (`[C8]`, `[C14]`).[^ch05-wb4-chk] At the pin
 $N^2_{\mathrm{eff}}n_1^2$ at $n_1$ = 32, 64, 128 is, switch off, $+0.0719$, $+0.0656$, $+0.0640$ (1 e-fold) and
 $+0.6197$, $+0.5344$, $+0.5060$ (3 e-folds); on, $+0.0025$, $+0.0006$, $+0.0001$ and $+0.0406$, $+0.0110$, $+0.0029$
 (@fig-ch05-wbref4-order). The seam tests print relative gaps of $9.9\times10^{-20}$ and $6.5\times10^{-16}$
@@ -339,7 +315,7 @@ run at the pin**); 2 ranks through the `_mp` arm.
 4. **Names.** The specification calls the switch `SNAPY_WB_REF_EXACT`; the code reads `SNAP_WB_REF4`.
 5. **Untested combinations.** See the switch coverage matrix, @sec-ch12-matrix.
 
-[^ch05-wb4-thr]: `docs/derivations/wb-ref4.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §7.
+[^ch05-wb4-thr]: `docs/derivations/wb-ref4.md@919936da07d80a310b98ab11da184972a3203274` §7.
 
 <!-- reader glossary notes -->
 [^rg-3739b5b2fec3]: $\vartheta$ — local phase $\pi h/\lambda_w$ of a wave of wavelength $\lambda_w$ in a Fourier error estimate; notation only; see @sec-appa

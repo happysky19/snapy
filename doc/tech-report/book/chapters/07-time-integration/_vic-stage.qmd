@@ -1,7 +1,7 @@
 ## Stage-weighted implicit step: the correction runs with $w_2^{(s)}\Delta t$ under rk3 and rk3s4 (`dt_corr`) {#sec-ch07-vic-stage}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy); pyharp@4721715855e937c1e8b218e964c0655f46e56e29
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy); pyharp@4721715855e937c1e8b218e964c0655f46e56e29
 sources: OUTLINE.md 7.8; src/hydro/hydro_forward.cpp; src/hydro/hydro.hpp; src/mesh/meshblock.cpp;
          pyharp src/integrator/integrator.cpp; tests/test_forcing.cpp; tests/test_implicit_face_work_operator.py
 status: draft

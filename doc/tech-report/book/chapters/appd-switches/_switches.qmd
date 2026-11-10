@@ -1,7 +1,7 @@
 ## Environment variables read at run time and build time {#sec-appd-switches}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md Appendix D and the ch01 outline entry; pinned code below (every getenv, get_env,
          os.environ and setenv in src/, python/ and setup.py at the pin)
 status: draft

@@ -1,7 +1,7 @@
 ## Precipitation and evaporation kinetics in the example drivers (driver-level coupling) {#sec-ch10-kinetics}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml); kintera@c55b13b2204997d2d09e04498558ab9495d8ee77
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml); kintera@c55b13b2204997d2d09e04498558ab9495d8ee77
 sources: OUTLINE.md 10.6; examples/run_hydro.cpp, examples/jupiter_evap_precip_1d.cpp, src/eos/*.cpp,
          src/mesh/meshblock.cpp, tests/test_uranus_cycle1_abort.cpp at the pin; kintera src/kinetics at its pin;
          sources/canoe__EVAPORATION_MULTIPRODUCT_TECH_REPORT.md sections 4-5

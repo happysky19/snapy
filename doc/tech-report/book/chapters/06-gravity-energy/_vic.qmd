@@ -1,7 +1,7 @@
 ## Gravity work inside the vertical implicit operator (`implicit-scheme`) {#sec-ch06-vic}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (code_pin.yml)
 sources: OUTLINE.md 6.5; sources/gw__GRAVITY_WORK_TECH_REPORT_draft.md sections 3.7, 5.2, 5.5; code links below
 status: draft
 author: Linfeng Li
@@ -164,11 +164,11 @@ if (face_work) {
 
 The Cartesian branch writes $\omega^{\mathrm{lo}}=\omega^{\mathrm{hi}}=\tfrac14$ in directly (`[C2]` of `vicwork_check.py`).
 The sign of the momentum entry is as written: `Phi(IPR, IVX + dir) = grav`, `Phi`
-([`vic_assemble_full_impl.h:40`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/implicit/vic_assemble_full_impl.h#L40)),
+([`vic_assemble_full_impl.h:40`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/implicit/vic_assemble_full_impl.h#L40)),
 `a[i]` subtracts `Phi`
-([`:94-96`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/implicit/vic_assemble_full_impl.h#L94-L96)),
+([`:94-96`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/implicit/vic_assemble_full_impl.h#L94-L96)),
 and the face branch adds $g_1(1-\omega^{\mathrm{lo}}_i-\omega^{\mathrm{hi}}_i)$ with the weights `lower`
-([`:116`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/implicit/vic_assemble_full_impl.h#L116)),
+([`:116`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/implicit/vic_assemble_full_impl.h#L116)),
 so the entry is $-g_1+g_1(1-\omega^{\mathrm{lo}}_i-\omega^{\mathrm{hi}}_i)=-g_1(\omega^{\mathrm{lo}}_i+\omega^{\mathrm{hi}}_i)$, the
 $\mathbf e_{m_1}$ coefficient of $[\mathsf A_i]_E$ in @eq-ch06-vic-rows. The rows are also checked by `[C1]` and
 `[C21]`–`[C23]`.

@@ -1,7 +1,7 @@
 ## Advance several blocks in one process (`distribute.blocks_per_process`) {#sec-ch01-mesh}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md entry 1.6; src/mesh/mesh.cpp; src/layout/layout.cpp; tests/test_mesh_multi_block.cpp; tests/test_mesh_exchange.py
 status: draft
 author: Jiheng Hu

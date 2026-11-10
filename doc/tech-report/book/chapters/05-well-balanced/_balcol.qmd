@@ -1,7 +1,7 @@
 ## `balance_column`: projection of ghost-free columns onto the scheme's discrete balance (C++ and Python API) {#sec-ch05-balcol}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy)
 sources: OUTLINE.md 5.6; src/hydro/balance_column.cpp; src/hydro/balance_column.hpp; python/csrc/pyhydro.cpp;
          examples/bryan.cpp; tests/test_balance_column.cpp; tests/run_bryan_balance_ic.cmake (re-derived from the code)
 status: draft

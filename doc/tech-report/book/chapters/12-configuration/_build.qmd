@@ -1,7 +1,7 @@
 ## Build options and test registration (`cmake -DNAME=value`) {#sec-ch12-build}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md 12.1; CMakeLists.txt; cmake/parameters.cmake; cmake/macros/macro_add_package.cmake; cmake/ucx.cmake;
          src/CMakeLists.txt; src/snap.h; tests/CMakeLists.txt; tests/test_python_import_path.py
 status: draft

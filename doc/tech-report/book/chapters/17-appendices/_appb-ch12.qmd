@@ -7,7 +7,7 @@
 | @sec-ch12-build | none | No continuum or discrete equation is selected here. |  | `configuration_check.py` | n/a |
 | @sec-ch12-macros | none | No physical derivation applies. |  | `configuration_check.py` | n/a |
 | @sec-ch12-environment | none | No numerical equation is added. |  | `configuration_check.py` | n/a |
-| @sec-ch12-wb-reference | none | See @sec-ch05-wbref4 for the reference filter, the wall continuation and the face rule. |  | `configuration_check.py` | n/a |
+| @sec-ch12-wb-reference | none | See @sec-ch05-wbref4 for the face rule and its guards. |  | `configuration_check.py` | n/a |
 | @sec-ch12-centroid | none | See @sec-ch05-x1cent for the moment solve and the integration by parts behind the pressure source. |  | `configuration_check.py` | n/a |
 | @sec-ch12-flux-covariance | none | See @sec-ch04-fluxcov for the covariance identity, the face centroid term and the exact telescoping of a shared face flux. |  | `configuration_check.py` | n/a |
 | @sec-ch12-mass-covariance | none | See @sec-ch04-x1masscov for the mean-conversion identity. |  | `configuration_check.py` | n/a |

@@ -1,7 +1,7 @@
 ## Rectify a mask and close fluid faces against solids (`boundary-condition/internal/*; vars["solid"]`) {#sec-ch11-solids}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy)
 sources: OUTLINE.md 11.9; src/bc/internal_boundary.cpp; src/bc/rectify_solid.cpp; src/bc/bc_dispatch.cpp;
          src/bc/flip_zero_impl.h; src/mesh/meshblock.cpp; src/hydro/hydro.cpp; src/hydro/hydro_forward.cpp;
          src/implicit/vic_assemble_partial_impl.h; src/implicit/vic_assemble_full_impl.h; src/implicit/implicit_dispatch.cpp

@@ -1,8 +1,8 @@
 ## The corrected-PE face gravity work (`SNAP_GRAVITY_WORK_RADIAL_EXACT`) {#sec-ch06-dwork}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (code_pin.yml)
-sources: docs/derivations/curved-gravity-work-weight.md@3c891cb20614260351944fb8007cbc9bd50d22a3 §§1-4, 7, 8, 10, 11, 12.1-12.10;
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (code_pin.yml)
+sources: docs/derivations/curved-gravity-work-weight.md@919936da07d80a310b98ab11da184972a3203274 §§1-4, 7, 8, 10, 11, 12.1-12.10;
          tests/test_stretched_x1_ref.cpp at the pin;
          sources/gw__NEXTPR_legD_REPORT.md; sources/gw__PR_BODIES_285-293.md;
          chengcli/snapy#303 PR body (items 1 and 5, Evidence, Limits);
@@ -71,7 +71,7 @@ implicit operator (the VIC gravity work). Under it the conserved invariant is $E
 `pe=`, and every $E_{\mathrm{tot}}+\mathrm{PE}_d$ check measures the wrong quantity.
 
 *Aliases.* "Leg D" of the gravity-work round, hence "scheme D" in commit messages; "option F" in
-`docs/derivations/curved-gravity-work-weight.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §7, whose "option D" is
+`docs/derivations/curved-gravity-work-weight.md@919936da07d80a310b98ab11da184972a3203274` §7, whose "option D" is
 a different, rejected two-point weight; "corrected-PE work", and "radial-exact" in identifiers.[^ch06-dwork-credit]
 
 [^ch06-dwork-credit]: The scheme came with the gravity-work round of chengcli/snapy; chengcli/snapy#303 (closing
@@ -131,7 +131,7 @@ $\mathrm{PE}_d$ is the exact $\int\rho\phi\,\mathrm{d}V$ of a piecewise-constant
 density gradient. On a uniform Cartesian grid @eq-ch06-dwork-face is the trapezoid rule,
 $W^{\mathrm{face}}_i = g_1(F_{i+1/2}+F_{i-1/2})/2$, with error $g_1\tfrac{h^2}{12}\partial_1^2F$ in every cell. On
 a spherical-polar grid two more terms appear
-(`docs/derivations/curved-gravity-work-weight.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §2, eq. 2):
+(`docs/derivations/curved-gravity-work-weight.md@919936da07d80a310b98ab11da184972a3203274` §2, eq. 2):
 
 $$
 \frac{W^{\mathrm{face}}_i - g_1\langle F\rangle_{V_i}}{g_1}
@@ -254,7 +254,7 @@ face work. This is the whole scheme. It changes only the energy row: mass and mo
 On a `gnomonic-equiangle` block $x_1$ is the radius, and `face_area1` and `cell_volume` carry the same solid angle
 per column, so per steradian $A$, $V$ and $\sigma^2$ are those of a spherical-polar column. The one difference is
 where `x1v` sits: it is the face midpoint $r^{\mathrm{m}}$, not the volume centroid $r_c$
-(`docs/derivations/curved-gravity-work-weight.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §12.1). The expansion of @eq-ch06-dwork-pe4 is about
+(`docs/derivations/curved-gravity-work-weight.md@919936da07d80a310b98ab11da184972a3203274` §12.1). The expansion of @eq-ch06-dwork-pe4 is about
 $r_c$ and does not depend on `x1v`, and because $\phi$ is linear, $\phi(r_c) = \phi(x_{1v}) - g_1o$
 exactly. Hence, with the code offset $o_i$,
 
@@ -301,7 +301,7 @@ $1.5\times10^{-13}$ at $r/H$ = 5, 60 and 1000, the last two at the cancellation 
 term in the work but not in $P$, $-1.3\times10^{-5}$, $-1.7\times10^{-7}$ and $-4.4\times10^{-10}$. `[CS2]`:
 $|P-\mathcal P|/|\mathcal P|$ for $\rho = e^{-(r-R)/H}$ at $R = 5H$, $n_1$ = 16 to 128, falls at orders 3.47, 3.77,
 3.89 with the term in $P$ and 2.01, 2.01, 2.00 without it. The derivation note's own replica,
-`docs/derivations/cubed_sphere_centroid_term.py@3c891cb20614260351944fb8007cbc9bd50d22a3`, checks the same identities with sympy.
+`docs/derivations/cubed_sphere_centroid_term.py@919936da07d80a310b98ab11da184972a3203274`, checks the same identities with sympy.
 
 #### Conservation, exactly
 
@@ -353,7 +353,7 @@ $$ {#eq-ch06-dwork-ped-change}
 the $O(h^2)$ error of $\mathrm{PE}_d$ itself. `[C7]` checks @eq-ch06-dwork-ped-change on one stage of every case,
 to $\le5.3\times10^{-17}$ of the summed magnitudes of its terms. This is the intended behaviour, not a defect:
 $\mathrm{PE}_d$ is the wrong target. At
-`docs/derivations/curved-gravity-work-weight.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §7 and §8.6 this change
+`docs/derivations/curved-gravity-work-weight.md@919936da07d80a310b98ab11da184972a3203274` §7 and §8.6 this change
 carries the same plus sign; check the note's current head before publication.
 
 #### Accuracy
@@ -487,7 +487,7 @@ Courant 250, in both geometries, against $\le4.9\times10^{-9}$ m s$^{-1}$ with t
 post-solve term restored the switch-off level; dropping only the explicit term did not.[^ch06-dwork-tall]
 
 [^ch06-dwork-tall]: sha: the parent of snapy@f256ab51fa400641360d16ea3611e78eba85ccc5, run sha not recorded; deck:
-    `tests/test_implicit_gravity_tall_column.py`; run: CPU; source: `docs/derivations/curved-gravity-work-weight.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §10. A
+    `tests/test_implicit_gravity_tall_column.py`; run: CPU; source: `docs/derivations/curved-gravity-work-weight.md@919936da07d80a310b98ab11da184972a3203274` §10. A
     re-run needs `f256ab51fa400641360d16ea3611e78eba85ccc5^` or a mutation of the pinned code that drops the operator
     coupling.
 
@@ -644,11 +644,11 @@ cells are $O(h^4)$ (`[C6]`: orders 4.49 spherical and 4.02 Cartesian). That is w
 the gravity work. The cp3/cp5/weno5 curvature flux $\mathcal K$ needs a value at the wall face and is set to
 zero there, which leaves its wall cells first order: Cartesian first cell $1.65\times10^{-2}$ $\to$
 $2.05\times10^{-3}$, order 1.00, $n_1$ 16 $\to$ 128
-(`docs/derivations/curved-gravity-work-weight.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §8.3, §8.7).[^ch06-dwork-replica] The scheme does not use $\mathcal K$: the `curv_flux1` branch in
+(`docs/derivations/curved-gravity-work-weight.md@919936da07d80a310b98ab11da184972a3203274` §8.3, §8.7).[^ch06-dwork-replica] The scheme does not use $\mathcal K$: the `curv_flux1` branch in
 {{< code src/hydro/hydro_forward.cpp HydroImpl::forward >}}
 turns it off when the scheme is active.
 
-[^ch06-dwork-replica]: deck: `docs/derivations/optionF_replica.py@3c891cb20614260351944fb8007cbc9bd50d22a3`, printed label §6; base sha
+[^ch06-dwork-replica]: deck: `docs/derivations/optionF_replica.py@919936da07d80a310b98ab11da184972a3203274`, printed label §6; base sha
     8cea3ae5a8297c82205c1cb9da03681f2343c0dc, which is not the code pin; run not recorded, so this is re-run work
     before approval.
 
@@ -666,7 +666,7 @@ same helper on the ghost densities, so the booked work and the logged $P$ agree 
 decomposition. An implicit scheme refuses a block whose $x_1$ faces are not both physical boundaries, in the
 `TORCH_CHECK` at {{< code src/hydro/hydro.cpp HydroImpl::_apply_implicit_correction >}}, so the VIC row and its post-solve term never meet a seam. A gnomonic-equiangle
 layout holds one block in $x_1$, so there the one-sided slope sits only at the two walls
-(`docs/derivations/curved-gravity-work-weight.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §12.6).
+(`docs/derivations/curved-gravity-work-weight.md@919936da07d80a310b98ab11da184972a3203274` §12.6).
 
 **When it runs in a stage.** Within `HydroImpl::forward` the scheme runs in step (6), external forcing, after the
 $x_1$, $x_2$, $x_3$ fluxes and the tracer positivity limiter, after the flux divergence, and after every forcing
@@ -857,7 +857,7 @@ in the derivation note, so they must be re-measured at the pin before approval.
 - This section's check: every `[Cn]` number, with the provenance given at the head of the Derivation layer.
 - $E_{\mathrm{tot}}+P$ in the code: per-step $\Delta^{\mathrm{stg}}(E_{\mathrm{tot}}+P)\le3.9\times10^{-16}$ of $E_{\mathrm{tot}}+P$ on the implicit cases of
   `test_gravity_work_radial_exact.py` and on its column under partial VIC
-  [`docs/derivations/curved-gravity-work-weight.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §10; deck: that
+  [`docs/derivations/curved-gravity-work-weight.md@919936da07d80a310b98ab11da184972a3203274` §10; deck: that
   test; run: CPU build, sha not recorded $\to$ **re-run**].
 - Seam gap, isothermal spherical column with a seam density bump, max relative 1-vs-2-block state gap: 0 at
   $n_1$ = 32, 64, 128 with the centred seam slope, against $8.0\times10^{-7}$, $6.3\times10^{-8}$,
@@ -953,7 +953,7 @@ every $E_{\mathrm{tot}}+\mathrm{PE}_d$ check — including `gravity_work_defect(
     cells are refilled every step. The VIC gates them. The explicit path with solids is not separately tested.
 11. **Remaining error of the onset rate.** With the wall closure and this scheme, the linear onset rate of
     convection keeps a second-order truncation error that the face and cell forms share. The convergence table in
-    `docs/derivations/curved-gravity-work-weight.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §11.3 is filled from runs at commits
+    `docs/derivations/curved-gravity-work-weight.md@919936da07d80a310b98ab11da184972a3203274` §11.3 is filled from runs at commits
     that are not the code pin, so its numbers are **re-run** work before approval; check the note's current head
     before publication.
 12. **Untested switch combinations.** This scheme with `SNAP_WB_REF4`, `SNAP_X1_CENTROID_EXACT` or
@@ -975,17 +975,17 @@ every $E_{\mathrm{tot}}+\mathrm{PE}_d$ check — including `gravity_work_defect(
 <!-- reader glossary notes -->
 [^rg-24c85d83151c]: $\sigma_i^2$ — variance of $x_1$ about the centroid over cell $i$ on its own measure, $\langle (x_1-x_{1,i})^2\rangle_{V_i}$
 
-[^rg-8b7387f6bab7]: $\delta_i$ — centroid offset $x_{1,i}-x^{\mathrm{m}}_{1,i}$ (zero on Cartesian); [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/gravity_work_radial.hpp#L95-L105)
+[^rg-8b7387f6bab7]: $\delta_i$ — centroid offset $x_{1,i}-x^{\mathrm{m}}_{1,i}$ (zero on Cartesian); [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/gravity_work_radial.hpp#L95-L105)
 
 [^rg-84698c2c1f47]: $\mathcal P$ — the exact potential energy $\int\rho\phi\,dV$ of a smooth density field; notation only; see @sec-appa
 
 [^rg-d054fdb5ce7a]: $\mathrm{PE}_d$ — discrete potential energy $\sum_iV_i\rho_i\phi_i$
 
-[^rg-972d04f188e1]: $\mathcal N_i$ — the stencil set of the centroid slope of cell $i$ (stencil cells indexed by $l$); [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/gravity_work_radial.hpp#L60-L87)
+[^rg-972d04f188e1]: $\mathcal N_i$ — the stencil set of the centroid slope of cell $i$ (stencil cells indexed by $l$); [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/gravity_work_radial.hpp#L60-L87)
 
-[^rg-233d4794e1ca]: $\Delta_\pm$ — centroid spacings $x_{1,i+1}-x_{1,i}$ ($+$) and $x_{1,i}-x_{1,i-1}$ ($-$), used in non-uniform stencils; never $h_\pm$, which would read as cell widths; [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/gravity_work_radial.hpp#L66-L71)
+[^rg-233d4794e1ca]: $\Delta_\pm$ — centroid spacings $x_{1,i+1}-x_{1,i}$ ($+$) and $x_{1,i}-x_{1,i-1}$ ($-$), used in non-uniform stencils; never $h_\pm$, which would read as cell widths; [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/gravity_work_radial.hpp#L66-L71)
 
-[^rg-477c78c44075]: $\mathsf S$ — the matrix of $s$: $(\mathsf S q)_i = s_i[q] = \sum_l\mathsf S_{il}q_l$ (row $i$: the weights of the cells $l$ in the slope of $i$; the code stores the transpose); $\tilde{\mathsf S}$ likewise for $\tilde s$; [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/implicit/implicit_hydro.cpp#L349-L374)
+[^rg-477c78c44075]: $\mathsf S$ — the matrix of $s$: $(\mathsf S q)_i = s_i[q] = \sum_l\mathsf S_{il}q_l$ (row $i$: the weights of the cells $l$ in the slope of $i$; the code stores the transpose); $\tilde{\mathsf S}$ likewise for $\tilde s$; [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/implicit/implicit_hydro.cpp#L349-L374)
 
 [^rg-f6811c76094b]: $\Delta t_c$ — the time step handed to the implicit solve: $w_{2,s}\Delta t$ under rk3 and rk3s4, $\Delta t$ under rk1 and rk2
 

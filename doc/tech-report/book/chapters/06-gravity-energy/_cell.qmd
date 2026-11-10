@@ -1,7 +1,7 @@
 ## Constant gravity and the cell form of the gravity work (`gravity-work: cell`) {#sec-ch06-cell}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (code_pin.yml)
 sources: OUTLINE.md 6.1; sources/gw__GRAVITY_WORK_TECH_REPORT_draft.md sections 2.1-2.4, 3.4-3.5; code links below
 status: draft
 author: Linfeng Li
@@ -107,11 +107,11 @@ Locally the cell form is exact, in three steps:
    the stored momentum by $\rho_i$, the dry plus all species densities (`IdealMoistImpl::_cons2prim`,
    {{< code src/eos/ideal_moist.cpp IdealMoistImpl::_cons2prim >}}; likewise `MoistMixtureImpl`, and for `ideal-gas` the
    kernel sets the density from the conserved density and divides the momenta by it, `ideal_gas_cons2prim`
-   [`ideal_gas_impl.h:16-24`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/eos/ideal_gas_impl.h#L16-L24)).
+   [`ideal_gas_impl.h:16-24`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/eos/ideal_gas_impl.h#L16-L24)).
    So $\rho_iv_{1,i}=m_{1,i}$ up to two roundings, the division and the product, at most $\epsilon_{\mathrm m}$[^rg-d0b9cfeec328] relative,
    unless the equation-of-state limiter's density floor fires: `apply_primitive_limiter_` then raises the primitive
    density to the floor after the division, `clamp_min_`
-   ([`equation_of_state.cpp:341`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/eos/equation_of_state.cpp#L341)),
+   ([`equation_of_state.cpp:341`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/eos/equation_of_state.cpp#L341)),
    and $\rho_iv_{1,i}\ne m_{1,i}$ in that cell.
 3. Hence $W^{\mathrm{cell}}_i=g_1m_{1,i}$ at $\alpha_{\mathrm{nh}}=1$: the exact cell work of the stage state, to that
    round-off. With $\alpha_{\mathrm{nh}}<1$ the $G_i$ term is the hydrostatic split, not the cell work, and is not
@@ -265,7 +265,7 @@ The cell form alone does not conserve $E_{\mathrm{tot}}+\mathrm{PE}_d$; with `gr
 
 [^rg-6f8cf364cedd]: $\phi_i$, $\phi_{i\pm1/2}$ — $\phi$ at the centroid and at the faces
 
-[^rg-d0b9cfeec328]: $\epsilon_{\mathrm{m}}$ — machine epsilon of the working precision (never bare $\epsilon$, which is $\epsilon_{\mathrm{piv}}$); [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/flux_positivity.cpp#L11-L14)
+[^rg-d0b9cfeec328]: $\epsilon_{\mathrm{m}}$ — machine epsilon of the working precision (never bare $\epsilon$, which is $\epsilon_{\mathrm{piv}}$); [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/flux_positivity.cpp#L11-L14)
 
 [^rg-7034ba898e85]: CPU — central processing unit
 

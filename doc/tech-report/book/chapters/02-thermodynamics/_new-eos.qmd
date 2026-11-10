@@ -47,7 +47,7 @@ uses the same state layout; the existing choices and conversion keys are listed 
 
 The smallest implementation exercise is to copy `ideal_gas.hpp` and `ideal_gas.cpp` to new names, rename
 `IdealGasImpl`/`IdealGas` throughout, and add the factory branch above before changing any thermodynamics.
-Reconfigure and rebuild: [`src/CMakeLists.txt:35-40`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/CMakeLists.txt#L35-L40)
+Reconfigure and rebuild: [`src/CMakeLists.txt:35-40`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/CMakeLists.txt#L35-L40)
 collects `eos/*.cpp` at configure time. This recipe preserves the existing dry-gas closure; it is not a
 validated new physical model. Check conversion round trips, the temperature/internal-energy identities and
 sound speed before using a changed closure. Runtime validation of this proposed copy is not provided here.

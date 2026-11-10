@@ -1,7 +1,7 @@
 ## Explicit SSP Runge-Kutta stages in Shu-Osher form (`integration/type`) {#sec-ch07-rk}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy); pyharp@4721715855e937c1e8b218e964c0655f46e56e29
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy); pyharp@4721715855e937c1e8b218e964c0655f46e56e29
 sources: OUTLINE.md 7.1; src/mesh/meshblock.cpp; pyharp src/integrator/integrator.cpp; sources/canoe__POSITIVITY_TECH_REPORT.md §3
 status: draft
 -->
@@ -271,7 +271,7 @@ assertion on the weights.
 
 [^rg-0ebf34f7decd]: YAML — YAML Ain't Markup Language, the structured input format used for decks
 
-[^rg-4d1d8f105ddf]: $\mathbf U^{(s)}$ — state after RK stage $s$; [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/mesh/meshblock.cpp#L817-L825)
+[^rg-4d1d8f105ddf]: $\mathbf U^{(s)}$ — state after RK stage $s$; [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/mesh/meshblock.cpp#L817-L825)
 
 [^rg-311cb1f16924]: implicit_radial — whether radial heat conduction on the cubed sphere is solved implicitly, split around the explicit step (default false)
 

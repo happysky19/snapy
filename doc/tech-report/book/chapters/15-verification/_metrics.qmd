@@ -1,7 +1,7 @@
 ## Reading verification evidence {#sec-ch15-metrics}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3
+pin: snapy@919936da07d80a310b98ab11da184972a3203274
 sources: tests/test_wb_ref_wall.cpp; tests/test_wall_saturation.cpp; src/coord/coordinate.cpp; src/snapy_report/ch15/checks/metrics_check.py
 status: draft
 -->
@@ -304,7 +304,7 @@ before reading such a difference as a broken identity.
 
 [^rg-f1bc2f88d9da]: $\mathcal O$ — an oracle (exact or reference value); notation only; see @sec-appa
 
-[^rg-bc1ae9c40f8b]: $\epsilon_{\mathrm{m}}$ — machine epsilon of the working precision (never bare $\epsilon$, which is $\epsilon_{\mathrm{piv}}$); [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/flux_positivity.cpp#L11-L14)
+[^rg-bc1ae9c40f8b]: $\epsilon_{\mathrm{m}}$ — machine epsilon of the working precision (never bare $\epsilon$, which is $\epsilon_{\mathrm{piv}}$); [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/flux_positivity.cpp#L11-L14)
 
 [^rg-e62a864fa416]: $h_i$ — $x_1$ width of cell $i$, $x_{1,i+1/2}-x_{1,i-1/2}$; written $\Delta x_1$ where the direction must be explicit
 

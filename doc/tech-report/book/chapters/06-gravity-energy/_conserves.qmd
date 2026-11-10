@@ -1,9 +1,9 @@
 ## What each form conserves (summary and oracle guide) {#sec-ch06-conserves}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (code_pin.yml)
 sources: OUTLINE.md 6.6; sections 6.1-6.5 of this chapter; chengcli/snapy#303 body;
-         docs/derivations/curved-gravity-work-weight.md@3c891cb20614260351944fb8007cbc9bd50d22a3 sections 12.5a, 12.10;
+         docs/derivations/curved-gravity-work-weight.md@919936da07d80a310b98ab11da184972a3203274 sections 12.5a, 12.10;
          code links below
 status: draft
 author: Linfeng Li
@@ -246,5 +246,5 @@ the wrong invariant: check `ie=`+`pe=`. `fixgrav=` is printed only with `cell` +
 [^ch06-cons-301]: Recorded in chengcli/snapy#301.
 
 <!-- reader glossary notes -->
-[^rg-fbecacf7f134]: $x^{\mathrm{m}}_{1,i}$ — cell midpoint $\tfrac12(x_{1,i-1/2}+x_{1,i+1/2})$ ($r^{\mathrm{m}}_i$ on spherical-polar); it is not the cell average of $x_1$, which is the centroid $x_{1,i}$; the half-sum of `x1f`; [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/coord/coordinate.cpp#L439)
+[^rg-fbecacf7f134]: $x^{\mathrm{m}}_{1,i}$ — cell midpoint $\tfrac12(x_{1,i-1/2}+x_{1,i+1/2})$ ($r^{\mathrm{m}}_i$ on spherical-polar); it is not the cell average of $x_1$, which is the centroid $x_{1,i}$; the half-sum of `x1f`; [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/coord/coordinate.cpp#L439)
 <!-- end reader glossary notes -->

@@ -16080,19 +16080,9 @@
     "max": 1.0,
     "mean": 1.0,
     "min": 1.0,
-    "n": 19,
-    "sha256": "9bff350f3e20767a",
+    "n": 9,
+    "sha256": "27b5c3a3745712be",
     "values": [
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
      1.0,
      1.0,
      1.0,
@@ -16110,19 +16100,9 @@
     "max": 1.0,
     "mean": 1.0,
     "min": 1.0,
-    "n": 19,
-    "sha256": "9bff350f3e20767a",
+    "n": 9,
+    "sha256": "27b5c3a3745712be",
     "values": [
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
-     1.0,
      1.0,
      1.0,
      1.0,
@@ -16138,21 +16118,11 @@
     "first": -2.0,
     "last": 6.0,
     "max": 6.0,
-    "mean": 1.894736842105263,
+    "mean": 2.0,
     "min": -2.0,
-    "n": 19,
-    "sha256": "6b40eb6a4a2cf86c",
+    "n": 9,
+    "sha256": "24f1e6e16d22b339",
     "values": [
-     -2.0,
-     -1.0,
-     0.0,
-     1.0,
-     2.0,
-     3.0,
-     4.0,
-     5.0,
-     6.0,
-     0.0,
      -2.0,
      -1.0,
      0.0,
@@ -16178,16 +16148,16 @@
     ]
    },
    "axes0.line0.y": {
-    "first": 1.25,
-    "last": 2.75,
-    "max": 2.75,
-    "mean": 2.0,
-    "min": 1.25,
+    "first": -0.25,
+    "last": 1.25,
+    "max": 1.25,
+    "mean": 0.5,
+    "min": -0.25,
     "n": 2,
-    "sha256": "53f9625f5eb09be9",
+    "sha256": "e7b57bb4a1c90481",
     "values": [
-     1.25,
-     2.75
+     -0.25,
+     1.25
     ]
    },
    "axes0.line1.x": {
@@ -16203,114 +16173,18 @@
     ]
    },
    "axes0.line1.y": {
-    "first": 2.3,
-    "last": 2.3,
-    "max": 2.3,
-    "mean": 2.3,
-    "min": 2.3,
+    "first": 0.8,
+    "last": 0.8,
+    "max": 0.8,
+    "mean": 0.8,
+    "min": 0.8,
     "n": 1,
-    "sha256": "8771a6c04174b7f7",
+    "sha256": "1e9d7c27c8bbc8dd",
     "values": [
-     2.3
+     0.8
     ]
    },
    "axes0.line10.x": {
-    "first": 1.0,
-    "last": 1.0,
-    "max": 1.0,
-    "mean": 1.0,
-    "min": 1.0,
-    "n": 1,
-    "sha256": "d0ff5974b6aa52cf",
-    "values": [
-     1.0
-    ]
-   },
-   "axes0.line10.y": {
-    "first": 0.5,
-    "last": 0.5,
-    "max": 0.5,
-    "mean": 0.5,
-    "min": 0.5,
-    "n": 1,
-    "sha256": "d2cbad71ff333de6",
-    "values": [
-     0.5
-    ]
-   },
-   "axes0.line11.x": {
-    "first": 2.0,
-    "last": 2.0,
-    "max": 2.0,
-    "mean": 2.0,
-    "min": 2.0,
-    "n": 1,
-    "sha256": "d84bdb34d4eeef40",
-    "values": [
-     2.0
-    ]
-   },
-   "axes0.line11.y": {
-    "first": 0.5,
-    "last": 0.5,
-    "max": 0.5,
-    "mean": 0.5,
-    "min": 0.5,
-    "n": 1,
-    "sha256": "d2cbad71ff333de6",
-    "values": [
-     0.5
-    ]
-   },
-   "axes0.line12.x": {
-    "first": 3.0,
-    "last": 3.0,
-    "max": 3.0,
-    "mean": 3.0,
-    "min": 3.0,
-    "n": 1,
-    "sha256": "a416ea84421fa7e1",
-    "values": [
-     3.0
-    ]
-   },
-   "axes0.line12.y": {
-    "first": 0.5,
-    "last": 0.5,
-    "max": 0.5,
-    "mean": 0.5,
-    "min": 0.5,
-    "n": 1,
-    "sha256": "d2cbad71ff333de6",
-    "values": [
-     0.5
-    ]
-   },
-   "axes0.line13.x": {
-    "first": 4.0,
-    "last": 4.0,
-    "max": 4.0,
-    "mean": 4.0,
-    "min": 4.0,
-    "n": 1,
-    "sha256": "fbd04e1aae9ce0b1",
-    "values": [
-     4.0
-    ]
-   },
-   "axes0.line13.y": {
-    "first": 0.5,
-    "last": 0.5,
-    "max": 0.5,
-    "mean": 0.5,
-    "min": 0.5,
-    "n": 1,
-    "sha256": "d2cbad71ff333de6",
-    "values": [
-     0.5
-    ]
-   },
-   "axes0.line14.x": {
     "first": 0.0,
     "last": 4.0,
     "max": 4.0,
@@ -16325,7 +16199,7 @@
      4.0
     ]
    },
-   "axes0.line14.y": {
+   "axes0.line10.y": {
     "first": 0.0,
     "last": 0.0,
     "max": 0.0,
@@ -16353,15 +16227,15 @@
     ]
    },
    "axes0.line2.y": {
-    "first": 2.3,
-    "last": 2.3,
-    "max": 2.3,
-    "mean": 2.3,
-    "min": 2.3,
+    "first": 0.8,
+    "last": 0.8,
+    "max": 0.8,
+    "mean": 0.8,
+    "min": 0.8,
     "n": 1,
-    "sha256": "8771a6c04174b7f7",
+    "sha256": "1e9d7c27c8bbc8dd",
     "values": [
-     2.3
+     0.8
     ]
    },
    "axes0.line3.x": {
@@ -16377,15 +16251,15 @@
     ]
    },
    "axes0.line3.y": {
-    "first": 2.3,
-    "last": 2.3,
-    "max": 2.3,
-    "mean": 2.3,
-    "min": 2.3,
+    "first": 0.8,
+    "last": 0.8,
+    "max": 0.8,
+    "mean": 0.8,
+    "min": 0.8,
     "n": 1,
-    "sha256": "8771a6c04174b7f7",
+    "sha256": "1e9d7c27c8bbc8dd",
     "values": [
-     2.3
+     0.8
     ]
    },
    "axes0.line4.x": {
@@ -16401,122 +16275,18 @@
     ]
    },
    "axes0.line4.y": {
-    "first": 2.3,
-    "last": 2.3,
-    "max": 2.3,
-    "mean": 2.3,
-    "min": 2.3,
+    "first": 0.8,
+    "last": 0.8,
+    "max": 0.8,
+    "mean": 0.8,
+    "min": 0.8,
     "n": 1,
-    "sha256": "8771a6c04174b7f7",
+    "sha256": "1e9d7c27c8bbc8dd",
     "values": [
-     2.3
+     0.8
     ]
    },
    "axes0.line5.x": {
-    "first": -0.5,
-    "last": -0.5,
-    "max": -0.5,
-    "mean": -0.5,
-    "min": -0.5,
-    "n": 1,
-    "sha256": "1b07b0cffa0b3f59",
-    "values": [
-     -0.5
-    ]
-   },
-   "axes0.line5.y": {
-    "first": 2.3,
-    "last": 2.3,
-    "max": 2.3,
-    "mean": 2.3,
-    "min": 2.3,
-    "n": 1,
-    "sha256": "8771a6c04174b7f7",
-    "values": [
-     2.3
-    ]
-   },
-   "axes0.line6.x": {
-    "first": -1.5,
-    "last": -1.5,
-    "max": -1.5,
-    "mean": -1.5,
-    "min": -1.5,
-    "n": 1,
-    "sha256": "37c2b212b94e5372",
-    "values": [
-     -1.5
-    ]
-   },
-   "axes0.line6.y": {
-    "first": 2.3,
-    "last": 2.3,
-    "max": 2.3,
-    "mean": 2.3,
-    "min": 2.3,
-    "n": 1,
-    "sha256": "8771a6c04174b7f7",
-    "values": [
-     2.3
-    ]
-   },
-   "axes0.line7.x": {
-    "first": -2.0,
-    "last": 3.0,
-    "max": 3.0,
-    "mean": 0.5,
-    "min": -2.0,
-    "n": 4,
-    "sha256": "58a309aa7eab20c5",
-    "values": [
-     -2.0,
-     -2.0,
-     3.0,
-     3.0
-    ]
-   },
-   "axes0.line7.y": {
-    "first": 1.5,
-    "last": 1.5,
-    "max": 1.5,
-    "mean": 1.425,
-    "min": 1.35,
-    "n": 4,
-    "sha256": "10c2ff68b73be0ee",
-    "values": [
-     1.5,
-     1.35,
-     1.35,
-     1.5
-    ]
-   },
-   "axes0.line8.x": {
-    "first": 0.0,
-    "last": 0.0,
-    "max": 0.0,
-    "mean": 0.0,
-    "min": 0.0,
-    "n": 2,
-    "sha256": "65b2c880641fb09b",
-    "values": [
-     0.0,
-     0.0
-    ]
-   },
-   "axes0.line8.y": {
-    "first": -0.25,
-    "last": 1.25,
-    "max": 1.25,
-    "mean": 0.5,
-    "min": -0.25,
-    "n": 2,
-    "sha256": "e7b57bb4a1c90481",
-    "values": [
-     -0.25,
-     1.25
-    ]
-   },
-   "axes0.line9.x": {
     "first": 0.0,
     "last": 0.0,
     "max": 0.0,
@@ -16528,16 +16298,112 @@
      0.0
     ]
    },
-   "axes0.line9.y": {
-    "first": 0.5,
-    "last": 0.5,
-    "max": 0.5,
-    "mean": 0.5,
-    "min": 0.5,
+   "axes0.line5.y": {
+    "first": 0.3,
+    "last": 0.3,
+    "max": 0.3,
+    "mean": 0.3,
+    "min": 0.3,
     "n": 1,
-    "sha256": "d2cbad71ff333de6",
+    "sha256": "221764976efe0413",
     "values": [
-     0.5
+     0.3
+    ]
+   },
+   "axes0.line6.x": {
+    "first": 1.0,
+    "last": 1.0,
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "n": 1,
+    "sha256": "d0ff5974b6aa52cf",
+    "values": [
+     1.0
+    ]
+   },
+   "axes0.line6.y": {
+    "first": 0.3,
+    "last": 0.3,
+    "max": 0.3,
+    "mean": 0.3,
+    "min": 0.3,
+    "n": 1,
+    "sha256": "221764976efe0413",
+    "values": [
+     0.3
+    ]
+   },
+   "axes0.line7.x": {
+    "first": 2.0,
+    "last": 2.0,
+    "max": 2.0,
+    "mean": 2.0,
+    "min": 2.0,
+    "n": 1,
+    "sha256": "d84bdb34d4eeef40",
+    "values": [
+     2.0
+    ]
+   },
+   "axes0.line7.y": {
+    "first": 0.3,
+    "last": 0.3,
+    "max": 0.3,
+    "mean": 0.3,
+    "min": 0.3,
+    "n": 1,
+    "sha256": "221764976efe0413",
+    "values": [
+     0.3
+    ]
+   },
+   "axes0.line8.x": {
+    "first": 3.0,
+    "last": 3.0,
+    "max": 3.0,
+    "mean": 3.0,
+    "min": 3.0,
+    "n": 1,
+    "sha256": "a416ea84421fa7e1",
+    "values": [
+     3.0
+    ]
+   },
+   "axes0.line8.y": {
+    "first": 0.3,
+    "last": 0.3,
+    "max": 0.3,
+    "mean": 0.3,
+    "min": 0.3,
+    "n": 1,
+    "sha256": "221764976efe0413",
+    "values": [
+     0.3
+    ]
+   },
+   "axes0.line9.x": {
+    "first": 4.0,
+    "last": 4.0,
+    "max": 4.0,
+    "mean": 4.0,
+    "min": 4.0,
+    "n": 1,
+    "sha256": "fbd04e1aae9ce0b1",
+    "values": [
+     4.0
+    ]
+   },
+   "axes0.line9.y": {
+    "first": 0.3,
+    "last": 0.3,
+    "max": 0.3,
+    "mean": 0.3,
+    "min": 0.3,
+    "n": 1,
+    "sha256": "221764976efe0413",
+    "values": [
+     0.3
     ]
    }
   }
@@ -30303,15 +30169,15 @@
   "chapter": "ch12",
   "series": {
    "axes0.line0.x": {
-    "first": -2.0,
-    "last": -2.0,
-    "max": -2.0,
-    "mean": -2.0,
-    "min": -2.0,
+    "first": -1.5,
+    "last": -1.5,
+    "max": -1.5,
+    "mean": -1.5,
+    "min": -1.5,
     "n": 1,
-    "sha256": "060cf5e1089dc78b",
+    "sha256": "37c2b212b94e5372",
     "values": [
-     -2.0
+     -1.5
     ]
    },
    "axes0.line0.y": {
@@ -30327,67 +30193,39 @@
     ]
    },
    "axes0.line1.x": {
-    "first": -2.5,
-    "last": -2.5,
-    "max": -2.5,
-    "mean": -2.5,
-    "min": -2.5,
-    "n": 2,
-    "sha256": "36537c23ed1394ba",
+    "first": -0.5,
+    "last": -0.5,
+    "max": -0.5,
+    "mean": -0.5,
+    "min": -0.5,
+    "n": 1,
+    "sha256": "1b07b0cffa0b3f59",
     "values": [
-     -2.5,
-     -2.5
+     -0.5
     ]
    },
    "axes0.line1.y": {
-    "first": -0.1,
-    "last": 0.1,
-    "max": 0.1,
-    "mean": 0.0,
-    "min": -0.1,
-    "n": 2,
-    "sha256": "d55db1c4db4d6736",
-    "values": [
-     -0.1,
-     0.1
-    ]
-   },
-   "axes0.line10.x": {
-    "first": -2.5,
-    "last": 2.5,
-    "max": 2.5,
-    "mean": 0.0,
-    "min": -2.5,
-    "n": 2,
-    "sha256": "a325b160c210a23c",
-    "values": [
-     -2.5,
-     2.5
-    ]
-   },
-   "axes0.line10.y": {
     "first": 0.0,
     "last": 0.0,
     "max": 0.0,
     "mean": 0.0,
     "min": 0.0,
-    "n": 2,
-    "sha256": "65b2c880641fb09b",
+    "n": 1,
+    "sha256": "8aed642bf5118b9d",
     "values": [
-     0.0,
      0.0
     ]
    },
    "axes0.line2.x": {
-    "first": -1.0,
-    "last": -1.0,
-    "max": -1.0,
-    "mean": -1.0,
-    "min": -1.0,
+    "first": 0.5,
+    "last": 0.5,
+    "max": 0.5,
+    "mean": 0.5,
+    "min": 0.5,
     "n": 1,
-    "sha256": "f006c4915bce75dd",
+    "sha256": "d2cbad71ff333de6",
     "values": [
-     -1.0
+     0.5
     ]
    },
    "axes0.line2.y": {
@@ -30403,19 +30241,43 @@
     ]
    },
    "axes0.line3.x": {
-    "first": -1.5,
-    "last": -1.5,
-    "max": -1.5,
-    "mean": -1.5,
-    "min": -1.5,
-    "n": 2,
-    "sha256": "c2232c51fb71789e",
+    "first": 1.5,
+    "last": 1.5,
+    "max": 1.5,
+    "mean": 1.5,
+    "min": 1.5,
+    "n": 1,
+    "sha256": "9f29a130438b8117",
     "values": [
-     -1.5,
-     -1.5
+     1.5
     ]
    },
    "axes0.line3.y": {
+    "first": 0.0,
+    "last": 0.0,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "n": 1,
+    "sha256": "8aed642bf5118b9d",
+    "values": [
+     0.0
+    ]
+   },
+   "axes0.line4.x": {
+    "first": -2.0,
+    "last": -2.0,
+    "max": -2.0,
+    "mean": -2.0,
+    "min": -2.0,
+    "n": 2,
+    "sha256": "400177acd45efd21",
+    "values": [
+     -2.0,
+     -2.0
+    ]
+   },
+   "axes0.line4.y": {
     "first": -0.1,
     "last": 0.1,
     "max": 0.1,
@@ -30428,41 +30290,17 @@
      0.1
     ]
    },
-   "axes0.line4.x": {
-    "first": 0.0,
-    "last": 0.0,
-    "max": 0.0,
-    "mean": 0.0,
-    "min": 0.0,
-    "n": 1,
-    "sha256": "8aed642bf5118b9d",
-    "values": [
-     0.0
-    ]
-   },
-   "axes0.line4.y": {
-    "first": 0.0,
-    "last": 0.0,
-    "max": 0.0,
-    "mean": 0.0,
-    "min": 0.0,
-    "n": 1,
-    "sha256": "8aed642bf5118b9d",
-    "values": [
-     0.0
-    ]
-   },
    "axes0.line5.x": {
-    "first": -0.5,
-    "last": -0.5,
-    "max": -0.5,
-    "mean": -0.5,
-    "min": -0.5,
+    "first": -1.0,
+    "last": -1.0,
+    "max": -1.0,
+    "mean": -1.0,
+    "min": -1.0,
     "n": 2,
-    "sha256": "ce480441cfc9830b",
+    "sha256": "18b0003a30bb9e83",
     "values": [
-     -0.5,
-     -0.5
+     -1.0,
+     -1.0
     ]
    },
    "axes0.line5.y": {
@@ -30479,40 +30317,42 @@
     ]
    },
    "axes0.line6.x": {
-    "first": 1.0,
-    "last": 1.0,
-    "max": 1.0,
-    "mean": 1.0,
-    "min": 1.0,
-    "n": 1,
-    "sha256": "d0ff5974b6aa52cf",
-    "values": [
-     1.0
-    ]
-   },
-   "axes0.line6.y": {
     "first": 0.0,
     "last": 0.0,
     "max": 0.0,
     "mean": 0.0,
     "min": 0.0,
-    "n": 1,
-    "sha256": "8aed642bf5118b9d",
+    "n": 2,
+    "sha256": "65b2c880641fb09b",
     "values": [
+     0.0,
      0.0
     ]
    },
-   "axes0.line7.x": {
-    "first": 0.5,
-    "last": 0.5,
-    "max": 0.5,
-    "mean": 0.5,
-    "min": 0.5,
+   "axes0.line6.y": {
+    "first": -0.1,
+    "last": 0.1,
+    "max": 0.1,
+    "mean": 0.0,
+    "min": -0.1,
     "n": 2,
-    "sha256": "c32018f65aa651ab",
+    "sha256": "d55db1c4db4d6736",
     "values": [
-     0.5,
-     0.5
+     -0.1,
+     0.1
+    ]
+   },
+   "axes0.line7.x": {
+    "first": 1.0,
+    "last": 1.0,
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "n": 2,
+    "sha256": "80a5794b572b2939",
+    "values": [
+     1.0,
+     1.0
     ]
    },
    "axes0.line7.y": {
@@ -30534,38 +30374,14 @@
     "max": 2.0,
     "mean": 2.0,
     "min": 2.0,
-    "n": 1,
-    "sha256": "d84bdb34d4eeef40",
+    "n": 2,
+    "sha256": "5f6e6988c28872b5",
     "values": [
+     2.0,
      2.0
     ]
    },
    "axes0.line8.y": {
-    "first": 0.0,
-    "last": 0.0,
-    "max": 0.0,
-    "mean": 0.0,
-    "min": 0.0,
-    "n": 1,
-    "sha256": "8aed642bf5118b9d",
-    "values": [
-     0.0
-    ]
-   },
-   "axes0.line9.x": {
-    "first": 1.5,
-    "last": 1.5,
-    "max": 1.5,
-    "mean": 1.5,
-    "min": 1.5,
-    "n": 2,
-    "sha256": "e01ec513122c3a32",
-    "values": [
-     1.5,
-     1.5
-    ]
-   },
-   "axes0.line9.y": {
     "first": -0.1,
     "last": 0.1,
     "max": 0.1,
@@ -30576,6 +30392,32 @@
     "values": [
      -0.1,
      0.1
+    ]
+   },
+   "axes0.line9.x": {
+    "first": -2.5,
+    "last": 2.5,
+    "max": 2.5,
+    "mean": 0.0,
+    "min": -2.5,
+    "n": 2,
+    "sha256": "a325b160c210a23c",
+    "values": [
+     -2.5,
+     2.5
+    ]
+   },
+   "axes0.line9.y": {
+    "first": 0.0,
+    "last": 0.0,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "n": 2,
+    "sha256": "65b2c880641fb09b",
+    "values": [
+     0.0,
+     0.0
     ]
    }
   }

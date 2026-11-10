@@ -3,7 +3,7 @@
 What is checked: the relaxation of the donor factor toward the dry-air factor and the share of the over-drain the
 poorer neighbour repays, as HydroImpl::forward (src/hydro/hydro_forward.cpp, step 4.C) and ScalarImpl::forward
 (src/scalar/scalar.cpp) apply them, and flux_positivity_share (src/hydro/flux_positivity.cpp), at
-snapy@3c891cb20614260351944fb8007cbc9bd50d22a3. Claims C1-C4.
+snapy@919936da07d80a310b98ab11da184972a3203274. Claims C1-C4.
 
   C1  with Theta = (1-eta) r rho V / D_n < 1 and Theta_d = (1-eta) rho V / D_d in (0, 1), Theta/Theta_d <= 1:
       the relaxed drain Theta' D_n equals (1-eta) r rho V + Xi r (D_d - (1-eta) rho V)            (sympy, exact)

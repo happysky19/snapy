@@ -230,7 +230,7 @@
     "in 70 files resolve there, and tools/ratchet_gate.py counts any other kintera sha as `offpin`.",
     "",
     "`build` is the commit that must be INSTALLED for the snapy commit in code_pin.yml to configure.",
-    "snapy 3c891cb20614260351944fb8007cbc9bd50d22a3 says, at CMakeLists.txt:104,",
+    "snapy 919936da07d80a310b98ab11da184972a3203274 says, at CMakeLists.txt:104,",
     "`find_package(Kintera 2.6.3 REQUIRED)`, so v2.6.2 cannot configure it:",
     "  Could NOT find Kintera: Found unsuitable version \"2.6.2\", but required is at least \"2.6.3\"",
     "v2.6.3 (b6ad3739) is the smallest revision at or above that floor -- exactly one commit after",

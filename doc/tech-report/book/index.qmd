@@ -19,15 +19,15 @@ switch the code does not know is ignored without a message. Older releases also 
 chapter 6. So build the pin, as below, before you try any example.
 
 <!-- generated reader-reference: install -->
-**What you need.** Python `>=3.10` ([`pyproject.toml:24`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/pyproject.toml#L24)), CMake 3.22 or later ([`CMakeLists.txt:1`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/CMakeLists.txt#L1)), a C++17 compiler ([`CMakeLists.txt:3`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/CMakeLists.txt#L3)), and the NetCDF C library. Install the latter with `brew install netcdf` on macOS or `sudo apt install libnetcdf-dev` on Debian/Ubuntu.
+**What you need.** Python `>=3.10` ([`pyproject.toml:24`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/pyproject.toml#L24)), CMake 3.22 or later ([`CMakeLists.txt:1`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/CMakeLists.txt#L1)), a C++17 compiler ([`CMakeLists.txt:3`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/CMakeLists.txt#L3)), and the NetCDF C library. Install the latter with `brew install netcdf` on macOS or `sudo apt install libnetcdf-dev` on Debian/Ubuntu.
 
-**Build the source pin.** The Python dependencies below follow [`pyproject.toml`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/pyproject.toml); the CMake options explicitly enable the example drivers and disable the optional UCX and parallel-NetCDF backends for this single-machine build.
+**Build the source pin.** The Python dependencies below follow [`pyproject.toml`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/pyproject.toml); the CMake options explicitly enable the example drivers and disable the optional UCX and parallel-NetCDF backends for this single-machine build.
 
 ```bash
 python3 -m venv snapy-env && source snapy-env/bin/activate
 pip install numpy pyyaml "kintera>=2.6.3" torch==2.10.0
 git clone https://github.com/chengcli/snapy && cd snapy
-git checkout 3c891cb20614260351944fb8007cbc9bd50d22a3
+git checkout 919936da07d80a310b98ab11da184972a3203274
 cmake -B build -DCMAKE_BUILD_TYPE=Release \
   -DBUILD_EXAMPLES=ON -DNETCDF=ON -DPNETCDF=OFF -DUCX=OFF
 cmake --build build --parallel 6
@@ -71,7 +71,7 @@ The 2-D warm-bubble test is `bryan.yaml`, a moist warm bubble on one block ($x_1
 `./bryan.release bryan.yaml`, stops at 1000 s of model time and writes one output frame every 100 s.
 
 **The same example on one GPU.** Rebuild with the `CUDA` option on
-([`CMakeLists.txt:10`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/CMakeLists.txt#L10)),
+([`CMakeLists.txt:10`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/CMakeLists.txt#L10)),
 that is, with `-DCUDA=ON` added to the build command above, then select the device with two environment variables:
 
 ```bash
@@ -80,7 +80,7 @@ DEVICE=cuda DEVICE_ID=0 ./straka.release straka_single.yaml
 ```
 
 `DEVICE` defaults to `cpu`
-([`src/layout/layout.cpp:238`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/layout/layout.cpp#L238));
+([`src/layout/layout.cpp:238`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/layout/layout.cpp#L238));
 with `cuda`, the block runs on `cuda:<DEVICE_ID>`, or on the local rank's GPU when `DEVICE_ID` is unset
 ({{< code src/mesh/meshblock_options.cpp MeshBlockOptionsImpl::device_str >}}).
 The driver prints "Running on CUDA" before the first step when it got a GPU

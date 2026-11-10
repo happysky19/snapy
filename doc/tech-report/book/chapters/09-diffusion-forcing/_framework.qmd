@@ -1,7 +1,7 @@
 ## The forcing loop: parsing, registration and the stage increment (`forcing:`) {#sec-ch09-framework}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md 9.1; src/hydro/register_forcing_modules.cpp, src/hydro/hydro_options.cpp, src/hydro/hydro.cpp,
          src/hydro/hydro_forward.cpp, src/mesh/meshblock.cpp, src/forcing/*.cpp at the pin
 status: draft
@@ -341,7 +341,7 @@ increment to $2.8\times10^{-17}$, and is not formed without tracers.
 The four ctest cases run on CPU[^rg-4bb768fd053e], one rank; there is no CUDA[^rg-4b8aae7361ed] or multi-rank arm. They have not been run for this
 report at the pin: **pending a pinned ctest run**.
 
-[^fw-run]: [sha: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3; deck: the check itself, seed 21; run: `python3 src/snapy_report/ch09/checks/framework_check.py`,
+[^fw-run]: [sha: snapy@919936da07d80a310b98ab11da184972a3203274; deck: the check itself, seed 21; run: `python3 src/snapy_report/ch09/checks/framework_check.py`,
     CPU, double, 1 process; Python 3.12.3, numpy 2.2.4, sympy 1.14.0; output identical to the committed file]. Output `framework_check.out`, lines `[C1]`–`[C3]`.
     Re-run of the committed numpy port from the report directory; this does not execute snapy.
 

@@ -1,7 +1,7 @@
 ## PPM: accepted by the parser, throws on the first stage (`type: ppm`) {#sec-ch04-ppm}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md 4.7; src/recon/ppm.cpp, src/recon/interpolation.hpp, src/recon/interpolation.cpp,
          src/recon/reconstruct.cpp at the pin
 status: draft

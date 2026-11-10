@@ -1,7 +1,7 @@
-## Cell/face-consistent reference (`SNAP_WB_REF4`) {#sec-ch12-wb-reference}
+## Cell-consistent face reference (`SNAP_WB_REF4`) {#sec-ch12-wb-reference}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md 12.4; src/hydro/wb_ref4.cpp; src/hydro/hydro.cpp; tests/test_wb_ref4_order.py; tests/test_x1_seam_split.cpp;
          tests/CMakeLists.txt
 status: draft
@@ -12,13 +12,12 @@ reviewer:
 ### Summary
 
 This section keeps the selector of the fourth-order reference and its guards; the construction itself, the
-five-cell filter, its cubic wall continuation and the four-cell face rule, is derived in @sec-ch05-wbref4 and is
-not repeated here.
+four-cell face rule, is derived in @sec-ch05-wbref4 and is not repeated here.
 
 ::: {.callout-note title="At a glance"}
-**Purpose.** Selects the reference filter and face rule of @sec-ch05-wbref4.
+**Purpose.** Selects the reference face rule of @sec-ch05-wbref4.
 
-**Data.** Cell ratios $\chi=\rho/p$ in; cell and face density references out.
+**Data.** The kernel's cell density reference and scan pressures in; the face density reference out.
 
 **Placement.** Before the well-balanced radial perturbation reconstruction.
 
@@ -34,11 +33,11 @@ Local symbols: $\rho$[^rg-afba7fb0b9e7] is density [$\mathrm{kg\,m^{-3}}$], $p$[
 
 ### Derivation
 
-See @sec-ch05-wbref4 for the reference filter, the wall continuation and the face rule. The chapter's own check
-line `[C2]` re-derives the moment identities independently: the weights $(-1,4,10,4,-1)/16$ have unit zeroth
-moment and vanishing first three moments, the cubic wall continuation reproduces every cubic, and the face rule
-integrates the quartic interpolant exactly [check `src/snapy_report/ch12/checks/configuration_check.py`, output
-`src/snapy_report/ch12/checks/configuration_check.out`].
+See @sec-ch05-wbref4 for the face rule and its guards. The chapter's own check line `[C2]` re-derives the
+face rule independently: it integrates the quartic interpolant exactly [check
+`src/snapy_report/ch12/checks/configuration_check.py`, output
+`src/snapy_report/ch12/checks/configuration_check.out`]. The same line also verifies a five-point filter and a
+cubic wall continuation, which no operator of the switch uses.
 
 ### Numerical method
 
@@ -48,17 +47,17 @@ module refuses fewer than three ghost cells (`HydroImpl::reset`, {{< code src/hy
 because the resolution flag reads pressures three cells away; with zero gravity no reference is built and the
 guard is inactive. `wb_ref4_stencils` ({{< code src/hydro/wb_ref4.cpp wb_ref4_stencils >}}) builds the stencils
 once per grid and marks them usable only with at least five cells and, next to a clamped wall, at least four
-owned cells; a block between two seams reads its exchanged ghosts instead. `wb_ref4_cells`
-({{< code src/hydro/wb_ref4.cpp wb_ref4_cells >}}) applies the cell filter and dilates the resolution flag by two
-cells, and `wb_ref4_faces` ({{< code src/hydro/wb_ref4.cpp wb_ref4_faces >}}) the face rule after the seam
-exchange of the cell reference, each keeping the base reference where the stencil is unusable or a value leaves
-its cell range. Both run inside `HydroImpl::_hydro_ref_x1` ({{< code src/hydro/hydro.cpp HydroImpl::_hydro_ref_x1 >}})
+owned cells; a block between two seams reads its exchanged ghosts instead. `wb_ref4_flag`
+({{< code src/hydro/wb_ref4.cpp wb_ref4_flag >}}) builds the resolution flag and dilates it by two cells, and
+`wb_ref4_faces` ({{< code src/hydro/wb_ref4.cpp wb_ref4_faces >}}) applies the face rule after the seam
+exchange of the cell reference, keeping the base face value where the stencil is unusable, where the flag is set
+or where the new value leaves the range of its two cells. The cell reference is not touched. Both run inside `HydroImpl::_hydro_ref_x1` ({{< code src/hydro/hydro.cpp HydroImpl::_hydro_ref_x1 >}})
 with the wall-clamp flags of @sec-ch11-wb.
 
 ```{python}
 #| label: fig-ch12-wb-reference-flow
-#| fig-cap: "Five-cell reference filter: sky-blue circles are cell ratios, black ticks are faces, and labels give filter and wall-continuation weights."
-#| fig-alt: "five cells: -1,4,10,4,-1; wall: cubic continuation; cell density reference; four-cell face integral."
+#| fig-cap: "The four-cell face window of the reference: sky-blue circles are the kernel's cell density references, black ticks are faces, and the labels give the face weights."
+#| fig-alt: "four cells and five faces with the weights of the interior and wall face rows."
 #| echo: false
 from snapy_report.ch12.figures.fig_wb_reference_flow import make_fig
 make_fig()
@@ -81,7 +80,8 @@ forcing:
 ```
 
 With radial gravity, `HydroImpl::reset` refuses a thinner halo: for two ghosts the message is
-"SNAP_WB_REF4 (or SNAP_X1_CENTROID_EXACT, which implies it) needs nghost >= 3, got 2; unset it".
+"SNAP_WB_REF4 (or SNAP_X1_CENTROID_EXACT, which implies it, or dynamics/conversion-order 4) needs nghost >= 3,
+got 2".
 The pressure scan needs those three neighbours; zero gravity disables that guard.
 
 `wb_ref4_enabled` ({{< code src/hydro/wb_ref4.cpp wb_ref4_enabled >}}) contains this selection step:
@@ -90,15 +90,15 @@ The pressure scan needs those three neighbours; zero gravity disables that guard
   return on || x1_centroid_exact_enabled();
 ```
 
-The logical OR selects the reference whenever either switch is active. It chooses the filter and face rule
-checked by `[C2]`; it does not remove their stencil-usability fallback.
+The logical OR selects the reference whenever either switch is active. It chooses the face rule checked by
+`[C2]`; it does not remove its stencil-usability fallback.
 
 | what | code link | symbol | switch |
 |---|---|---|---|
 | flag | {{< code src/hydro/wb_ref4.cpp wb_ref4_enabled >}} | `wb_ref4_enabled` | `SNAP_WB_REF4` |
 | guard | {{< code src/hydro/hydro.cpp HydroImpl::reset >}} | `nghost` | `SNAP_WB_REF4` |
 | stencils | {{< code src/hydro/wb_ref4.cpp wb_ref4_stencils >}} | `usable` | `SNAP_WB_REF4` |
-| cells | {{< code src/hydro/wb_ref4.cpp wb_ref4_cells >}} | `wb_ref4_cells` | `SNAP_WB_REF4` |
+| flag | {{< code src/hydro/wb_ref4.cpp wb_ref4_flag >}} | `wb_ref4_flag` | `SNAP_WB_REF4` |
 | faces | {{< code src/hydro/wb_ref4.cpp wb_ref4_faces >}} | `wb_ref4_faces` | `SNAP_WB_REF4` |
 | call | {{< code src/hydro/hydro.cpp HydroImpl::_hydro_ref_x1 >}} | `wb_ref4` | `SNAP_WB_REF4` |
 
@@ -108,7 +108,7 @@ checked by `[C2]`; it does not remove their stencil-usability fallback.
    {{< code src/hydro/wb_ref4.cpp wb_ref4_enabled >}}.
 2. At setup with gravity, refuse fewer than three ghosts. The anchor `nghost` is in
    {{< code src/hydro/hydro.cpp HydroImpl::reset >}}.
-3. On each hydro call build or reuse the stencils, apply the cell filter, exchange the seam rows, apply the
+3. On each hydro call build or reuse the stencils, build the resolution flag, exchange the seam rows, apply the
    face rule. The anchor `wb_ref4` is in {{< code src/hydro/hydro.cpp HydroImpl::_hydro_ref_x1 >}}.
 
 ### Tests
@@ -119,7 +119,7 @@ checked by `[C2]`; it does not remove their stencil-usability fallback.
 | `test_x1_seam_split_wb_ref4.<b>` (CUDA and two-rank variants registered) | a split column matches one block; `nghost` below 3 is refused | relative gap at most $10^{-13}$; exception text | the test |
 | `test_x1_seam_split_wb_ref4_gravity_0.<b>` | with zero gravity a one-ghost column sets up and steps | finite state | the test |
 | `test_balance_column_wb_ref4.<b>`, `test_face_floor_wb_ref4.<b>` | the balance and face-floor checks hold under the switched reference | as in their base tests | `tests/CMakeLists.txt` |
-| `configuration_check.py` `[C2]` (report check) | the filter, wall continuation and face moments | exact symbolic or Boolean equality | the independent check |
+| `configuration_check.py` `[C2]` (report check) | the face moments | exact symbolic or Boolean equality | the independent check |
 
 : Source assertions, not new solver measurements. {#tbl-ch12-wb-reference-tests}
 
@@ -133,7 +133,9 @@ registered in {{< code tests/CMakeLists.txt >}}.
 No snapy runtime test is executed for this chapter. CUDA and multi-rank entries describe registration only.
 The independent checks and their outputs are catalogued in @sec-ch15-ch12-tests.
 
-The independent report check verifies the filter, wall continuation and face moments in `[C2]`.[^ch12-wb-reference-run]
+The independent report check verifies the face moments in `[C2]`.[^ch12-wb-reference-run] The check itself is
+unchanged, so its committed output line still reads `filter, cubic wall continuation and face moments`; those
+two identities belong to an operator the switch no longer has, and no claim here rests on them.
 It models the stated contract; it does not execute the compiled solver.
 
 [^ch12-wb-reference-run]: [sha: snapy@c0c38593d3d3f37bebe204a590610fd7daa05a5f; deck: the check itself;

@@ -1,7 +1,7 @@
 ## One global grid, sliced per block (YAML `geometry`) {#sec-ch03-globalgrid}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: src/coord/coordinate.cpp, src/coord/coordinate.hpp, tests/test_coordinate.cpp
 status: draft
 -->
@@ -353,7 +353,7 @@ listed in the switch coverage matrix, @sec-ch12-matrix.
 
 [^rg-254534abaa24]: CPU — central processing unit
 
-[^rg-fbe9686e1f06]: $\epsilon_{\mathrm{m}}$ — machine epsilon of the working precision (never bare $\epsilon$, which is $\epsilon_{\mathrm{piv}}$); [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/flux_positivity.cpp#L11-L14)
+[^rg-fbe9686e1f06]: $\epsilon_{\mathrm{m}}$ — machine epsilon of the working precision (never bare $\epsilon$, which is $\epsilon_{\mathrm{piv}}$); [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/flux_positivity.cpp#L11-L14)
 
 [^rg-e074f181bf79]: x2min_pi — lower bound of the second coordinate in multiples of pi
 

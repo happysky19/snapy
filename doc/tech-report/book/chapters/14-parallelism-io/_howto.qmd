@@ -4,7 +4,7 @@
 
 **A minimal input.** Follow these five steps in one Python file, `collective.py`, run from the repository root.
 
-0. Set up: launch two CPU processes, naming the group's backend in `BACKEND` ([environment](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/layout/layout.cpp#L190)), and make a
+0. Set up: launch two CPU processes, naming the group's backend in `BACKEND` ([environment](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/layout/layout.cpp#L190)), and make a
    small copy of the deck per process with this helper.
 
 ```bash
@@ -28,13 +28,13 @@ def tiny_deck():
     return str(path)
 ```
 
-1. Create the group with `torch.distributed`, as the generated line does ([`python/exchange.py:21`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/python/exchange.py#L21)).
+1. Create the group with `torch.distributed`, as the generated line does ([`python/exchange.py:21`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/python/exchange.py#L21)).
 
 ```python
 dist.init_process_group(backend="gloo", init_method="env://")
 ```
 
-2. Register it with the generated call ([`python/exchange.py:22`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/python/exchange.py#L22)). The deck lives at `examples/straka_proc2.yaml`.
+2. Register it with the generated call ([`python/exchange.py:22`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/python/exchange.py#L22)). The deck lives at `examples/straka_proc2.yaml`.
 
 ```python
 snapy.distributed.set_process_group(dist_c10d._get_default_group())
@@ -71,16 +71,16 @@ dist.destroy_process_group()
 
 **Contract.**
 
-- Name the backend: `BACKEND` must equal the registered group's backend name, or the block stops with "external process group backend mismatch" ([check](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/layout/process_group.cpp#L216)).
-- Not with UCX: for `BACKEND=ucx`, the default of a Linux UCX build ([default](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/layout/layout.cpp#L41)), the registered group is ignored and snapy creates its own ([routing](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/layout/process_group.cpp#L103)).
-- Register first: a block's layout reads the registered group when it creates its context, and the context is cached ([creation](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/layout/process_group.cpp#L77)).
-- One process uses no group: with one process the context returns before any backend ([one process](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/layout/process_group.cpp#L100)).
-- CPU tensors, one per message: point-to-point sends through the group refuse CUDA tensors and lists of more than one tensor ([send](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/layout/process_group.cpp#L156)).
-- Collectives go to the group and wait: `allreduce` and `reduce` call it and block ([allreduce](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/layout/process_group.cpp#L195)); the step uses MIN, then the CFL factor ([scaling](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/mesh/meshblock.cpp#L546)).
-- Ownership: snapy never shuts the group down; destroy it after the last block ([ownership](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/layout/process_group.cpp#L221), [shutdown](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/mesh/meshblock.cpp#L1286)).
-- No card key: `distribute: backend` is accepted and ignored ([ignored](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/layout/layout.cpp#L231)).
+- Name the backend: `BACKEND` must equal the registered group's backend name, or the block stops with "external process group backend mismatch" ([check](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/layout/process_group.cpp#L216)).
+- Not with UCX: for `BACKEND=ucx`, the default of a Linux UCX build ([default](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/layout/layout.cpp#L41)), the registered group is ignored and snapy creates its own ([routing](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/layout/process_group.cpp#L103)).
+- Register first: a block's layout reads the registered group when it creates its context, and the context is cached ([creation](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/layout/process_group.cpp#L77)).
+- One process uses no group: with one process the context returns before any backend ([one process](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/layout/process_group.cpp#L100)).
+- CPU tensors, one per message: point-to-point sends through the group refuse CUDA tensors and lists of more than one tensor ([send](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/layout/process_group.cpp#L156)).
+- Collectives go to the group and wait: `allreduce` and `reduce` call it and block ([allreduce](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/layout/process_group.cpp#L195)); the step uses MIN, then the CFL factor ([scaling](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/mesh/meshblock.cpp#L546)).
+- Ownership: snapy never shuts the group down; destroy it after the last block ([ownership](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/layout/process_group.cpp#L221), [shutdown](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/mesh/meshblock.cpp#L1286)).
+- No card key: `distribute: backend` is accepted and ignored ([ignored](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/layout/layout.cpp#L231)).
 
-The generated reduction of step 3 ([`src/mesh/meshblock.cpp:535`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/mesh/meshblock.cpp#L535)) and Python binding ([`python/csrc/pylayout.cpp:140`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/python/csrc/pylayout.cpp#L140)) are:
+The generated reduction of step 3 ([`src/mesh/meshblock.cpp:535`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/mesh/meshblock.cpp#L535)) and Python binding ([`python/csrc/pylayout.cpp:140`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/python/csrc/pylayout.cpp#L140)) are:
 
 ```cpp
 op.reduceOp = c10d::ReduceOp::MIN;
@@ -92,7 +92,7 @@ op.reduceOp = c10d::ReduceOp::MIN;
 
 CI checks the contract; the two-process run is recorded in `tools/do-cards.yaml`.
 
-**Native C++ alternative.** A backend that snapy owns is a new branch of this generated dispatch ([`src/layout/process_group.cpp:125`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/layout/process_group.cpp#L125)),
+**Native C++ alternative.** A backend that snapy owns is a new branch of this generated dispatch ([`src/layout/process_group.cpp:125`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/layout/process_group.cpp#L125)),
 next to `_init_gloo`:
 
 ```cpp

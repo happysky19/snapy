@@ -1,7 +1,7 @@
 ## Wrap values through a callback or the layout (`periodic`) {#sec-ch11-periodic}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy)
 sources: OUTLINE.md 11.3; src/bc/bc_func.cpp; src/mesh/meshblock_options.cpp; src/mesh/meshblock.cpp;
          src/layout/slab_layout.cpp
 status: draft
@@ -45,7 +45,7 @@ q_{n_1+l}&=q_l.
 $$ {#eq-ch11-periodic-copy}
 
 `periodic_inner` and `periodic_outer`
-([`bc_func.cpp:36-50`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/bc/bc_func.cpp#L36-L50))
+([`bc_func.cpp:36-50`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/bc/bc_func.cpp#L36-L50))
 implement @eq-ch11-periodic-copy as one slab copy each, with no sign change for any row.
 For several blocks the donor is the wrapped neighbour that `SlabLayoutImpl::neighbor_rank`
 ({{< code src/layout/slab_layout.cpp SlabLayoutImpl::neighbor_rank >}}) selects by adding the block count
@@ -107,7 +107,7 @@ The last owned slab becomes the lower ghosts, implementing the first row of @eq-
 
 | what | code link | symbol | switch |
 |---|---|---|---|
-| periodic | [`bc_func.cpp:36-50`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/bc/bc_func.cpp#L36-L50) | `periodic_inner` | `periodic` |
+| periodic | [`bc_func.cpp:36-50`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/bc/bc_func.cpp#L36-L50) | `periodic_inner` | `periodic` |
 | yaml | {{< code src/mesh/meshblock_options.cpp MeshBlockOptionsImpl::from_yaml >}} | `periodic_z` | `boundary-condition/external/x1-*` |
 | yamlxy | {{< code src/mesh/meshblock_options.cpp MeshBlockOptionsImpl::from_yaml >}} | `periodic_x` | `boundary-condition/external/x2-*`, `x3-*` |
 | null | {{< code src/mesh/meshblock.cpp MeshBlockImpl::reset >}} | `bfuncs` | layout periodic flags |
@@ -121,7 +121,7 @@ The last owned slab becomes the lower ghosts, implementing the first row of @eq-
    {{< code src/mesh/meshblock.cpp MeshBlockImpl::reset >}}.
 3. Copy the opposite owned slab in the callback, or obtain the wrapped neighbour through the layout. The
    anchor `periodic_inner` is in
-   [`bc_func.cpp:36-50`](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/bc/bc_func.cpp#L36-L50);
+   [`bc_func.cpp:36-50`](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/bc/bc_func.cpp#L36-L50);
    the anchor `periodic_x` of the wrap is in {{< code src/layout/slab_layout.cpp SlabLayoutImpl::neighbor_rank >}}.
 
 ### Tests

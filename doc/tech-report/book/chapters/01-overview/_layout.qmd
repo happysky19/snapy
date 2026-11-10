@@ -1,7 +1,7 @@
 ## Locate tensor rows, faces and ghost slabs (`NMASS` / `PartOptions`) {#sec-ch01-layout}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md entry 1.10; src/snap.h; src/coord/coordinate.hpp; src/mesh/meshblock.hpp; src/mesh/meshblock.cpp; src/recon/reconstruct.cpp
 status: draft
 author: Jiheng Hu

@@ -67,7 +67,7 @@ they do not execute a snapy simulation.[^appb-run]
 
 The index does not verify algebra, code correspondence or check success. “Exists” classifies a reference to a derivation source; “re-derived” classifies its absence. Neither is a review verdict.
 
-[^appb-source]: Report implementation: `tools/gen_derivation_index.py` in the current report revision. Solver claims must be checked separately at `3c891cb20614260351944fb8007cbc9bd50d22a3`.
+[^appb-source]: Report implementation: `tools/gen_derivation_index.py` in the current report revision. Solver claims must be checked separately at `919936da07d80a310b98ab11da184972a3203274`.
 
 [^appb-run]: Run from the report directory (@sec-appa-refresh) with `python tools/gen_derivation_index.py --check` and `PYTHONPATH=src python -m pytest -q tools/tests`. The PR evidence records base/head results and Python/pytest versions. These are report checks, with no CPU, CUDA or MPI solver execution claimed.
 

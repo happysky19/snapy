@@ -1,9 +1,9 @@
 ## $r^2$-exact $x_1$ maps on spherical-polar grids (`SNAP_X1_CENTROID_EXACT`) {#sec-ch05-x1cent}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy)
 sources: OUTLINE.md 5.8; src/coord/x1_centroid.cpp; src/coord/spherical_polar.cpp; src/hydro/hydro_forward.cpp;
-         src/hydro/hydro.cpp; docs/derivations/x1-centroid-spherical.md@3c891cb20614260351944fb8007cbc9bd50d22a3 §§1-5, 7;
+         src/hydro/hydro.cpp; docs/derivations/x1-centroid-spherical.md@919936da07d80a310b98ab11da184972a3203274 §§1-5, 7;
          sources/study__next-1overR_README.md §§0-3
 status: draft
 -->
@@ -49,7 +49,7 @@ Units: $r$[^rg-2ecd0b8c12cb] and $\Delta x_1$ [m]; $A_{i\pm1/2}=r_{i\pm1/2}^2$ a
 code forms them. $\langle q\rangle_i=V_i^{-1}\int r^2q\,\mathrm{d}r$ is the $r^2$ mean, $\overline q_i=\Delta x_{1,i}^{-1}\int q\,\mathrm{d}r$ the plain
 mean, and $x=(r-r^{\mathrm m}_i)/\Delta x_{1,i}$ the local coordinate, with $r^{\mathrm m}_i=\tfrac12(r_{i-1/2}+r_{i+1/2})$ the mid-radius (appendix A $x^{\mathrm m}_{1,i}$[^rg-9f1279c76a64]). Re-written from the derivation note.[^ch05-x1c-note]
 
-[^ch05-x1c-note]: `docs/derivations/x1-centroid-spherical.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §§1-5.
+[^ch05-x1c-note]: `docs/derivations/x1-centroid-spherical.md@919936da07d80a310b98ab11da184972a3203274` §§1-5.
 
 #### The defect
 
@@ -365,7 +365,7 @@ The switch does nothing on cubed-sphere grids. Under it `balance_column` balance
 [^ch05-x1c-copy]: `sources/deriv__x1-centroid-spherical.md`.
 
 <!-- reader glossary notes -->
-[^rg-929a9e6df954]: $\delta_i$ — centroid offset $x_{1,i}-x^{\mathrm{m}}_{1,i}$ (zero on Cartesian); [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/hydro/gravity_work_radial.hpp#L95-L105)
+[^rg-929a9e6df954]: $\delta_i$ — centroid offset $x_{1,i}-x^{\mathrm{m}}_{1,i}$ (zero on Cartesian); [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/hydro/gravity_work_radial.hpp#L95-L105)
 
 [^rg-4cb11b837953]: $A_{i\pm1/2}$ — $x_1$ face area
 
@@ -373,7 +373,7 @@ The switch does nothing on cubed-sphere grids. Under it `balance_column` balance
 
 [^rg-2ecd0b8c12cb]: $r$ — $x_1$ on a spherical-polar grid (radius) [m]
 
-[^rg-9f1279c76a64]: $x^{\mathrm{m}}_{1,i}$ — cell midpoint $\tfrac12(x_{1,i-1/2}+x_{1,i+1/2})$ ($r^{\mathrm{m}}_i$ on spherical-polar); it is not the cell average of $x_1$, which is the centroid $x_{1,i}$; the half-sum of `x1f`; [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/coord/coordinate.cpp#L439)
+[^rg-9f1279c76a64]: $x^{\mathrm{m}}_{1,i}$ — cell midpoint $\tfrac12(x_{1,i-1/2}+x_{1,i+1/2})$ ($r^{\mathrm{m}}_i$ on spherical-polar); it is not the cell average of $x_1$, which is the centroid $x_{1,i}$; the half-sum of `x1f`; [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/coord/coordinate.cpp#L439)
 
 [^rg-014edceb12dd]: x2min — lower bound of the second coordinate
 

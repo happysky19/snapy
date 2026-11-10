@@ -1,7 +1,7 @@
 ## Ideal gas conversion (`ideal-gas`) {#sec-ch02-ideal-gas}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md section 2; src/eos/ideal_gas.cpp, src/eos/ideal_gas_impl.h, src/coord/coord_utils_impl.h
          at the pin
 status: draft
@@ -195,7 +195,7 @@ not been run for this report at the pin: **pending a pinned ctest run**.
 
 [^rg-a8a15585c552]: $T$ — temperature [K]
 
-[^rg-5c552fe80570]: $R_{\mathrm{d}}$, $R_n$ — specific gas constants of dry air and species $n$ [J kg$^{-1}$ K$^{-1}$]; [source](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/eos/ideal_moist.cpp#L40-L43)
+[^rg-5c552fe80570]: $R_{\mathrm{d}}$, $R_n$ — specific gas constants of dry air and species $n$ [J kg$^{-1}$ K$^{-1}$]; [source](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/eos/ideal_moist.cpp#L40-L43)
 
 [^rg-eacc0154b64b]: MPS — Metal Performance Shaders
 

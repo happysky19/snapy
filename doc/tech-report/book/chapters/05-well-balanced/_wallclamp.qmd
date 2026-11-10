@@ -1,9 +1,9 @@
 ## Wall clamp and the wall continuation of the default reference (`dynamics/wb-wall-clamp`) {#sec-ch05-wallclamp}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy)
 sources: OUTLINE.md 5.3; src/hydro/hydro_ref_x1_impl.h; src/hydro/hydro_dispatch.cpp; src/hydro/hydro_options.cpp;
-         docs/derivations/wb-ref-wall.md@3c891cb20614260351944fb8007cbc9bd50d22a3 §§1-5; the wall-closure patches in
+         docs/derivations/wb-ref-wall.md@919936da07d80a310b98ab11da184972a3203274 §§1-5; the wall-closure patches in
          sources/team-notes/
 status: draft
 -->
@@ -80,7 +80,7 @@ reference is first order at faces 0-2. The even-parity perturbation ghosts (@sec
 $\rho'=\overline\rho-\rho_{\mathrm{ref}}$ into the ghosts, so the solver's face densities there are first order too;
 the mirror is not the source, the bias in $\rho_{\mathrm{ref}}$ is.[^ch05-wall-mirror]
 
-[^ch05-wall-mirror]: `docs/derivations/wb-ref-wall.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §3.
+[^ch05-wall-mirror]: `docs/derivations/wb-ref-wall.md@919936da07d80a310b98ab11da184972a3203274` §3.
 
 #### The continuation
 
@@ -317,9 +317,9 @@ cells by index, so the second-order argument for faces 0-2 is not carried over; 
    edge-replicated at a clamped wall; the code at the pin continues the ratio as above.[^ch05-wall-stale]
 5. **Untested combinations.** See the switch coverage matrix, @sec-ch12-matrix.
 
-[^ch05-wall-straka]: `docs/derivations/wb-ref-wall.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §5, measured on the code of the wall-closure patches.
+[^ch05-wall-straka]: `docs/derivations/wb-ref-wall.md@919936da07d80a310b98ab11da184972a3203274` §5, measured on the code of the wall-closure patches.
 
-[^ch05-wall-stale]: `docs/derivations/wb-ref4.md@3c891cb20614260351944fb8007cbc9bd50d22a3` §1.
+[^ch05-wall-stale]: `docs/derivations/wb-ref4.md@919936da07d80a310b98ab11da184972a3203274` §1.
 
 <!-- reader glossary notes -->
 [^rg-984120207496]: $l$ — cell index counted from the wall ($l=0$ the wall cell)

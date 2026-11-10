@@ -1,7 +1,7 @@
 ## Restart files: write, bundle, read (`outputs: type: restart`, `-r`) {#sec-ch14-restart}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy); kintera@c55b13b2204997d2d09e04498558ab9495d8ee77; pyharp@4721715855e937c1e8b218e964c0655f46e56e29
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy); kintera@c55b13b2204997d2d09e04498558ab9495d8ee77; pyharp@4721715855e937c1e8b218e964c0655f46e56e29
 sources: src/output/restart.cpp, src/output/combine_restart.cpp, src/input/read_restart_file.cpp, src/mesh/meshblock.cpp, src/output/output_type.cpp, src/hydro/hydro.hpp, tests/run_restart_*.py, tests/test_user_output.cpp, tests/test_output_barrier.cpp
 status: draft
 -->
@@ -116,10 +116,10 @@ What the file records:
 
 | id | entry | dtype | source |
 |---|---|---|---|
-| O-37 | every defined tensor of the block's variable map, copied whole to the CPU, ghosts included (`hydro_u`, `hydro_w`, `scalar_s`, the outflow `boundary_reference_*`, …). `scalar_r` is left out when `scalar_s` and `hydro_u` are both there | as held | [restart.cpp#L26-L36](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/output/restart.cpp#L26-L36) |
-| O-38 | `last_time`, `last_cycle` | float64, int64 | [restart.cpp#L38-L40](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/output/restart.cpp#L38-L40) |
+| O-37 | every defined tensor of the block's variable map, copied whole to the CPU, ghosts included (`hydro_u`, `hydro_w`, `scalar_s`, the outflow `boundary_reference_*`, …). `scalar_r` is left out when `scalar_s` and `hydro_u` are both there | as held | [restart.cpp#L26-L36](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/output/restart.cpp#L26-L36) |
+| O-38 | `last_time`, `last_cycle` | float64, int64 | [restart.cpp#L38-L40](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/output/restart.cpp#L38-L40) |
 | O-39 | per stream: `file_number`, `next_time`, and `output_key` (N legacy keys, then N precise keys) | int64, float64, int64 | [restart.cpp#L42-L61](https://github.com/chengcli/snapy/blob/ccf40f9565642c32be69f4b9ef0cfa6daff3f201/src/output/restart.cpp#L42-L61) |
-| O-40 | file layout: each block saves `<basename>.block<r>.<kkkkk>.part` (or `.final.part`) with `kintera::save_tensors`. The root renames a single part to `<basename>.<kkkkk>.restart`, or bundles several parts behind the header `SNAPY_RESTART_BUNDLE_V1`. `combine` is forced on | | [restart.cpp#L18-L22](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/output/restart.cpp#L18-L22), [L70-L97](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/output/restart.cpp#L70-L97), [combine_restart.cpp#L133-L156](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/output/combine_restart.cpp#L133-L156), [read_restart_file.cpp#L23](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/input/read_restart_file.cpp#L23) |
+| O-40 | file layout: each block saves `<basename>.block<r>.<kkkkk>.part` (or `.final.part`) with `kintera::save_tensors`. The root renames a single part to `<basename>.<kkkkk>.restart`, or bundles several parts behind the header `SNAPY_RESTART_BUNDLE_V1`. `combine` is forced on | | [restart.cpp#L18-L22](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/output/restart.cpp#L18-L22), [L70-L97](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/output/restart.cpp#L70-L97), [combine_restart.cpp#L133-L156](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/output/combine_restart.cpp#L133-L156), [read_restart_file.cpp#L23](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/input/read_restart_file.cpp#L23) |
 
 : Restart contract, table 1. {#tbl-ch14-restart-contract-1}
 
@@ -127,8 +127,8 @@ What a resume does with it:
 
 | id | fact | source |
 |---|---|---|
-| O-41 | It requires `hydro_u`, `last_time`, `last_cycle`, `file_number` and `next_time`. It restores the cycle and time, re-matches the stream schedules, and moves every tensor to the run's device | [meshblock.cpp#L1482-L1501](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/mesh/meshblock.cpp#L1482-L1501), [L1503-L1577](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/mesh/meshblock.cpp#L1503-L1577) |
-| O-42 | With an outflow (radiating) boundary, it also requires the `boundary_reference_*` tensors ("Initialize afresh or select extrapolation") | [meshblock.cpp#L1579-L1593](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/mesh/meshblock.cpp#L1579-L1593) |
+| O-41 | It requires `hydro_u`, `last_time`, `last_cycle`, `file_number` and `next_time`. It restores the cycle and time, re-matches the stream schedules, and moves every tensor to the run's device | [meshblock.cpp#L1482-L1501](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/mesh/meshblock.cpp#L1482-L1501), [L1503-L1577](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/mesh/meshblock.cpp#L1503-L1577) |
+| O-42 | With an outflow (radiating) boundary, it also requires the `boundary_reference_*` tensors ("Initialize afresh or select extrapolation") | [meshblock.cpp#L1579-L1593](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/mesh/meshblock.cpp#L1579-L1593) |
 
 : Restart contract, table 2. {#tbl-ch14-restart-contract-2}
 
@@ -136,11 +136,11 @@ What is **not** restored:
 
 | id | not restored | consequence for you | source |
 |---|---|---|---|
-| O-43 | the YAML card: grid, EOS[^rg-b6eeb6bec592], species and every option | rebuilt from the card you pass on resume. `_init_from_restart` has no check that the card matches the one that wrote the file (none found anywhere in that function) | [restart.cpp#L24-L61](https://github.com/chengcli/snapy/blob/ccf40f9565642c32be69f4b9ef0cfa6daff3f201/src/output/restart.cpp#L24-L61) (only tensors are written), [meshblock.cpp#L1474-L1607](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/mesh/meshblock.cpp#L1474-L1607) |
-| O-44 | the running `*_stat` mean and spread | these live in the output stream, not in the variable map, so a resumed run starts a new statistics window | [output_type.hpp#L209-L215](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/output/output_type.hpp#L209-L215), [restart.cpp#L42-L61](https://github.com/chengcli/snapy/blob/ccf40f9565642c32be69f4b9ef0cfa6daff3f201/src/output/restart.cpp#L42-L61) |
-| O-45 | the time step | no `dt` is written. The step is recomputed from the state by `max_time_step` | [restart.cpp#L38-L61](https://github.com/chengcli/snapy/blob/ccf40f9565642c32be69f4b9ef0cfa6daff3f201/src/output/restart.cpp#L38-L61), [mesh.cpp#L325-L344](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/mesh/mesh.cpp#L325-L344) |
-| O-46 | wall-clock timing | the timer restarts at the resumed cycle (`_time_start = clock()`) | [meshblock.cpp#L1497-L1499](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/mesh/meshblock.cpp#L1497-L1499) |
-| O-48 | `scalar_r` | not stored when `scalar_s` and `hydro_u` are stored; rebuilt on read | [meshblock.cpp#L1568-L1577](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/mesh/meshblock.cpp#L1568-L1577), [L1602-L1604](https://github.com/chengcli/snapy/blob/3c891cb20614260351944fb8007cbc9bd50d22a3/src/mesh/meshblock.cpp#L1602-L1604) |
+| O-43 | the YAML card: grid, EOS[^rg-b6eeb6bec592], species and every option | rebuilt from the card you pass on resume. `_init_from_restart` has no check that the card matches the one that wrote the file (none found anywhere in that function) | [restart.cpp#L24-L61](https://github.com/chengcli/snapy/blob/ccf40f9565642c32be69f4b9ef0cfa6daff3f201/src/output/restart.cpp#L24-L61) (only tensors are written), [meshblock.cpp#L1474-L1607](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/mesh/meshblock.cpp#L1474-L1607) |
+| O-44 | the running `*_stat` mean and spread | these live in the output stream, not in the variable map, so a resumed run starts a new statistics window | [output_type.hpp#L209-L215](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/output/output_type.hpp#L209-L215), [restart.cpp#L42-L61](https://github.com/chengcli/snapy/blob/ccf40f9565642c32be69f4b9ef0cfa6daff3f201/src/output/restart.cpp#L42-L61) |
+| O-45 | the time step | no `dt` is written. The step is recomputed from the state by `max_time_step` | [restart.cpp#L38-L61](https://github.com/chengcli/snapy/blob/ccf40f9565642c32be69f4b9ef0cfa6daff3f201/src/output/restart.cpp#L38-L61), [mesh.cpp#L325-L344](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/mesh/mesh.cpp#L325-L344) |
+| O-46 | wall-clock timing | the timer restarts at the resumed cycle (`_time_start = clock()`) | [meshblock.cpp#L1497-L1499](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/mesh/meshblock.cpp#L1497-L1499) |
+| O-48 | `scalar_r` | not stored when `scalar_s` and `hydro_u` are stored; rebuilt on read | [meshblock.cpp#L1568-L1577](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/mesh/meshblock.cpp#L1568-L1577), [L1602-L1604](https://github.com/chengcli/snapy/blob/919936da07d80a310b98ab11da184972a3203274/src/mesh/meshblock.cpp#L1602-L1604) |
 
 : Restart contract, table 3. {#tbl-ch14-restart-contract-3}
 

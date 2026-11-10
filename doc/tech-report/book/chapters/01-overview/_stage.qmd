@@ -1,7 +1,7 @@
 ## Accumulate and combine one stage (`user_stage_forcings`) {#sec-ch01-stage}
 
 <!-- PROVENANCE
-pin: snapy@3c891cb20614260351944fb8007cbc9bd50d22a3 (chengcli/snapy, code_pin.yml)
+pin: snapy@919936da07d80a310b98ab11da184972a3203274 (chengcli/snapy, code_pin.yml)
 sources: OUTLINE.md entry 1.4; src/mesh/meshblock.cpp; src/hydro/hydro_forward.cpp; src/implicit/implicit_dispatch.cpp;
          src/implicit/implicit_dispatch.cu; tests/test_user_output.cpp; tests/test_jit_user_forcing.py;
          tests/test_tracer_dry_convention.py; tests/test_scalar_upper_bound_donor.py

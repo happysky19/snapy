@@ -13,8 +13,6 @@
  "eq-ch05-hsmode-force": "The hydrostatic mode adds the cell's own face-pressure difference, weighted by $1 - \\alpha_{\\mathrm{nh}}$, to momentum and total energy density.",
  "eq-ch05-balcol-iter": "One `balance_column` sweep: set each cell pressure to its reference plus the top-cell gauge, at fixed $1/\\chi = p/\\rho$.",
  "eq-ch05-balcol-res": "`balance_column` stops when the largest balance residual, scaled by $\\rho g \\Delta x_1$, is below `rtol`.",
- "eq-ch05-wbref4-dref": "Fourth-order reference cell density from a five-point filter $(-1, 4, 10, 4, -1)/16$ of $\\chi$.",
- "eq-ch05-wbref4-cubic": "At a clamped wall the two values past the wall are cubic extrapolations of the four nearest owned cells.",
  "eq-ch05-wbref4-face": "Reference face density as the derivative of the quartic through the cumulative cell mass at five faces.",
  "eq-ch05-x1cent-defect": "On spherical-polar grids the $r^2$-weighted cell mean differs from the plain mean by $\\delta_i \\partial_1 q$, with $\\delta_i \\approx \\Delta x_1^2/(6r^{\\mathrm m}_i)$, the leading term of the exact offset.",
  "eq-ch05-x1cent-conv": "Plain cell means recovered from $r^2$-weighted means by a five-cell stencil exact for quartics.",
