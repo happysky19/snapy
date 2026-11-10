@@ -1,4 +1,5 @@
 #include <kintera/utils/format.hpp>
+#include <limits>
 
 // C/C++
 #include <algorithm>
@@ -231,6 +232,20 @@ bool HydroImpl::is_x1_wall(int f) const {
   return pmb->options->is_physical_boundary(0, 0, f == 0 ? -1 : 1) &&
          !(f < static_cast<int>(nm.size()) &&
            nm[f].compare(0, 8, "periodic") == 0);
+}
+
+double HydroImpl::x1_href_candidate(torch::Tensor const& w) const {
+  double inf = std::numeric_limits<double>::infinity();
+  if (!options->grav() || !(-options->grav()->grav1() > 0.)) return inf;
+  if (!pmb->options->is_physical_boundary(0, 0, -1)) return inf;
+  auto pc = pmb->pcoord;
+  using torch::indexing::Slice;
+  auto row = [&](int v) {
+    return w[v].index({Slice(pc->kl(), pc->ku() + 1),
+                       Slice(pc->jl(), pc->ju() + 1), pc->il()});
+  };
+  double rt = (row(IPR) / row(IDN)).min().item<double>();
+  return rt / -options->grav()->grav1();
 }
 
 void HydroImpl::_check_stretched_x1(torch::Tensor const& u) const {
@@ -600,13 +615,20 @@ HydroImpl::_hydro_ref_x1(torch::Tensor const& w) const {
 
   auto dx1f = pcoord->dx1f.contiguous();
   if (!x1_rows_.defined()) {
-    // factored-exponential experiment: href from this block's first column,
-    // bottom interior cell, at the first call (the setup state); fixed after
-    int js = w.size(2) > 1 ? pcoord->jl() : 0,
-        ks = w.size(1) > 1 ? pcoord->kl() : 0;
-    double rt = (w[IPR][ks][js][is] / w[IDN][ks][js][is]).item<double>();
+    // H_ref, in order: the deck's dynamics/x1-ref-scale-height; the mesh's
+    // one value, set at setup (MeshImpl::initialize); or, for a block run
+    // outside a mesh, this block's own candidate. Fixed for the run after.
+    if (options->x1_ref_scale_height() > 0.) {
+      x1_href_ = options->x1_ref_scale_height();
+    } else if (!(x1_href_ > 0.)) {
+      x1_href_ = x1_href_candidate(w);
+      if (!std::isfinite(x1_href_)) {  // no x1-inner wall here: its own row
+        auto rt = (w[IPR] / w[IDN]).narrow(-1, is, 1);
+        x1_href_ = rt.min().item<double>() / g;
+      }
+    }
     x1_rows_ = hydro_ref_x1_factored_rows(pcoord->dx1f, iu, phys_in, phys_out,
-                                          options->wb_wall_clamp(), rt / g)
+                                          options->wb_wall_clamp(), x1_href_)
                    .to(w.options())
                    .contiguous();
   }

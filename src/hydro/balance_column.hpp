@@ -115,6 +115,11 @@ namespace snap {
 //! rows (hydro_ref_x1_stretched_rows); a column of unequal widths takes them
 //! whatever the flag.
 //!
+//! `x1_ref_scale_height` is H_ref of the factored rows, p = P exp(-z/H_ref):
+//! pass the deck's dynamics/x1-ref-scale-height when it sets one. 0 takes
+//! what a mesh would take, the smallest (p / rho) / g over the bottom cells
+//! of the columns given -- the same value when the columns are the mesh's.
+//!
 //! Under SNAP_X1_CENTROID_EXACT a spherical-polar block's reference works on
 //! plain means converted from its r^2 means, which this column does not model:
 //! the caller then passes geometry "cartesian", and anything else (unknown, or
@@ -122,6 +127,7 @@ namespace snap {
 std::tuple<torch::Tensor, double, int> balance_column(
     torch::Tensor const& w, torch::Tensor const& dx1f, double grav,
     bool wall_clamp = true, double rtol = 1.e-13, int max_iter = 450,
-    std::string const& geometry = "", bool stretched = false);
+    std::string const& geometry = "", bool stretched = false,
+    double x1_ref_scale_height = 0.);
 
 }  // namespace snap

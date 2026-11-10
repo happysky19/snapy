@@ -53,6 +53,11 @@ struct HydroOptionsImpl {
   //! Keep the well-balanced x1 reference's stencils off the wall ghosts
   ADD_ARG(bool, wb_wall_clamp) = true;
 
+  //! Scale height of the fixed exponential factored out of the x1 reference
+  //! rows (p = P exp(-z / H_ref)). 0: set at setup, one value for the whole
+  //! mesh (MeshImpl::initialize, HydroImpl::x1_href_candidate)
+  ADD_ARG(double, x1_ref_scale_height) = 0.;
+
   //! forcing options
   ADD_ARG(ConstGravityOptions, grav) = nullptr;
   ADD_ARG(CoriolisOptions, coriolis) = nullptr;
@@ -202,6 +207,15 @@ class HydroImpl : public torch::nn::Cloneable<HydroImpl> {
   //! the x1 neighbour blocks {below, above} across a split, non-periodic x1
   //! column, -1 where there is none (as the W reference relay pairs them)
   std::pair<int, int> x1_neighbors() const;
+
+  //! this block's candidate for the x1 reference scale height H_ref: the
+  //! smallest (p / rho) / g over the bottom interior row when the block owns
+  //! the physical x1-inner wall, +inf otherwise (or without gravity)
+  double x1_href_candidate(torch::Tensor const& w) const;
+  //! set H_ref for this block (MeshImpl::initialize: one value per mesh);
+  //! must come before the first x1 reference is built
+  void x1_href(double h) const { x1_href_ = h; }
+  double x1_href() const { return x1_href_; }
   //! this block's E+PE defect of the dynamics in the current step (J),
   //! accumulated over the stages with their weight in the step
   torch::Tensor gravity_work_defect() const { return _gwfix_d; }
@@ -271,6 +285,8 @@ class HydroImpl : public torch::nn::Cloneable<HydroImpl> {
 
   mutable int x1_uniform_ = -1;
   mutable torch::Tensor x1_rows_;
+  //! H_ref of the factored rows, 0 until set (see x1_href_candidate)
+  mutable double x1_href_ = 0.;
 
   void _check_stretched_x1(torch::Tensor const& u) const;
   //! SNAP_WB_REF4 stencils for this block's x1 grid, built on first use

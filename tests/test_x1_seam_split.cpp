@@ -210,7 +210,8 @@ double energy_p(Mesh mesh, MeshVariables const& vars) {
 // max over rho, rho v1 and E of |split - one| / max|one| after nstep steps
 double split_gap(int nx1, double nh, char const* gw, int nstep,
                  double* ep_drift = nullptr, bool cold = false,
-                 torch::Device device = torch::kCPU) {
+                 torch::Device device = torch::kCPU,
+                 bool per_block_href = false) {
   auto one = make_column(1, nx1, nh, gw, 3, device);
   auto two = make_column(2, nx1, nh, gw, 3, device);
   EXPECT_EQ(one->blocks.size(), 1u);
@@ -220,6 +221,17 @@ double split_gap(int nx1, double nh, char const* gw, int nstep,
   fill_column(two, v2, cold);
   one->initialize(v1);
   two->initialize(v2);
+  if (per_block_href) {  // the control: each block its own bottom row's H_ref
+    for (auto* m : {&one, &two})
+      for (size_t b = 0; b < (*m)->blocks.size(); ++b) {
+        auto& blk = (*m)->blocks[b];
+        auto w = (m == &one ? v1 : v2)[b].at("hydro_w");
+        int is = blk->pcoord->il();
+        // g = 1 on this column
+        blk->phydro->x1_href(
+            (w[IPR] / w[IDN]).select(-1, is).min().item<double>());
+      }
+  }
   double dt = 0.3 * (kLz / nx1) / std::sqrt(kGamma);
   double ep0 = energy_p(two, v2), ep_max = 0.;
   for (int n = 0; n < nstep; ++n) {
@@ -301,7 +313,35 @@ void wb_ref4_flag_at_the_seam_split_matches_one_block(torch::Device device) {
     }
 }
 
+// The factored x1 reference rows divide out exp(-z / H_ref) (hydro_ref_x1_
+// factored_rows), so H_ref is part of the reference operator. On the cold
+// column, where T falls by e^{-2} across the column, a split column keeps the
+// one-block state only if both blocks take the same H_ref: the mesh sets one
+// for all of them (MeshImpl::set_x1_href). The control gives each block its
+// own bottom row's value, which is what a per-block H_ref did.
+void factored_href_split_matches_one_block(torch::Device device) {
+  torch::set_num_threads(1);
+  double gap = split_gap(16, 1., "cell", 20, nullptr, /*cold=*/true, device);
+  double ctl =
+      split_gap(16, 1., "cell", 20, nullptr, /*cold=*/true, device, true);
+  std::printf(
+      "factored rows, cold column: 2 blocks vs 1, max rel gap %.3e "
+      "(one H_ref), %.3e (per-block H_ref)\n",
+      gap, ctl);
+  EXPECT_LE(gap, 1e-13);
+  EXPECT_GT(ctl, 1e-10);
+}
+
 }  // namespace
+
+TEST(X1SeamSplit, factored_href_split_matches_one_block) {
+  factored_href_split_matches_one_block(torch::kCPU);
+}
+
+TEST(X1SeamSplit, factored_href_split_matches_one_block_cuda) {
+  if (!snapy_cuda_test_enabled()) GTEST_SKIP() << "CUDA is not available";
+  factored_href_split_matches_one_block(torch::Device(torch::kCUDA, 0));
+}
 
 TEST(X1SeamSplit, switches_off_nghost_1_sets_up) {
   ASSERT_FALSE(std::getenv("SNAP_X1_CENTROID_EXACT") ||

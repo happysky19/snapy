@@ -14,7 +14,7 @@ namespace snap {
 std::tuple<torch::Tensor, double, int> balance_column(
     torch::Tensor const& w, torch::Tensor const& dx1f, double grav,
     bool wall_clamp, double rtol, int max_iter, std::string const& geometry,
-    bool stretched) {
+    bool stretched, double x1_ref_scale_height) {
   TORCH_CHECK(grav > 0., "balance_column: grav is a downward magnitude (> 0)");
   TORCH_CHECK(w.dim() == 4, "balance_column: w must be (nvar, nc3, nc2, nx1)");
   TORCH_CHECK(w.size(0) > IPR, "balance_column: w has no pressure channel");
@@ -68,10 +68,14 @@ std::tuple<torch::Tensor, double, int> balance_column(
                                1.e-10 * d.mean().item<double>();
   int x1_grid = stretched ? kX1RefStretched : kX1RefUniform;
   // #280 (iv): the same rows a block builds from the same widths
-  // factored-exponential experiment: href from the first column's bottom cell
-  double href = (wb[IPR].flatten(0, 1)[0][0] / wb[IDN].flatten(0, 1)[0][0])
-                    .item<double>() /
-                grav;
+  // H_ref as a mesh sets it (MeshImpl::set_x1_href): the smallest
+  // (p / rho) / g over the bottom cells of the columns given, unless given
+  double href = x1_ref_scale_height > 0.
+                    ? x1_ref_scale_height
+                    : (wb[IPR].narrow(-1, 0, 1) / wb[IDN].narrow(-1, 0, 1))
+                              .min()
+                              .item<double>() /
+                          grav;
   torch::Tensor rows =
       hydro_ref_x1_factored_rows(dxf, nc1 - 1, true, true, wall_clamp, href)
           .to(w.options());

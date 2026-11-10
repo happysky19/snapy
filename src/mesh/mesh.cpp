@@ -318,8 +318,36 @@ double MeshImpl::initialize(MeshVariables& vars, char const* restart_file) {
   SignalHandler::GetInstance();
 
   run_block_jobs([&](size_t i) { blocks[i]->initialize_under_mesh(vars[i]); });
+  set_x1_href(vars);
 
   return 0.;
+}
+
+// One H_ref for the factored x1 reference rows across the whole mesh: the
+// smallest (p / rho) / g over every bottom-wall cell of the setup state,
+// reduced over the local blocks and then the processes, so the rows -- and
+// with them the rest state -- do not depend on how the column is split.
+// The minimum is the coldest bottom cell, i.e. the shortest scale height at
+// the bottom; any single value would do for the split, and this one is
+// defined by the setup state alone. A deck's dynamics/x1-ref-scale-height
+// takes precedence (HydroImpl::_hydro_ref_x1).
+void MeshImpl::set_x1_href(MeshVariables const& vars) {
+  double h = std::numeric_limits<double>::infinity();
+  for (size_t i = 0; i < blocks.size(); ++i) {
+    auto ph = blocks[i]->phydro;
+    if (ph && vars[i].count("hydro_w"))
+      h = std::min(h, ph->x1_href_candidate(vars[i].at("hydro_w")));
+  }
+  auto t = torch::tensor({h}, torch::dtype(torch::kFloat64));
+  std::vector<at::Tensor> red = {t};
+  auto layout = blocks.front()->get_layout();
+  if (layout->has_process_group()) {
+    layout->comm->allreduce(red, c10d::ReduceOp::MIN);
+  }
+  h = red[0].item<double>();
+  if (!std::isfinite(h)) return;  // no x1-inner wall or no gravity: per block
+  for (auto& b : blocks)
+    if (b->phydro) b->phydro->x1_href(h);
 }
 
 double MeshImpl::max_time_step(MeshVariables const& vars) {

@@ -50,6 +50,8 @@ class MeshImpl : public torch::nn::Cloneable<MeshImpl> {
   void reset() override;
 
   double initialize(MeshVariables& vars, char const* restart_file = nullptr);
+  //! one H_ref for the factored x1 reference rows of every block (setup)
+  void set_x1_href(MeshVariables const& vars);
   double max_time_step(MeshVariables const& vars);
   void forward(MeshVariables& vars, double dt, int stage);
   void exchange(MeshVariables& vars, SyncOptions const& opts);
