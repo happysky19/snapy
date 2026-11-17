@@ -3,7 +3,7 @@
 V3 lane C: reconstruction, Riemann solvers, well-balanced reference, conversion order
 =====================================================================================
 
-Revision 2, 2026-11-17. Owner: Tianhao Le (alternate: Xinyue). Design only:
+Revision 3, 2026-11-17. Owner: Tianhao Le (alternate: Xinyue). Design only:
 no implementation change. Declarations are in ``docs/v3/skeleton/C/`` (not
 built); the file-by-file line table is ``docs/v3/design/C_lines.csv``,
 produced by ``docs/v3/design/C_lines.py``.
@@ -13,17 +13,30 @@ Every ``path:line`` is at chengcli/snapy
 "Measured" means produced by a command named in the text; "estimate" means a
 design target.
 
-Changes from revision 1 (``b7d1300f``), by Cheng's numbered review:
-(1) the twelve sections are the brief's, in its order; (2) section 4 states
-the register contract: the named increment ``riemann``, its frame and area
-weighting, its FP32 dtype, no lane C flux storage, and the memory of
-``mass_central``; (3) diagnostics is lane O and layout is lane S; (4) the line
-budget is per file, and the lines moved in from lane R files are split as in
-section 9; (5) paths and branch are upper case. In addition, revision 2
-decides the solver and scheme kill lists from the pinned decks (section 3.6).
-Revision 1 had already fixed hllc as the default and removed ``ppm`` and
-``plume-roe``, but it left ``roe``, ``weno3`` and ``cp3`` marked
-``FOR CHENG``. No deck uses any of them, so revision 2 removes them.
+Changes in revision 3 (from ``a660a7af``):
+
+* sections 6 and 7 are rebuilt on lane X's precision and CUDA-graph
+  contracts (UCzhangxi/snapy ``v3-design/X``
+  ``77c65d5aac1f96ff6c34a45ef48faeb996c2128e``, ``docs/v3/design/X.rst``
+  sections 6 and 7). Lane C maps its quantities onto X's ``Quantity`` rows
+  and its ops onto X's segments, and states where revision 2 disagreed with
+  X and how that is resolved;
+* the 587-line accounting with lane R is confirmed (section 9);
+* the ``riemann`` increment, the ``mass_central`` field, the register API
+  and the FP32 accumulation dtype are marked provisional until lane R
+  answers (sections 4 and 11).
+
+Revision 2 (``a660a7af``) answered Cheng's revision-1 review:
+
+1. the brief's twelve sections, in its order;
+2. the register contract (section 4);
+3. diagnostics is lane O and layout is lane S;
+4. a per-file line budget;
+5. upper-case paths and branch.
+
+It also decided the kill lists from the pinned decks (section 3.6).
+Revision 1 (``b7d1300f``) had fixed hllc as the default and removed ``ppm``
+and ``plume-roe``.
 
 1. Scope and pins
 -----------------
@@ -48,7 +61,9 @@ lane R ranges that move into them (section 9).
 * angular momentum: lane A;
 * the implicit solve: lane I;
 * output and diagnostics: lane O;
-* execution and graphs: lane X.
+* execution and graphs: lane X;
+* the EOS and limiters, including the floor values ``FaceFloor`` applies:
+  lane EF.
 
 **Pins.** snapy ``9e5de2d4ce497d0b2d4da3295fc1fe969fe7e410`` (chengcli main
 when this revision was written; checked with ``git ls-remote``). No kintera,
@@ -65,7 +80,11 @@ pyharp or commux source is read or changed (section 8).
   #354, #359, #360 and #362, fetched read-only;
 * lane O revision 1 (JiachenLiu-Atmos/snapy ``v3-design/O``
   ``7dac5f4a``), for its assumptions about lane R. It was read after this
-  lane's revision 1 was posted.
+  lane's revision 1 was posted;
+* lane X (UCzhangxi/snapy ``v3-design/X``
+  ``77c65d5aac1f96ff6c34a45ef48faeb996c2128e``, fetched read-only; it
+  descends from the pin): ``X.rst`` sections 3, 4, 6, 7, 8 and 11 and the
+  skeletons ``precision_policy.hpp`` and ``stage_executor.hpp``.
 
 **Not available.** Xinyue's 77-site inventory at ``919936da`` is not in the
 shared workspace. It is also not on a ``v3-design``, ``inventory`` or
@@ -529,11 +548,28 @@ Decided without Cheng, because no deck is affected:
 
 Register owner: lane R. Lane C stores no face flux. ``_flux1/2/3``,
 ``_face_pressure1``, ``cen2/3``, ``_aam_mass_flux`` and ``bflux1`` become
-register slots or views of them.
+register slots or views of them. The executor side of the register
+(allocation by ``StateStore`` at ``reset()``, ``begin_stage`` with the
+integrator weights, reset at stage 0 and on rollback, the monitor read with
+the retry flags) is lane X's, ``X.rst`` section 4. Lane C takes it as stated
+there.
 
-**What lane C posts.** One increment per direction ``d`` and stage, named
-``riemann`` (req. 2), written in place into the register's slot by
-``solve_faces``:
+**Provisional until lane R answers** (questions R1-R4, section 11). Lane R
+has no published design yet, so these lane C items are proposals, not
+agreed interfaces:
+
+* the increment name ``riemann``;
+* the ``mass_central`` companion field;
+* the register API that ``solve_faces`` writes into;
+* the FP32 accumulation dtype.
+
+They may change with lane R's revision. Lane C's own computation (what
+the solve produces, its frame, area weighting and compute dtype) does not
+depend on those answers.
+
+**What lane C posts.** One increment per direction ``d`` and stage,
+provisionally named ``riemann`` (req. 2), written in place into the
+register's slot by ``solve_faces``:
 
 * **quantity**: conservative flux density per unit face area, all ``nvar``
   rows. The register's divergence applies ``face_area<d>`` and the cell
@@ -543,25 +579,28 @@ register slots or views of them.
   lane C calls it and does not own it;
 * **location**: face index ``i`` along ``d`` is the face between cells
   ``i-1`` and ``i`` (today's convention);
-* **dtype**: the compute dtype. That is FP32 under FP32: lr is cast at
-  ``hydro_forward.cpp:565`` and the slots are FP32 at ``hydro.cpp:248``.
-  FP64 otherwise (req. 8). The accumulation dtype is lane R's (question R2).
+* **dtype**: ``policy.compute(Quantity::kFlux)`` (X section 6, "fluxes,
+  du"): FP32 in an FP32 run, FP64 otherwise (req. 8). The step accumulator
+  is X's ``Quantity::kRegister``, FP64 as a hypothesis in X and open to lane
+  R (question R2). Lane C posts in ``kFlux`` whatever R chooses.
 
 **Companion fields, posted with the increment.** They are not flux
 increments.
 
-* ``p*`` (x1 only): the total face pressure, FP64 in every precision. In
-  FP32 runs it is the FP32 perturbation plus the FP64 background, added
-  once in ``solve_faces`` (today ``hydro_forward.cpp:568-570``,
+* ``p*`` (x1 only): the total face pressure, ``Quantity::kGauge``, FP64 in
+  every precision (X section 6, "gauges, total face pressure"). In FP32 runs
+  it is the ``kFlux`` perturbation plus the FP64 background, added once in
+  ``solve_faces`` (today ``hydro_forward.cpp:568-570``,
   ``hydro.cpp:252-253``). It is read by the pressure source and gravity work.
-* ``mass_central`` (x2, x3): only with ``conserve-axial-momentum: full``,
-  which refuses FP32 (``hydro_forward.cpp:993-995``), so it is FP64. It
-  holds rows IDN and ICY.. of ``1/2 (F(w_L) + F(w_R))`` in the global frame.
-  The dissipative mass flux for lane A is ``riemann[mass rows] -
-  mass_central``.
+* ``mass_central`` (x2, x3), provisional: only with
+  ``conserve-axial-momentum: full``. It holds rows IDN and ICY.. of ``1/2
+  (F(w_L) + F(w_R))`` in the global frame, in ``kFlux``. That option refuses
+  FP32 (``hydro_forward.cpp:993-995``), so in practice it is FP64. The
+  dissipative mass flux for lane A is ``riemann[mass rows] - mass_central``.
 
 **Memory of mass_central (req. 9).** Size: ``(1+ny) x nc3 x nc2 x nc1 x 8``
-bytes per direction, in fixed storage allocated only when the option is on.
+bytes per direction, in fixed storage allocated at ``reset()`` only when the
+option is on.
 
 * For ``examples/jupiter_gcm.yaml`` dimensions (48 x 48 x 100, nghost 3,
   10 species, so ny = 9 and nvar = 14), that is 24.7 MB per direction and
@@ -577,7 +616,8 @@ reference read the state.
 **What lane C corrects:** nothing. It does not modify another lane's
 increment.
 
-**Ordering constraints:**
+**Ordering constraints** (inside X's posting segment, X section 4: post
+before pack):
 
 * ``riemann`` is posted first in each direction;
 * sedimentation (x1), covariance (x2/x3) and positivity post after it, as
@@ -587,11 +627,13 @@ increment.
   ``:847-848``). This is why the increments must be reportable separately
   (req. 2);
 * the x1 seam average (``:882-946``) is the reconciliation of a shared
-  face (req. 5). It applies to ``riemann``, ``p*`` and the split background,
-  after all of a stage's x1 increments, and it is lane R/S's.
+  face (req. 5). In X's terms it is the register's exchange phase, which
+  ends the posting segment. It applies to ``riemann``, ``p*`` and the split
+  background, after all of a stage's x1 increments, and it is lane R/S's.
 
 **Floors (req. 7):** counts, as described in section 3.7. The solver's
-p* clamp is reported in ``FaceFlux::events``.
+p* clamp is reported in ``FaceFlux::events``. Both go into lane R's monitor,
+which X reads with the retry flags.
 
 **Restart (req. 10):** nothing of lane C is written. ``X1RowsCache`` and the
 reference are rebuilt.
@@ -653,113 +695,237 @@ reference are rebuilt.
 6. FP32 contract
 ----------------
 
+**The contract is lane X's** (``X.rst`` section 6; ``PrecisionPolicy``
+and ``Quantity`` in ``docs/v3/skeleton/X/precision_policy.hpp``). Lane C
+defines no second dtype table. Every lane C quantity maps onto one X row,
+and lane C code calls ``policy.compute(q)`` / ``policy.cast(q, x)`` in
+place of ``fp32()``.
+
 .. list-table::
    :header-rows: 1
 
-   * - stage
-     - FP32 run today (pin)
-     - after
-   * - conversion (orders 2/4) and admissibility
-     - FP64; perturbation ``delta`` updated in FP64
-       (``hydro_forward.cpp:512-519``)
-     - unchanged
-   * - reference
-     - FP64 ``SRS`` pairs (``hydro_reference.hpp:102-128``); gauge FP64
-       (``hydro.cpp:671-674``)
-     - unchanged
-   * - x1 WB perturbations
-     - formed in FP64, cast to FP32 for reconstruction (``:762``), restored
-       with FP64 references (``:772-787``)
-     - unchanged
-   * - x2/x3 faces
-     - gauge subtracted in FP64, reconstructed in FP32 (``:585-588``),
-       pressure restored and floored in FP64 (``:600-605``, ``:608-613``)
-     - unchanged
-   * - point functions
-     - FP32 storage, FP64 arithmetic in the weno5/weno3 constants and in
-       LMARS (section 2.5)
-     - typed ``T`` (C9); weno3 removed
-   * - Riemann
-     - FP32 HLLC (``:565``; ``hllc_impl.h:60-63`` asserts FP32 work)
-     - unchanged
-   * - posted ``riemann`` increment
-     - FP32 slot (``hydro.cpp:248``)
-     - FP32 increment; accumulation dtype is lane R's
-   * - ``p*``
-     - FP64 (FP32 delta plus FP64 background, ``:568-570``)
-     - unchanged, FP64
-   * - ``mass_central``
-     - not available in FP32 (``:993-995``)
-     - unchanged
-   * - floors and counters
-     - FP64 floors on FP64 totals; no counters
-     - same floors; ``int64`` counters
+   * - lane C quantity
+     - X row
+     - FP32 run
+     - FP64 run
+     - pin evidence
+   * - conversion input and output (``u - L u``, ``W``, ``w``)
+     - ``kPrimitive``
+     - FP64
+     - FP64
+     - ``hydro_forward.cpp:410-412``, ``:512-519``
+   * - reference evaluation (``SRS`` pairs, scan, ``psf``, ``pref``,
+       ``dref``, ``dsf_lr``)
+     - ``kReference``
+     - FP64
+     - FP64
+     - ``hydro_reference.hpp:102-128``
+   * - x1 weight tables (``x1_rows``)
+     - ``kReference`` master, cast per use
+     - FP64 master; consumer's compute dtype on the device
+     - FP64
+     - X: "reference and geometry masters, FP64, cached casts"
+   * - gauges, split background, ``p*``
+     - ``kGauge``
+     - FP64
+     - FP64
+     - ``hydro.cpp:671-674``; ``hydro_forward.cpp:568-570``
+   * - WB perturbations ``w'``
+     - formed in ``kPrimitive``, cast to ``kFlux`` for reconstruction
+     - FP64, then FP32
+     - FP64
+     - ``hydro_forward.cpp:700-705``, ``:762``
+   * - face states (reconstruction output, Riemann input), ``FaceThermo``
+     - ``kFlux`` (proposed; X has no face-state row, question X1)
+     - FP32
+     - FP64
+     - ``hydro_forward.cpp:565``, ``:586-588``
+   * - ``riemann`` increment
+     - ``kFlux``
+     - FP32
+     - FP64
+     - ``hydro.cpp:248``
+   * - ``mass_central`` (provisional)
+     - ``kFlux``
+     - not allowed (AAM full refuses FP32)
+     - FP64
+     - ``hydro_forward.cpp:993-995``
+   * - register step accumulator
+     - ``kRegister``
+     - FP64 (X's hypothesis; open to R)
+     - FP64
+     - X section 6
+   * - floor counters, solver events
+     - not a float quantity
+     - ``int64`` / ``uint8``
+     - same
+     - section 3.7
+
+**Floors** act on the dtype of the value they floor. On the split path the
+x2/x3 pressure floor acts on the FP64 total after the gauge is restored
+(``hydro_forward.cpp:600-605``, ``:608-613``), which is ``kGauge``.
+Elsewhere they act on ``kFlux`` face states.
+
+**Where revision 2 and X disagreed, and the resolution:**
+
+1. *Mechanism.* Revision 2 described FP32 behaviour through today's
+   ``fp32()`` conditions. X replaces all 30 ``fp32()`` calls in ``src``
+   (counted at the pin: ``git grep -c 'fp32()'``) with ``PrecisionPolicy``.
+   Ten of them are in the ranges that move into lane C files:
+
+   * ``hydro_forward.cpp:693``, ``:704``, ``:762``, ``:774``, ``:781``,
+     ``:784``, ``:814``;
+   * ``hydro.cpp:638``, ``:671``, ``:709``.
+
+   Lane C's PR C7 converts those ten to policy calls, after X's PR X1
+   (section 8). The baseline lane C files contain none. HLLC's
+   ``is_same_v<T, float>`` branches (``hllc_impl.h:76``, ``:102``) are
+   template dispatch on the kernel type, not precision policy, and stay.
+2. *Dtype-change rebinding.* HLLC rebinds its FP64 buffers to the state
+   dtype on first use (``hllc.cpp:51-54``). That is X's "allocation on dtype
+   change" class (X section 7), and it goes the same way: ``FaceThermo``
+   buffers are created in ``policy.compute(kFlux)`` at ``reset()``.
+3. *Face states* have no X row. Lane C proposes ``kFlux`` (question X1)
+   and does not add a ``Quantity``.
+4. *Floors.* Revision 2 said "FP64 floors on FP64 totals" for all floors.
+   That is true only on the split path. The table above is the precise
+   statement.
+
+No other lane C dtype differs from X's table. The FP64 islands (conversion,
+reference, gauges, ``p*``) are X's ``kPrimitive``, ``kReference`` and
+``kGauge`` rows. FP32 arithmetic in the point functions is C9 (section
+2.5), which makes the ``kFlux`` compute dtype hold inside the kernels as
+well.
+
+**MPS** follows X's MPS rule (no FP64). Lane C's MPS path is the CPU
+kernel at float32 (``OnHost``). The split path stays refused on MPS,
+because anomaly storage refuses MPS (#354, commit 7ca41432).
 
 7. CUDA-graph contract
 ----------------------
 
-**Host reads.** None in the per-stage path of lane C code. Found with
-``grep`` of ``.item``/``.cpu()`` in the baseline files and in
-``hydro_forward.cpp:383-1153`` and ``hydro.cpp:605-872``. Every host read is
-at setup or on a cache rebuild, which must be outside capture:
+**The contract is lane X's** (``X.rst`` section 7; ``StageExecutor``,
+``Segment``, ``Op`` and ``GraphKey`` in
+``docs/v3/skeleton/X/stage_executor.hpp``):
 
-* ``x1_coeffs.cpp:130-135``;
-* ``hydro_reference.hpp:45-48``;
-* ``wb_ref4.cpp:52``;
-* ``hydro_dispatch.cpp:280``;
-* ``balance_column.cpp:55``, ``:142``, ``:149``, at initialization only.
+* eager is the reference;
+* an ``Op`` is capturable when it does no host read and allocates nothing
+  outside the graph pool;
+* communication is a ``kPack`` / ``kHost`` / ``kUnpack`` boundary;
+* graphs are keyed by ``GraphKey``.
 
-After the change, every one of them sits in ``X1RowsCache`` or the
-``X1Reference`` constructor.
+Lane C adds no executor. Its code runs inside lane R's ``hydro.forward``
+compute op. This section states lane C's part of X's per-owner rulings and
+the boundaries lane C adds inside that op.
 
-**Allocations per call** (measured lines). These become fixed workspace
-owned by the module, sized at construction:
+**Host reads: lane C's ruling on X's per-directory counts.** X counts
+``.item<`` lines at the pin: recon 2, hydro 11, riemann 0.
 
-* 45 allocating lines in ``hydro_forward.cpp:383-1153``;
-* 9 in ``hydro.cpp:605-872``;
-* ``reconstruct.cpp:88``;
-* ``hllc.cpp:58-59``, ``:89``.
+* ``recon``, 2: ``x1_coeffs.cpp:131``, ``:135``. They run at the build of
+  ``X1RowsCache``, outside every segment.
+* ``hydro``, 5 of the 11 are lane C's: ``hydro_reference.hpp:47-48``, at
+  the cache build in the ``X1Reference`` constructor; and
+  ``balance_column.cpp:55``, ``:142``, ``:149``, at initialization only,
+  never in a step.
+* 4 of the 11 (``hydro.cpp:889``, ``:892``, ``:899``, ``:903``) are inside
+  the commented block ``hydro.cpp:883-907``, so they are not live (note to
+  X, question X4).
+* 2 (``hydro.cpp:470``, ``:530``) are lane R's.
 
-The workspace is:
+The per-stage path of lane C has no host read. ``grep`` of ``.item``/
+``.cpu()`` in ``hydro_forward.cpp:383-1153`` and ``hydro.cpp:605-872``
+finds none. Gate: X's replay under
+``torch.cuda.set_sync_debug_mode('error')`` (X section 5).
 
-* ``FaceStates`` for each direction;
-* ``ReferenceFaces``;
-* ``FaceThermo``;
-* register slots, which lane R owns.
+**Allocations.** Revision 2 required every per-call temporary to become
+fixed workspace. That is stricter than X, whose capturable ``Op`` may
+allocate from the graph pool. Resolved by adopting X's rule:
 
-**Data-dependent host branches.** None on tensor values. The branches
-depend on options, shapes, dtype and ``defined()``. One branch must happen
-before capture: HLLC rebinds its buffers on the first call with a new dtype
-(``hllc.cpp:51-54``), so warm-up must run first. Branches inside kernels are
-device-side.
+* temporaries that live inside one segment stay graph-pool allocations;
+  that covers most of the 45 allocating lines in
+  ``hydro_forward.cpp:383-1153`` and the 9 in ``hydro.cpp:605-872``;
+* fixed storage, allocated at ``reset()`` and part of
+  ``StateStore::generation`` when its address can change, is required only
+  for a tensor that crosses a segment boundary:
 
-**Segment boundaries.** Host-controlled communication inside a lane C
-stage:
+  * the x2/x3 ``FaceStates`` across the cubed-sphere exchange;
+  * ``ReferenceFaces`` and the anchor across the relay and ghost-row
+    exchange;
+  * the primitive ``w`` across the conversion-order 4 ghost exchange
+    (``hydro_w`` is lane R's buffer);
+  * the register slots (lane R/X);
+* the HLLC dtype rebinding is removed (section 6, item 2).
 
-1. conversion-order 4 ghost exchange and boundary functions
-   (``hydro_forward.cpp:489-503``);
-2. reference anchor relay, a serial dependency down the x1 block column
-   (``hydro.cpp:636``, ``:712``);
-3. reference ghost-row exchange (``hydro.cpp:727-776``);
-4. cubed-sphere face-state exchange (``hydro_forward.cpp:1033-1048``);
-5. ``SNAP_X1_CENTROID_EXACT`` ghost rows (``:666``, ``:953``) and the
-   covariance seam rows (``:1059-1065``);
-6. the x1 seam flux average (``:882-946``), owned by lane R/S.
+**Data-dependent host branches.** None on tensor values. Branches depend on
+options, shapes, dtype and ``defined()``, which are fixed per ``GraphKey``.
 
-Each is an eager boundary until lane S gives a capture-safe exchange.
+**Cache rebuilds.** ``X1RowsCache`` and the ``X1Reference`` constructor
+rebuild at ``reset()``, ``to()`` and restart, which are X's generation
+events, or when ``x1f`` is rewritten. An ``x1f`` rewrite during a run must
+bump X's ``config_generation`` (question X2). With a fixed grid nothing
+rebuilds inside a step.
 
-**G-milestone mapping:**
+**Graph key.** Lane C ops read no ``dt``; gravity is a constant of the
+configuration. They depend on the precision generation (dtype) and the
+configuration generation (``x1f``, options), both already in ``GraphKey``.
 
-* **G1**: single-block dry. No boundary applies; needs the fixed workspace
-  and the C2-C4 refactors.
-* **G2**: moist. Needs the conversion's limiter-mark and vapor-failure
-  restore to stay device-side; it already copies tensors,
+**Boundaries lane C adds inside R's compute op.** X's segment list names
+only ``hydro_forward.cpp:1017``, ``:1029`` and ``scalar.cpp:120-146``. It
+does not list B1, B2, B3 or B5, so X's list understates
+the boundaries. Lane C declares them here, and asks X to add them
+(question X3):
+
+.. list-table::
+   :header-rows: 1
+
+   * - boundary (pin)
+     - when
+     - X segment kind
+     - G
+   * - B1: conversion-order 4 ghost exchange and boundary functions
+       (``hydro_forward.cpp:489-503``)
+     - ``conversion-order: 4`` (no in-tree deck)
+     - pack / host / unpack
+     - G1 (key 4), G4
+   * - B2: reference anchor relay (``hydro.cpp:636``, ``:712``), a serial
+       chain down the x1 block column
+     - x1 split (``pz > 1``)
+     - host
+     - G4
+   * - B3: reference ghost-row exchange (``hydro.cpp:727-776``)
+     - x1 split
+     - pack / host / unpack
+     - G4
+   * - B4: cubed-sphere face-state exchange (``hydro_forward.cpp:1017-1048``)
+     - cubed sphere
+     - pack / host / unpack (in X's list; lane S)
+     - G6
+   * - B5: ``SNAP_X1_CENTROID_EXACT`` ghost rows (``:666``, ``:953``) and
+       covariance seam rows (``:1059-1065``)
+     - that switch, or covariance with an x1 split
+     - pack / host / unpack
+     - G4
+   * - B6: x1 seam flux average (``:882-946``)
+     - x1 split across processes
+     - the register's exchange phase (X section 4; lane R/S)
+     - G4
+
+Each stays an eager boundary until lane S provides a capture-safe exchange,
+as X section 7 does for every exchange. The single-block Cartesian key-2
+path (G1) crosses none of them.
+
+**G-milestone mapping** (X's milestones):
+
+* **G1**: single-block dry and moist explicit. No lane C boundary at key 2;
+  needs C2-C4 and the removal of the HLLC rebinding.
+* **G2**: moist. The conversion's limiter-mark and vapor-failure restore
+  must stay device-side; it already copies tensors,
   ``hydro_forward.cpp:470-480``.
-* **G4**: multi-block Cartesian. Boundaries 1, 2, 3 and 6.
-* **G5**: FP32 cubed sphere. The split reference is Cartesian-only today
+* **G4**: multi-block. B1, B2, B3, B5 and B6.
+* **G5**: FP32 cubed sphere. The split reference is Cartesian-only
   (``hydro.cpp:196-203``); lane C's part is extending ``ReferenceInput`` to
   panel seams.
-* **G6**: boundary 4 and the rotation.
+* **G6**: B4 and the rotation.
 
 8. Cross-repository interface changes and merge order
 -----------------------------------------------------
@@ -772,8 +938,10 @@ calls (``W->I``, ``W->A``, ``WA->L``, ``W->L``) are snapy's
 
 1. C1 and C2 first; they are independent.
 2. Then C3 and C4.
-3. C6 and C7.
-4. C5 and C8 after lane R's register API, which they post into.
+3. C6; C7 after lane X's PR X1 (``PrecisionPolicy``), because C7 converts
+   the ten moved ``fp32()`` sites (section 6).
+4. C5 and C8 after lane R's register API, which they post into
+   (provisional until R answers).
 5. C4's rotation call after lane S moves the helper to coord. Until then
    C4 calls ``riemann_solver.cpp``'s helper unchanged.
 6. C9 last, as a predeclared FP32 re-baseline.
@@ -812,14 +980,16 @@ range, its length. "After" is an estimate. The table is
 * The largest deletions are the MPS rewrites (674 lines, C2) and roe (516
   lines, C1).
 
-**Split with lane R (proposed to Linfeng, question R6).** The 587 moved
-lines count once:
+**Split with lane R, confirmed by Linfeng in the home thread.** The 587
+moved lines count once:
 
 * in lane R's table as deletions from ``hydro.cpp`` and
   ``hydro_forward.cpp``, with "after" 0 for those ranges;
 * in lane C's table only in the "after" of the new files.
 
-The call sites left in lane R's files are lane R's lines. The sweep
+Linfeng will compare lane R's deleted ranges with ``C_lines.csv`` when he
+writes lane R's table, and will report any range that differs. The call
+sites left in lane R's files are lane R's lines. The sweep
 (``hydro_forward.cpp:1010-1031``, ``:1088-1152``, 87 lines) stays in lane
 R's file, at about 45 lines after; lane C counts none of it. The rotation
 helper (``riemann_solver.cpp:12-47``) moves to coord, so lane S counts it.
@@ -938,8 +1108,9 @@ File by file:
      - key 2 bitwise; key 4 to round-off (expected; weights rebuilt in
        another arithmetic order; no deck)
    * - C7
-     - ``X1Reference`` + ``X1ColumnLink``; ``WellBalancedX1``
-     - bitwise: code move
+     - ``X1Reference`` + ``X1ColumnLink``; ``WellBalancedX1``; the ten moved
+       ``fp32()`` sites become ``PrecisionPolicy`` calls
+     - bitwise: code move; the policy returns the same dtypes
    * - C8
      - ``reconstruct_faces`` / ``solve_faces``
      - bitwise: code move
@@ -964,17 +1135,21 @@ File by file:
 11. Open questions to other lanes
 ---------------------------------
 
-**Lane R (Linfeng):**
+**Lane R (Linfeng).** R1-R4 are open. The lane C items they govern are
+provisional (section 4):
 
 * R1: the register API ``solve_faces`` writes into: slot views per
-  (increment, direction, stage)?
-* R2: the accumulation dtype in FP32 runs (lane O assumes FP64)?
-* R3: the declared increment order and the ``(theta - 1) F`` rule for
-  positivity?
+  (increment, direction, stage)? Is the name ``riemann`` acceptable?
+* R2: the accumulation dtype in FP32 runs? X (``Quantity::kRegister``) and
+  lane O both assume FP64.
+* R3: the declared increment order, the ``(theta - 1) F`` rule for
+  positivity, and whether ``mass_central`` is a register field or AAM's?
 * R4: will the monitor hold the ``FaceFloor`` counters and
-  ``FaceFlux::events``, and who resets them on a redo?
+  ``FaceFlux::events``, and who resets them on a redo? X section 4 resets
+  registers at stage 0 and on rollback.
 * R5: who owns the x1 seam reconciliation?
-* R6: the line split of section 9.
+* R6 (answered): the 587-line split of section 9 is confirmed. Linfeng
+  will check lane R's deleted ranges against ``C_lines.csv``.
 
 **Lane S (Jiheng):**
 
@@ -994,8 +1169,19 @@ or must AAM keep every row, as ``_aam_mass_flux`` does today
 ``grep`` match for the face pressure, the reference or the solver). Does V3
 keep it that way?
 
-**Lane X:** are the eager boundaries in section 7 acceptable for G4/G6,
-until lane S makes them capture-safe?
+**Lane X (Xi):**
+
+* X1: face states (reconstruction output, Riemann input) have no
+  ``Quantity`` row. Is ``kFlux`` right, or should X add a row?
+* X2: does an ``x1f`` rewrite during a run bump ``config_generation``
+  (section 7, cache rebuilds)?
+* X3: add lane C's boundaries B1, B2, B3 and B5 (section 7) to X's segment
+  list, which names only ``hydro_forward.cpp:1017``, ``:1029`` and
+  ``scalar.cpp:120-146``.
+* X4: 4 of X's 11 ``hydro`` ``.item<`` lines (``hydro.cpp:889-903``) are
+  inside a comment block (``:883-907``); X's count of live sites is 7.
+* X5: are the eager boundaries acceptable for G4/G6 until lane S makes them
+  capture-safe?
 
 **Cheng:** section 3.8 items 1-3.
 

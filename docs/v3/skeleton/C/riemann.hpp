@@ -13,17 +13,17 @@ struct RiemannSolverOptionsImpl {
   ADD_ARG(std::string, dir) = "omni";   // shallow-roe only
 };
 
-//! The increment lane C posts to the flux register (lane R), one per
-//! direction and RK stage, under the name "riemann". Frame: global
-//! coordinate components (after coord's to_global_frame_). Area: per unit
-//! face area; the register's divergence multiplies by face_area<d>.
-//! Storage: fixed register slots, never a lane C buffer.
+//! PROVISIONAL until lane R answers (C.rst section 11, R1-R4): the name,
+//! the register API and mass_central. Posted per direction and RK stage.
+//! Frame: global components (coord's to_global_frame_). Area: per unit face
+//! area; the register's divergence applies face_area<d>. Dtypes are lane X's
+//! PrecisionPolicy rows (X.rst section 6). Storage: register slots only.
 struct FaceFlux {
-  torch::Tensor flux;          // (nvar, nc3, nc2, nc1); FP32 under FP32
-  torch::Tensor pressure;      // x1 only: TOTAL face pressure p*, FP64; none
-                               // for shallow water
-  torch::Tensor mass_central;  // x2/x3, only with conserve-axial-momentum
-                               // full: (1+ny) rows, FP64, 1/2 (F_L + F_R)
+  torch::Tensor flux;          // (nvar, nc3, nc2, nc1), Quantity::kFlux
+  torch::Tensor pressure;      // x1: TOTAL p*, Quantity::kGauge (FP64);
+                               // none for shallow water
+  torch::Tensor mass_central;  // x2/x3, conserve-axial-momentum full only:
+                               // (1+ny) rows, kFlux (FP64: no FP32 there)
   torch::Tensor wave_speed;    // optional, max |S| per face
   torch::Tensor events;        // optional uint8: bit0 p* clamped (hllc)
 };
