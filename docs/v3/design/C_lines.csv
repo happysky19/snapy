@@ -1,0 +1,78 @@
+file,lines_now_measured,lines_after_estimate,fate
+src/recon/cp3.cpp,53,0,removed: cp3 killed (no deck)
+src/recon/cp5.cpp,60,0,"merged: table -> x1_rows.cpp, calls -> reconstruct.cpp"
+src/recon/interp_impl.cuh,193,0,"merged -> recon_line.cuh (Op wrappers, interp_nu_untiled deleted)"
+src/recon/interp_impl.h,49,0,deleted: line loops are the CPU loop in recon_dispatch.cpp
+src/recon/interp_point.h,124,0,renamed -> recon_point.h (weno3_point deleted)
+src/recon/interpolation.cpp,42,0,deleted: factory -> Scheme parse in reconstruct.cpp
+src/recon/interpolation.hpp,288,0,deleted: 7 Interp classes -> Scheme + ReconRows
+src/recon/plm.cpp,33,0,merged -> reconstruct.cpp (torch ops kept)
+src/recon/ppm.cpp,18,0,removed: ppm killed (throws)
+src/recon/recon_dispatch.cpp,179,70,MPS rewrites :83-158 deleted (OnHost); one stub
+src/recon/recon_dispatch.cu,106,70,one launcher for uniform and per-face rows
+src/recon/recon_dispatch.hpp,20,15,one dispatch stub
+src/recon/recon_dispatch_nu.cpp,115,0,deleted: second path
+src/recon/recon_dispatch_nu.cu,91,0,deleted: second path
+src/recon/recon_dispatch_nu.hpp,17,0,deleted: second path
+src/recon/recon_launch.cuh,98,0,merged -> recon_line.cuh
+src/recon/reconstruct.cpp,181,150,"dead block :118-141 and floors removed; plm, Scheme parse added"
+src/recon/reconstruct.hpp,103,60,"dead options is_boundary_*, limiter removed"
+src/recon/weno3.cpp,58,0,removed: weno3 killed (no deck)
+src/recon/weno5.cpp,70,0,merged: table -> x1_rows.cpp
+src/recon/x1_coeffs.cpp,239,0,merged -> x1_rows.cpp
+src/recon/x1_coeffs.hpp,86,0,merged -> x1_rows.hpp
+src/recon/x1_coeffs_device.h,10,0,merged -> recon_point.h traits
+src/riemann/hllc.cpp,115,0,merged -> riemann.cpp (one forward)
+src/riemann/hllc_dispatch.cpp,174,0,CPU loop -> riemann_dispatch.cpp; MPS :50-164 deleted
+src/riemann/hllc_impl.h,170,0,moved -> riemann_kernels.h
+src/riemann/lmars.cpp,78,0,merged -> riemann.cpp
+src/riemann/lmars_dispatch.cpp,112,0,CPU loop -> riemann_dispatch.cpp; MPS :44-102 deleted
+src/riemann/lmars_impl.h,85,0,moved -> riemann_kernels.h
+src/riemann/plume_roe.cpp,104,0,"removed: plume-roe killed (no deck, no output)"
+src/riemann/riemann_dispatch.cu,125,55,one CUDA loop switching on kind
+src/riemann/riemann_dispatch.hpp,25,0,merged -> riemann.hpp
+src/riemann/riemann_solver.cpp,113,0,-> riemann.cpp; rotation -> coord (lane S)
+src/riemann/riemann_solver.hpp,245,0,-> riemann.hpp; 6 classes -> 1
+src/riemann/roe.cpp,69,0,removed: roe killed (no deck)
+src/riemann/roe_dispatch.cpp,229,0,removed: roe killed
+src/riemann/roe_impl.h,218,0,removed: roe killed
+src/riemann/shallow_roe.cpp,58,0,merged -> riemann.cpp
+src/riemann/shallow_roe_dispatch.cpp,91,0,CPU loop -> riemann_dispatch.cpp; MPS :33-81 deleted
+src/riemann/shallow_roe_impl.h,78,0,moved -> riemann_kernels.h
+src/hydro/hydro_ref_x1_impl.h,296,290,kept; stretched rows read from x1_rows table
+src/hydro/hydro_reference.hpp,157,0,-> x1_reference.hpp
+src/hydro/wb_ref4.cpp,132,0,rows -> x1_rows.cpp; flag/faces -> x1_reference.cpp
+src/hydro/wb_ref4.hpp,53,0,"-> x1_rows.hpp, x1_reference.hpp"
+src/hydro/balance_column.cpp,160,105,order-4 pass uses Conversion and X1Reference
+src/hydro/balance_column.hpp,134,110,contract kept
+src/hydro/split_reference_scalar.hpp,74,74,unchanged
+src/hydro/hydro_dispatch.cpp,327,0,"-> x1_reference_dispatch.cpp; MPS :33-54, :101-275 deleted; rows :277-312 -> x1_rows"
+src/hydro/hydro_dispatch.cu,118,0,-> x1_reference_dispatch.cu
+src/hydro/hydro_dispatch.hpp,68,0,-> x1_reference_dispatch.hpp; wall4/conv4 decls -> recon
+src/hydro/hydro_forward.cpp:291-368,78,0,"lane R range, moved in: conv4 weights, wall4 weights/fill, admissibility -> x1_rows, conversion"
+src/hydro/hydro_forward.cpp:417-504,88,0,"lane R range, moved in: conversion-order 4 stage -> conversion.cpp"
+src/hydro/hydro_forward.cpp:668-820,153,0,"lane R range, moved in: well-balanced x1 block -> well_balanced_x1.cpp"
+src/hydro/hydro.cpp:605-872,268,0,"lane R range, moved in: _hydro_ref_x1 -> x1_reference.cpp"
+src/recon/recon_point.h,0,95,new lane C file
+src/recon/recon_line.cuh,0,165,new lane C file
+src/recon/x1_rows.hpp,0,45,new lane C file
+src/recon/x1_rows.cpp,0,250,new lane C file
+src/recon/conversion.hpp,0,30,new lane C file
+src/recon/conversion.cpp,0,100,new lane C file
+src/recon/well_balanced_x1.hpp,0,20,new lane C file
+src/recon/well_balanced_x1.cpp,0,100,new lane C file
+src/recon/face_floor.hpp,0,25,new lane C file
+src/recon/face_floor.cpp,0,25,new lane C file
+src/riemann/riemann.hpp,0,100,new lane C file
+src/riemann/riemann.cpp,0,140,new lane C file
+src/riemann/riemann_kernels.h,0,320,new lane C file
+src/riemann/riemann_dispatch.cpp,0,55,new lane C file
+src/hydro/x1_reference.hpp,0,70,new lane C file
+src/hydro/x1_reference.cpp,0,230,new lane C file
+src/hydro/x1_reference_dispatch.hpp,0,35,new lane C file
+src/hydro/x1_reference_dispatch.cpp,0,65,new lane C file
+src/hydro/x1_reference_dispatch.cu,0,95,new lane C file
+TOTAL baseline files,5841,999,
+TOTAL moved in from lane R,587,0,
+TOTAL new files,0,1965,
+TOTAL lane C,6428,2964,-49.3% vs baseline; -53.9% vs baseline+moved

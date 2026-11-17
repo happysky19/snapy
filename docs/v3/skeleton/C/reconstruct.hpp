@@ -7,7 +7,7 @@
 namespace snap {
 
 struct ReconstructOptionsImpl {
-  ADD_ARG(std::string, type) = "dc";  // dc|plm|cp3|weno3|cp5|weno5
+  ADD_ARG(std::string, type) = "dc";  // dc|plm|cp5|weno5
   ADD_ARG(bool, scale) = false;
   ADD_ARG(bool, shock) = false;       // one default (today true vs false)
 };
@@ -15,7 +15,7 @@ struct ReconstructOptionsImpl {
 //! the faces of one sweep: lr[ILT|IRT], plus what the floors did
 struct FaceStates {
   torch::Tensor lr;      // (2, nvar, nc3, nc2, nc1)
-  torch::Tensor floors;  // int64 (3,): rho, p, species faces floored (EF)
+  torch::Tensor floors;  // int64 (3,) rho/p/species: monitor (R), view (O)
 };
 
 //! conversion-order 2 (identity) or 4: w = W(u - L u) + L W(u), the key-4

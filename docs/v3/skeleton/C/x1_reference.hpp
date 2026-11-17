@@ -21,7 +21,7 @@ struct ReferenceFaces {
   torch::Tensor face0, face_delta, cell0, cell_delta, gauge;  // split only
 };
 
-//! the x1 block column a block belongs to; implemented by layout (lane O).
+//! the x1 block column a block belongs to; implemented by layout (lane S).
 //! Absent (nullptr) for a single column: balance_column and nb1 = 1.
 struct X1ColumnLink {
   virtual torch::Tensor take_anchor(torch::Tensor shape_like) = 0;
