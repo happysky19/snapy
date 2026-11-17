@@ -3,7 +3,7 @@
 V3 lane C: reconstruction, Riemann solvers, well-balanced reference, conversion order
 =====================================================================================
 
-Revision 3, 2026-11-17. Owner: Tianhao Le (alternate: Xinyue). Design only:
+Revision 4, 2026-11-17. Owner: Tianhao Le (alternate: Xinyue). Design only:
 no implementation change. Declarations are in ``docs/v3/skeleton/C/`` (not
 built); the file-by-file line table is ``docs/v3/design/C_lines.csv``,
 produced by ``docs/v3/design/C_lines.py``.
@@ -13,30 +13,38 @@ Every ``path:line`` is at chengcli/snapy
 "Measured" means produced by a command named in the text; "estimate" means a
 design target.
 
-Changes in revision 3 (from ``a660a7af``):
+Changes in revision 4 (from ``eb998ab1``), after Cheng's decision in the
+home thread that every solver and scheme stays:
 
-* sections 6 and 7 are rebuilt on lane X's precision and CUDA-graph
-  contracts (UCzhangxi/snapy ``v3-design/X``
-  ``77c65d5aac1f96ff6c34a45ef48faeb996c2128e``, ``docs/v3/design/X.rst``
-  sections 6 and 7). Lane C maps its quantities onto X's ``Quantity`` rows
-  and its ops onto X's segments, and states where revision 2 disagreed with
-  X and how that is resolved;
-* the 587-line accounting with lane R is confirmed (section 9);
-* the ``riemann`` increment, the ``mass_central`` field, the register API
-  and the FP32 accumulation dtype are marked provisional until lane R
-  answers (sections 4 and 11).
+* **Nothing is removed.** All six Riemann solvers (roe, lmars, hllc,
+  upwind, shallow-roe, plume-roe) and all six schemes (plm, ppm, weno3,
+  weno5, cp3, cp5) stay, and dc stays as the default scheme. The kill lists
+  are gone from sections 3.6, 9 and 10.
+* **The budget is redone on structure alone**: one kernel definition per
+  scheme and per solver across CPU, CUDA and MPS, one dispatch, one
+  direction-generic sweep and one frame rotation. The estimate is 3,329
+  lines against the 4,672-line ceiling (section 9).
+* **The ``riemann`` increment and its ``central`` and ``dissipative``
+  parts are defined for each of the six solvers** (section 3.6). Section 4
+  states what lane A reads as ``riemann.central``. The names follow lane
+  A's ``A.rst`` (JiachenLiu-Atmos/snapy ``v3-design/A`` ``2c9589c6``). They
+  stay provisional until lane R's header exists.
+* **"What changes" table** (section 3.8). The single default, the
+  ``shock`` default, the shock-path floors, MPS through host copies, the
+  FP32 typed constants, the Python binding and the ``--fmad=false`` CI build
+  are ``FOR CHENG``.
+* **The 587-line accounting with lane R is provisional** until lane R's
+  owner confirms it in lane R's own table (section 9). Revision 3 called it
+  confirmed; that was premature.
 
-Revision 2 (``a660a7af``) answered Cheng's revision-1 review:
+Earlier revisions:
 
-1. the brief's twelve sections, in its order;
-2. the register contract (section 4);
-3. diagnostics is lane O and layout is lane S;
-4. a per-file line budget;
-5. upper-case paths and branch.
-
-It also decided the kill lists from the pinned decks (section 3.6).
-Revision 1 (``b7d1300f``) had fixed hllc as the default and removed ``ppm``
-and ``plume-roe``.
+* Revision 3 (``eb998ab1``) put sections 6 and 7 on lane X's contracts
+  (UCzhangxi/snapy ``v3-design/X`` ``77c65d5a``).
+* Revision 2 (``a660a7af``) answered Cheng's revision-1 review: the twelve
+  sections, the register contract, the lane letters, the per-file budget,
+  and upper-case names.
+* Revision 1 is ``b7d1300f``.
 
 1. Scope and pins
 -----------------
@@ -84,7 +92,17 @@ pyharp or commux source is read or changed (section 8).
 * lane X (UCzhangxi/snapy ``v3-design/X``
   ``77c65d5aac1f96ff6c34a45ef48faeb996c2128e``, fetched read-only; it
   descends from the pin): ``X.rst`` sections 3, 4, 6, 7, 8 and 11 and the
-  skeletons ``precision_policy.hpp`` and ``stage_executor.hpp``.
+  skeletons ``precision_policy.hpp`` and ``stage_executor.hpp``;
+* lane A (JiachenLiu-Atmos/snapy ``v3-design/A``
+  ``2c9589c68c633796cfa5f749d003af7a2b57f38a``, fetched read-only):
+  ``A.rst`` A-r2, sections 6.1 and 6.2, and question R-1/C-1, for what lane
+  A reads as ``riemann.central``.
+
+**Lane R material.** None is published. No ``v3-design/R`` branch exists on
+any of the eleven chengcli/snapy forks or on chengcli (``git ls-remote``).
+The only register-named ref is ``fix/224-register-tests``, which is
+unrelated. Lane R's names and dtypes are therefore not used anywhere in
+this document as settled.
 
 **Not available.** Xinyue's 77-site inventory at ``919936da`` is not in the
 shared workspace. It is also not on a ``v3-design``, ``inventory`` or
@@ -295,6 +313,19 @@ landed after it.
   x86-64). Typing the constants as ``T`` changes 363,162 of 1,000,000 FP32
   faces. LMARS has the same pattern by reading (``lmars_impl.h:28-43``).
   Whether this costs GPU time is a hypothesis; nothing was timed.
+* Upwind and plume-roe do not work as hydro solvers at the pin.
+
+  * Upwind is ``RiemannSolverImpl::forward`` (``riemann_solver.cpp:79-88``).
+    It refuses a face pressure, and the x1 solve passes one
+    (``hydro_forward.cpp:842-845``). On x2/x3 it returns ``vel * ...``
+    with the flux buffer read as ``vel``, and ``solve`` discards the return
+    value (``:544-548``). Its working use is scalar transport, where ``vel``
+    is the hydro mass flux (``scalar.cpp:150-163``).
+  * Plume-roe refuses ``dim != 1`` (``plume_roe.cpp:52-55``), which in hydro
+    is x3 (``DIM3 = 1``, ``hydro_forward.cpp:372``). It also refuses a face
+    pressure, and it returns without writing ``flx`` (``:99-101``).
+
+  No deck or test runs either in hydro (section 2.3).
 * The MPS-only rewrites total 674 lines (measured):
 
 
@@ -318,7 +349,8 @@ landed after it.
    * - type (skeleton file)
      - role
    * - ``Scheme``, ``recon_point<Scheme,T>`` (``recon_point.h``)
-     - one point function per scheme: cp5, weno5. dc and plm stay torch ops.
+     - one point function per scheme: cp3, weno3, cp5, weno5. dc, plm and
+       ppm are tensor code.
    * - ``ReconRows``, ``face_value_row``, ``conv4_rows``, ``wall4_rows``,
        ``face_density_rows``, ``six_face_rows``, ``X1RowsCache``
        (``x1_rows.hpp``)
@@ -360,7 +392,7 @@ landed after it.
      |  immersed solid (pib)
      |  RiemannSolver: FaceThermo, rotate (coord [S]), kernel, rotate back
      v
-   FluxRegister["riemann", dir, stage]  (+ p*, mass_central)  [R]
+   FluxRegister["riemann", dir, stage]  (+ p*, riemann.central) [R]
      |  later increments by their owners: sedimentation, covariance,
      |  positivity; seam reconciliation                        [R/S]
      v
@@ -369,12 +401,22 @@ landed after it.
 3.3 Reconstruction (questions 1, 2)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**One definition per scheme.** cp5 and weno5 are ``DISPATCH_MACRO`` point
-functions, reached through ``recon_point<Scheme,T>``. The CPU loop and the
-CUDA line kernel are written once over ``Scheme``. dc (a copy) and plm (torch
-ops) stay tensor code. Torch ops are already one definition on every
-backend, and plm is the scheme the inventory found bitwise between CPU and
-CUDA (not re-measured here).
+**One definition per scheme**, for every scheme that stays:
+
+* cp3 and cp5 are ``poly_point<3>`` and ``poly_point<5>``; weno3 and weno5
+  are ``weno3_point`` and ``weno5_point``. All four are ``DISPATCH_MACRO``
+  point functions reached through ``recon_point<Scheme,T>``. The CPU loop and
+  the CUDA line kernel are written once over ``Scheme``.
+* dc (a copy) and plm (torch ops, ``plm.cpp:19-29``) stay tensor code. Torch
+  ops are already one definition on every backend, and plm is the scheme
+  the inventory found bitwise between CPU and CUDA (not re-measured here).
+* ppm stays a registered scheme with today's behaviour: the parser accepts
+  it and ``forward`` throws "not implemented" (``ppm.cpp:14``). Implementing
+  PPM is new numerics, outside this refactor.
+* The group rule stays: ``weno5`` reconstructs velocity and pressure with
+  cp5, and ``weno3`` with cp3 (``interpolation.cpp:21-36``). It becomes one
+  explicit table in ``reconstruct.cpp``, keyed by scheme, in place of the
+  name's last character.
 
 **MPS** registers the CPU kernel through ``OnHost`` (``on_host.hpp:61-70``,
 #354). The 674 MPS-only lines are deleted. MPS then gives the CPU float32
@@ -389,7 +431,8 @@ per call (``on_host.hpp:15-19``).
 * ``recon_line.cuh`` in place of ``interp_impl.cuh`` and
   ``recon_launch.cuh``. The four ``Op`` wrappers and ``interp_nu_untiled``
   become one ``Op<Scheme>``;
-* ``recon_dispatch_nu.*`` and ``interp_impl.h`` are deleted.
+* ``recon_dispatch_nu.*`` and ``interp_impl.h`` are deleted. They are
+  code paths, not options.
 
 **One x1 path.** ``ReconRows`` carries ``row_stride``: ``ncoeff`` for
 per-face rows, and ``0`` (one broadcast row) for a uniform grid. Per-face rows
@@ -399,7 +442,8 @@ every stretched x1.
 Moving weno5's ``.3/.6/.1`` (``interp_point.h:113-115``) into the table is
 bitwise in FP64 but not in FP32 (``0.3f != 0.3``), so it lands with C9.
 Until then C3 keeps ``Nu`` as a compile-time branch on ``row_stride == 0``.
-dc and plm keep the stretched-x1 refusal (``interpolation.hpp:62-71``).
+dc, plm, ppm, cp3 and weno3 keep today's stretched-x1 refusal
+(``interpolation.hpp:62-71``).
 
 3.4 Conversion, wall fills, balance_column (question 3)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -440,63 +484,119 @@ binding.
 * The order is unchanged (``hydro.cpp:647-869``). The kernel
   ``hydro_ref_x1_impl.h`` is not changed.
 
-3.6 Riemann (questions 6, 7), default and kill lists
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+3.6 Riemann (questions 6, 7): six solvers, one module
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-One ``RiemannSolverImpl`` with ``RiemannKind`` in place of six classes.
+All six solvers stay. One ``RiemannSolverImpl`` with ``RiemannKind`` replaces
+the six classes (``riemann_solver.hpp:54-242``).
 
+* **One kernel definition per solver** for CPU, CUDA and MPS:
+
+  * hllc, lmars, roe and shallow-roe are ``DISPATCH_MACRO`` face functions
+    in ``riemann_kernels.h``. One CPU loop and one CUDA loop switch on the
+    kind once per call. MPS runs the CPU loop through ``OnHost``, which is
+    ``FOR CHENG`` (section 3.8).
+  * upwind and plume-roe are torch-op formulas, which already run as one
+    definition on every backend.
 * **One EOS face pass**, ``FaceThermo``, replaces ``hllc.cpp:64-81``,
   ``lmars.cpp:36-52`` and ``roe.cpp:32-37``. The per-kind order of the EOS
-  calls is kept, so the results stay bitwise.
+  calls is kept, so the results stay bitwise. Roe's ideal-moist tables
+  (``roe.cpp:20-30``) go into ``RiemannParams``.
 * **One rotation**, owned by coord (lane S), replaces
   ``riemann_solver.cpp:12-47`` and the three covariance copies.
-* **Output contract**: section 4.
+* **One dispatch stub**, ``riemann_fn``, replaces ``call_hllc``,
+  ``call_lmars``, ``call_roe`` and ``call_shallow_roe``.
 
-**Single default: hllc. Decided, not FOR CHENG.**
+**What each solver provides.** The ``riemann`` increment is defined in
+section 4. Its parts are:
 
-* It is the default already in ``create()`` and YAML. 27 decks rely on the
-  default and 10 name it.
-* It is the only solver allowed with ``perturbation-flux``
-  (``hydro.cpp:207-210``), so FP32 runs need it (``hydro.cpp:80-81``).
-* It is the solver of the roadmap's first FP32 case
-  (``V3_ROADMAP.md:375-376``).
-* It returns a contact pressure with a positivity clamp
-  (``hllc_impl.h:93-98``).
+* ``central`` = the conserved rows of ``1/2 (F(w_L) + F(w_R))``, where ``F``
+  is the solver's own physical flux of one state. For every solver here,
+  ``F(w, w)`` is that physical flux, so this is today's ``1/2 (F(w_L, w_L) +
+  F(w_R, w_R))`` (``hydro_forward.cpp:997-1003``) up to round-off;
+* ``dissipative`` = ``riemann - central``. It is derived, never stored.
 
-A different default would change 27 decks.
+``central`` is stored only for the mass rows, IDN (dry) and ICY.. (species),
+and only when a consumer asks for it (lane A's ``conserve-axial-momentum``
+modes). For the other rows only the total is posted.
 
-**Solver kill list. Decided, no deck uses these** (section 2.3):
+.. list-table::
+   :header-rows: 1
 
-* **roe**: ``roe.cpp``, ``roe_dispatch.cpp``, ``roe_impl.h`` (516 lines)
-  and the roe cases of ``test_riemann.cpp:242-343``,
-  ``test_mps_matches_cpu.py:196`` and ``test_roe_cubed_sphere_rest.py``.
-  #340 fixed roe on the cubed sphere on 2026-11-09. That is evidence of
-  recent use outside the deck set, not of a deck, so it is noted here and
-  does not block the decision.
-* **plume-roe**: ``plume_roe.cpp`` (104 lines). It has no user and writes no
-  output.
-* **upwind as a hydro solver** goes. ``upwind_flux`` stays as the scalar
-  transport flux (10 scalar decks), and its YAML key keeps parsing under
-  ``scalar``.
-* **Python** per-solver bindings (``pyriemann.cpp:26-41``) are replaced by
-  one ``RiemannSolver``. No in-tree Python uses them.
-* **Kept**: hllc, lmars (26 decks), shallow-roe (9 decks).
+   * - solver
+     - equations; where it works at the pin
+     - ``riemann`` (posted)
+     - ``central`` mass rows (stored on request)
+     - ``p*``
+   * - hllc
+     - Euler + species; hydro, every direction
+     - ``hllc_impl.h:151-162``
+     - dry ``1/2 (rho_L u_L rd_L + rho_R u_R rd_R)``; species ``1/2
+       (rho_L q_L u_L + rho_R q_R u_R)``; ``u`` is the face-normal velocity
+       in the face frame, ``rd = 1 - sum q``
+     - contact pressure, clamped (``:96-98``)
+   * - lmars
+     - Euler + species; hydro
+     - ``lmars_impl.h:47-77`` (upwinded by ``ubar``)
+     - same formula as hllc
+     - ``pbar`` (``:38-40``)
+   * - roe
+     - Euler + species, ideal-moist aware; hydro (tests)
+     - ``roe_impl.h:103-210``
+     - same formula; it is the ``0.5 (fl + fr)`` the kernel already forms
+       before subtracting dissipation (``:103-112``)
+     - acoustic estimate (``:119-122``)
+   * - shallow-roe
+     - shallow water (h, hu, hv), ny = 0; hydro shallow-water decks
+     - ``shallow_roe_impl.h:60-71``
+     - ``1/2 (h_L u_L + h_R u_R)``, the kernel's own central row
+       (``:60``)
+     - none
+   * - upwind
+     - transport of a quantity ``q`` by a given face mass flux ``m``;
+       scalar transport (``scalar.cpp:150-163``); not functional in hydro
+       (section 2.5)
+     - ``m q_upwind`` (``riemann_solver.cpp:86-87``)
+     - ``m 1/2 (q_L + q_R)`` for each transported row; ``dissipative`` =
+       ``1/2 abs(m) (q_L - q_R)``. Posted by whoever transports ``q``; no
+       hydro mass rows
+     - none
+   * - plume-roe
+     - plume equations (R, W, B, V), ``dim == 1`` only; not functional in
+       hydro (section 2.5)
+     - Lax-Friedrichs, ``plume_roe.cpp:14-39``
+     - all four rows ``1/2 (F(w_L) + F(w_R))`` (``:38``); dissipative
+       ``-1/2 alpha (w_R - w_L)``; no hydro mass rows
+     - none
 
-**Scheme kill list. Decided, no deck uses these:**
+So hllc, lmars, roe and shallow-roe give lane A its mass rows. Upwind and
+plume-roe have no hydro mass rows. With them, ``riemann.central`` is
+undefined for lane A, and an option that needs it refuses at ``reset()``
+with a message naming the solver.
 
-* **ppm**: it throws.
-* **weno3** and **cp3**, with ``weno3_point``. Their tests are adapted in C1.
-* The dead ``ReconstructOptions`` fields.
-* **Kept**: dc (27 decks), plm (6), cp5 (1, plus weno5's partner), weno5
-  (39).
+**Retained, with proposed contract fixes** (``FOR CHENG``, section 3.8):
 
-A deck that names a removed type gets an error that names the remaining
-types.
+* plume-roe writes its flux into its slot, as every solver must. Its unused
+  Roe averages, Jacobian and characteristic polynomial
+  (``plume_roe.cpp:57-92``) are dead code and go; the option stays.
+* Upwind and plume-roe under ``dynamics`` are refused at ``reset()`` for a
+  direction they cannot solve, in place of today's runtime failure or
+  discarded result. Upwind stays the scalar default (``scalar.hpp:29``).
 
-**FP32 perturbation entry**: the ``FaceBackground`` argument. It is the same
-kernel shifted by ``p0`` (``hllc_impl.h:29-31``, ``:51-52``, ``:96-97``,
-``:155-156``). LMARS perturbation support stays deferred
-(``V3_ROADMAP.md:543``).
+**Single default (proposal; ``FOR CHENG``).** hllc, unchanged:
+
+* it is the default already in ``create()`` and YAML, relied on by 27
+  decks and named by 10;
+* it is the only solver allowed with ``perturbation-flux``
+  (``hydro.cpp:207-210``), which FP32 needs (``hydro.cpp:80-81``);
+* it is the roadmap's first FP32 case (``V3_ROADMAP.md:375-376``).
+
+**FP32 perturbation entry**: the ``FaceBackground`` argument, hllc only. It
+is the same kernel shifted by ``p0`` (``hllc_impl.h:29-31``, ``:51-52``,
+``:96-97``, ``:155-156``). The mass rows carry no pressure, so ``central``
+is unaffected by the gauge; face densities are totals on both paths
+(``hydro_forward.cpp:586-588``, ``:790-805``). LMARS and Roe perturbation
+support stays deferred (``V3_ROADMAP.md:543``).
 
 3.7 Sweep (question 5) and floors (question 8)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -520,28 +620,58 @@ Face-state floors are not flux increments: the flux they cause has no
 separate value without a second solve. So they register counts, not flux
 (section 4).
 
-3.8 FOR CHENG (each changes deck results)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+3.8 What changes
+~~~~~~~~~~~~~~~~
 
-1. **One ``shock`` default.** Make it ``false`` in ``create()``, matching
-   YAML. 7 test decks change wherever a density or pressure floor fires
-   (section 2.3).
-2. **Density and pressure floors on the shock path.** 12 decks change,
-   including 6 examples.
-3. **MPS through ``OnHost``.** Every MPS run moves from the MPS formulas to
-   the CPU kernel's float32 result (within ``test_mps_matches_cpu.py``
-   tolerances today), and MPS throughput drops.
+Every option of the pin stays (Cheng's decision). This table lists what
+the design proposes to change in behaviour or interface. "Decks" is the
+in-tree census of section 2.3.
 
-Decided without Cheng, because no deck is affected:
+.. list-table::
+   :header-rows: 1
 
-* the kill lists;
-* hllc as the default (unchanged);
-* the FP32 typed constants (C9), since no deck runs FP32;
-* the in-kernel ``mass_central`` (C5), since no deck runs
-  ``conserve-axial-momentum: full``;
-* the key-4 weight rows (C6), since no deck runs key 4;
-* the Python binding change;
-* no ``--fmad=false`` build.
+   * - change
+     - decks whose results change
+     - status
+   * - single Riemann default: hllc (unchanged)
+     - none
+     - FOR CHENG
+   * - one ``shock`` default, ``false`` in ``create()`` as in YAML
+     - 7 test decks with the limiter on, where a density or pressure floor
+       fires
+     - FOR CHENG
+   * - density and pressure floors on the shock path
+     - 12 decks (6 examples), where a floor fires
+     - FOR CHENG
+   * - MPS through host copies (``OnHost``)
+     - every MPS run: MPS results become the CPU float32 result; MPS
+       throughput drops
+     - FOR CHENG
+   * - FP32 typed constants in weno3/weno5/LMARS (C9)
+     - none in-tree (no deck sets ``precision: float32``); FP32 tests are
+       re-baselined against FP64
+     - FOR CHENG
+   * - Python: one ``RiemannSolver`` binding in place of ``UpwindSolver``,
+       ``RoeSolver``, ``LmarsSolver``, ``ShallowRoeSolver``
+       (``pyriemann.cpp:26-41``)
+     - none (no in-tree Python uses them)
+     - FOR CHENG
+   * - a ``--fmad=false`` CI build of the recon/Riemann ``.cu`` files, for
+       bitwise CPU/CUDA debugging (not the default)
+     - none
+     - FOR CHENG
+   * - plume-roe writes its slot; upwind/plume-roe refused at ``reset()``
+       for a hydro direction they cannot solve
+     - none (none works in hydro at the pin, section 2.5)
+     - FOR CHENG (new in revision 4)
+   * - in-kernel ``riemann.central`` in place of two extra solves per
+       x2/x3 direction (C5)
+     - none (no deck runs ``conserve-axial-momentum: full``); round-off
+       change expected
+     - proposal; lane A gate H1 (1e-14 relative)
+   * - key-4 weight rows from ``x1_rows`` (C6)
+     - none (no deck runs key 4); round-off change expected
+     - proposal
 
 4. Flux-register contract
 -------------------------
@@ -559,9 +689,15 @@ has no published design yet, so these lane C items are proposals, not
 agreed interfaces:
 
 * the increment name ``riemann``;
-* the ``mass_central`` companion field;
+* the part names ``riemann.central`` and ``riemann.dissipative``. They are
+  lane A's names (``A.rst`` A-r2), and lane A has asked lane R whether a
+  named part is supported (A's R-1);
+* whether ``central`` is kept as a field or reported only as an integral;
 * the register API that ``solve_faces`` writes into;
 * the FP32 accumulation dtype.
+
+No lane R header or numbered review notes were available to this revision.
+No R name or dtype is taken as settled here.
 
 They may change with lane R's revision. Lane C's own computation (what
 the solve produces, its frame, area weighting and compute dtype) does not
@@ -592,22 +728,47 @@ increments.
   it is the ``kFlux`` perturbation plus the FP64 background, added once in
   ``solve_faces`` (today ``hydro_forward.cpp:568-570``,
   ``hydro.cpp:252-253``). It is read by the pressure source and gravity work.
-* ``mass_central`` (x2, x3), provisional: only with
-  ``conserve-axial-momentum: full``. It holds rows IDN and ICY.. of ``1/2
-  (F(w_L) + F(w_R))`` in the global frame, in ``kFlux``. That option refuses
-  FP32 (``hydro_forward.cpp:993-995``), so in practice it is FP64. The
-  dissipative mass flux for lane A is ``riemann[mass rows] - mass_central``.
 
-**Memory of mass_central (req. 9).** Size: ``(1+ny) x nc3 x nc2 x nc1 x 8``
-bytes per direction, in fixed storage allocated at ``reset()`` only when the
-option is on.
+**Parts of the increment (provisional names, lane A's).** Section 3.6
+defines them per solver.
+
+* ``riemann.central``: the mass rows (IDN dry, ICY.. species) of ``1/2
+  (F(w_L) + F(w_R))``, formed in the kernel from the face states the solver
+  used. That is A-r2's ``1/2 Σ_s (ρ_s u_n)_L + (ρ_s u_n)_R``.
+
+  * Densities are totals on both the total and the perturbation path
+    (section 3.6), so lane A's R-1 sub-question is answered from lane C's
+    side: totals.
+  * The mass rows are not touched by the frame rotation (``flux2global*_``
+    rewrites only the momentum rows, ``gnomonic_equiangle.cpp:428-455``), so
+    they are the same in the face and global frames.
+  * Defined for hllc, lmars, roe and shallow-roe. Upwind and plume-roe have
+    no hydro mass rows (section 3.6), and a mode that needs ``central``
+    refuses them at ``reset()``.
+  * Stored only when a consumer asks for it (lane A's
+    ``conserve-axial-momentum`` modes), on the directions it asks for: x2
+    and x3 today (``hydro_forward.cpp:1356-1361``).
+* ``riemann.dissipative`` = ``riemann - riemann.central`` on the mass rows.
+  It is derived, never stored. Lane A forms ``F - F_c`` itself in FP64
+  (``A.rst`` 6.1).
+
+**dtype of the parts.** ``riemann.central`` is in ``kFlux``, the same as
+the increment: FP64 in an FP64 run and FP32 in an FP32 run. This matches
+``A.rst`` 6.1 ("flux dtype (FP32)"). At the pin the AAM full mode refuses
+FP32 (``hydro_forward.cpp:993-995``). Lane A plans to lift that after its
+gate G10 (``A.rst`` 6.2), so lane C does not assume FP64.
+
+**Memory of riemann.central (req. 9).** Size: ``(1+ny) x nc3 x nc2 x nc1 x
+b`` bytes per stored direction, with ``b`` = 8 (FP64) or 4 (FP32). It is
+fixed storage allocated at ``reset()`` only when requested.
 
 * For ``examples/jupiter_gcm.yaml`` dimensions (48 x 48 x 100, nghost 3,
-  10 species, so ny = 9 and nvar = 14), that is 24.7 MB per direction and
-  49.5 MB per block.
+  10 species, so ny = 9 and nvar = 14) in FP64, that is 24.7 MB per
+  direction and 49.5 MB per block for x2 and x3.
 * Today the same option holds ``cen`` and ``_flux - cen``: 2 x nvar rows,
   or 69.2 MB per direction (by reading ``hydro_forward.cpp:997-1003``,
-  ``:1356-1361``; not profiled).
+  ``:1356-1361``; not profiled). Lane A's own count, ``A.rst`` table at
+  line 694, is "2 (5+ny)" today against "2 (1+ny)" after.
 * It also removes four Riemann solves per stage.
 
 **What lane C reads from the register:** nothing. Reconstruction and the
@@ -678,6 +839,17 @@ reference are rebuilt.
    * - key-4 order
      - tolerance: order >= 4.9 (as #347)
      - ``test_conversion_order``, ``test_wb_ref4_order``
+   * - ``riemann.central`` equals today's central mass rows (two extra
+       solves, ``hydro_forward.cpp:997-1003``)
+     - tolerance: 1e-14 relative, FP64 (lane A's H1)
+     - lane A's G2 on the #363 deck; per solver: hllc, lmars, roe,
+       shallow-roe
+   * - every solver and scheme of the pin still parses and runs as before
+       (ppm still throws)
+     - bitwise per C1-C4, C7, C8
+     - existing tests per option: ``test_riemann`` (lmars, roe),
+       ``test_weno`` (weno3, cp3, weno5, cp5), ``test_plm``,
+       ``test_x1_stretched_refusal``, scalar upwind tests
    * - split path equals the total path in FP64
      - tolerance of the existing tests
      - ``test_perturbation_flux``, ``test_perturbation_flux_split``,
@@ -745,11 +917,12 @@ place of ``fp32()``.
      - FP32
      - FP64
      - ``hydro.cpp:248``
-   * - ``mass_central`` (provisional)
+   * - ``riemann.central`` (provisional)
      - ``kFlux``
-     - not allowed (AAM full refuses FP32)
+     - FP32 (refused at the pin, ``hydro_forward.cpp:993-995``; lane A
+       plans to lift it)
      - FP64
-     - ``hydro_forward.cpp:993-995``
+     - ``A.rst`` 6.1
    * - register step accumulator
      - ``kRegister``
      - FP64 (X's hypothesis; open to R)
@@ -962,37 +1135,61 @@ range, its length. "After" is an estimate. The table is
      - after (estimate)
    * - the 50 lane C baseline files
      - 5,841
-     - 999 (10 files kept)
+     - 1,069 (11 files kept)
    * - lane R ranges moved in (``hydro_forward.cpp:291-368``, ``:417-504``,
        ``:668-820``; ``hydro.cpp:605-872``)
      - 587
      - 0 (code now in new lane C files)
    * - 19 new lane C files
      - 0
-     - 1,965
+     - 2,260
    * - **lane C**
      - **6,428**
-     - **2,964**
+     - **3,329**
 
-* Against the 5,841-line baseline: -49.3%.
-* Against baseline plus moved-in lines: -53.9%.
-* The lane ceiling (20%) is 4,672.
-* The largest deletions are the MPS rewrites (674 lines, C2) and roe (516
-  lines, C1).
+Every solver and scheme of the pin is in these numbers (Cheng's decision).
+The reduction comes only from structure:
 
-**Split with lane R, confirmed by Linfeng in the home thread.** The 587
-moved lines count once:
+* one kernel definition per scheme and per solver for CPU, CUDA and MPS.
+  This deletes the 674 MPS-only lines (section 2.5) and the duplicate CPU and
+  CUDA loops;
+* one dispatch per family (``recon_dispatch``, ``riemann_fn``). This
+  deletes ``recon_dispatch_nu.*`` and the four per-solver CPU dispatch files;
+* one direction-generic sweep. It sits in lane R's file and is not counted
+  here;
+* one frame rotation, moved to coord: ``riemann_solver.cpp:12-47``, counted
+  by lane S;
+* one weight builder (``x1_rows``) and one reference evaluator
+  (``X1Reference``).
+
+By group, now to after: recon 2,233 to 1,275; riemann 2,089 to 980; the 10
+reference files plus their new files 1,519 to 1,074. The moved-in lines'
+new home is inside those "after" numbers.
+
+**Against the ceiling.** The lane ceiling is 4,672 (20% below 5,841). The
+estimate is 3,329: 1,343 lines under the ceiling, -43.0% against the 5,841
+baseline, -48.2% against baseline plus moved-in lines (6,428). Two variants
+were checked against it:
+
+* if MPS keeps on-device torch formulas instead of host copies (``FOR
+  CHENG``, section 3.8), one tensor-scalar instantiation of the same point
+  functions adds about 90 lines (estimate): 3,419;
+* if the rotation stays in lane C (lane S declines it), add 36: 3,365.
+
+Both stay under 4,672.
+
+**Split with lane R: provisional until lane R's owner confirms it.** The
+proposal is that the 587 moved lines count once:
 
 * in lane R's table as deletions from ``hydro.cpp`` and
   ``hydro_forward.cpp``, with "after" 0 for those ranges;
-* in lane C's table only in the "after" of the new files.
+* in lane C's table only in the "after" of the new files (as here).
 
-Linfeng will compare lane R's deleted ranges with ``C_lines.csv`` when he
-writes lane R's table, and will report any range that differs. The call
-sites left in lane R's files are lane R's lines. The sweep
-(``hydro_forward.cpp:1010-1031``, ``:1088-1152``, 87 lines) stays in lane
-R's file, at about 45 lines after; lane C counts none of it. The rotation
-helper (``riemann_solver.cpp:12-47``) moves to coord, so lane S counts it.
+A message in the home thread accepted this split and said lane R's deleted
+ranges would be compared with ``C_lines.csv`` once lane R's table exists.
+No lane R table or design is published (section 1), so the R side is not
+verified and stays provisional (question R6). The call sites left in lane
+R's files are lane R's lines.
 
 File by file:
 
@@ -1000,15 +1197,15 @@ File by file:
    :header: "file", "now (measured)", "after (estimate)", "fate"
    :widths: 34, 10, 10, 46
 
-   "src/recon/cp3.cpp", 53, 0, "removed: cp3 killed (no deck)"
+   "src/recon/cp3.cpp", 53, 0, "merged: table -> x1_rows.cpp, calls -> reconstruct.cpp"
    "src/recon/cp5.cpp", 60, 0, "merged: table -> x1_rows.cpp, calls -> reconstruct.cpp"
    "src/recon/interp_impl.cuh", 193, 0, "merged -> recon_line.cuh (Op wrappers, interp_nu_untiled deleted)"
    "src/recon/interp_impl.h", 49, 0, "deleted: line loops are the CPU loop in recon_dispatch.cpp"
-   "src/recon/interp_point.h", 124, 0, "renamed -> recon_point.h (weno3_point deleted)"
+   "src/recon/interp_point.h", 124, 0, "renamed -> recon_point.h (all point functions kept)"
    "src/recon/interpolation.cpp", 42, 0, "deleted: factory -> Scheme parse in reconstruct.cpp"
    "src/recon/interpolation.hpp", 288, 0, "deleted: 7 Interp classes -> Scheme + ReconRows"
    "src/recon/plm.cpp", 33, 0, "merged -> reconstruct.cpp (torch ops kept)"
-   "src/recon/ppm.cpp", 18, 0, "removed: ppm killed (throws)"
+   "src/recon/ppm.cpp", 18, 0, "merged -> reconstruct.cpp (ppm kept; not implemented at the pin, as today)"
    "src/recon/recon_dispatch.cpp", 179, 70, "MPS rewrites :83-158 deleted (OnHost); one stub"
    "src/recon/recon_dispatch.cu", 106, 70, "one launcher for uniform and per-face rows"
    "src/recon/recon_dispatch.hpp", 20, 15, "one dispatch stub"
@@ -1016,9 +1213,9 @@ File by file:
    "src/recon/recon_dispatch_nu.cu", 91, 0, "deleted: second path"
    "src/recon/recon_dispatch_nu.hpp", 17, 0, "deleted: second path"
    "src/recon/recon_launch.cuh", 98, 0, "merged -> recon_line.cuh"
-   "src/recon/reconstruct.cpp", 181, 150, "dead block :118-141 and floors removed; plm, Scheme parse added"
+   "src/recon/reconstruct.cpp", 181, 165, "dead block :118-141 and floors removed; plm, ppm stub, Scheme parse and group table added"
    "src/recon/reconstruct.hpp", 103, 60, "dead options is_boundary_*, limiter removed"
-   "src/recon/weno3.cpp", 58, 0, "removed: weno3 killed (no deck)"
+   "src/recon/weno3.cpp", 58, 0, "merged: table -> x1_rows.cpp, calls -> reconstruct.cpp"
    "src/recon/weno5.cpp", 70, 0, "merged: table -> x1_rows.cpp"
    "src/recon/x1_coeffs.cpp", 239, 0, "merged -> x1_rows.cpp"
    "src/recon/x1_coeffs.hpp", 86, 0, "merged -> x1_rows.hpp"
@@ -1029,14 +1226,14 @@ File by file:
    "src/riemann/lmars.cpp", 78, 0, "merged -> riemann.cpp"
    "src/riemann/lmars_dispatch.cpp", 112, 0, "CPU loop -> riemann_dispatch.cpp; MPS :44-102 deleted"
    "src/riemann/lmars_impl.h", 85, 0, "moved -> riemann_kernels.h"
-   "src/riemann/plume_roe.cpp", 104, 0, "removed: plume-roe killed (no deck, no output)"
-   "src/riemann/riemann_dispatch.cu", 125, 55, "one CUDA loop switching on kind"
+   "src/riemann/plume_roe.cpp", 104, 45, "kept as tensor code; writes its slot; unused Roe averages, Jacobian and polynomial (:57-92) dropped"
+   "src/riemann/riemann_dispatch.cu", 125, 65, "one CUDA loop switching on kind (hllc, lmars, roe, shallow-roe)"
    "src/riemann/riemann_dispatch.hpp", 25, 0, "merged -> riemann.hpp"
-   "src/riemann/riemann_solver.cpp", 113, 0, "-> riemann.cpp; rotation -> coord (lane S)"
+   "src/riemann/riemann_solver.cpp", 113, 0, "-> riemann.cpp (incl. upwind); rotation :12-47 -> coord (lane S)"
    "src/riemann/riemann_solver.hpp", 245, 0, "-> riemann.hpp; 6 classes -> 1"
-   "src/riemann/roe.cpp", 69, 0, "removed: roe killed (no deck)"
-   "src/riemann/roe_dispatch.cpp", 229, 0, "removed: roe killed"
-   "src/riemann/roe_impl.h", 218, 0, "removed: roe killed"
+   "src/riemann/roe.cpp", 69, 0, "merged -> riemann.cpp (ideal-moist params in RiemannParams)"
+   "src/riemann/roe_dispatch.cpp", 229, 0, "CPU loop -> riemann_dispatch.cpp; MPS :50-219 deleted"
+   "src/riemann/roe_impl.h", 218, 0, "moved -> riemann_kernels.h"
    "src/riemann/shallow_roe.cpp", 58, 0, "merged -> riemann.cpp"
    "src/riemann/shallow_roe_dispatch.cpp", 91, 0, "CPU loop -> riemann_dispatch.cpp; MPS :33-81 deleted"
    "src/riemann/shallow_roe_impl.h", 78, 0, "moved -> riemann_kernels.h"
@@ -1054,29 +1251,29 @@ File by file:
    "src/hydro/hydro_forward.cpp:417-504", 88, 0, "lane R range, moved in: conversion-order 4 stage -> conversion.cpp"
    "src/hydro/hydro_forward.cpp:668-820", 153, 0, "lane R range, moved in: well-balanced x1 block -> well_balanced_x1.cpp"
    "src/hydro/hydro.cpp:605-872", 268, 0, "lane R range, moved in: _hydro_ref_x1 -> x1_reference.cpp"
-   "src/recon/recon_point.h", 0, 95, "new lane C file"
+   "src/recon/recon_point.h", 0, 125, "new lane C file"
    "src/recon/recon_line.cuh", 0, 165, "new lane C file"
    "src/recon/x1_rows.hpp", 0, 45, "new lane C file"
-   "src/recon/x1_rows.cpp", 0, 250, "new lane C file"
+   "src/recon/x1_rows.cpp", 0, 260, "new lane C file"
    "src/recon/conversion.hpp", 0, 30, "new lane C file"
    "src/recon/conversion.cpp", 0, 100, "new lane C file"
    "src/recon/well_balanced_x1.hpp", 0, 20, "new lane C file"
    "src/recon/well_balanced_x1.cpp", 0, 100, "new lane C file"
    "src/recon/face_floor.hpp", 0, 25, "new lane C file"
    "src/recon/face_floor.cpp", 0, 25, "new lane C file"
-   "src/riemann/riemann.hpp", 0, 100, "new lane C file"
-   "src/riemann/riemann.cpp", 0, 140, "new lane C file"
-   "src/riemann/riemann_kernels.h", 0, 320, "new lane C file"
-   "src/riemann/riemann_dispatch.cpp", 0, 55, "new lane C file"
+   "src/riemann/riemann.hpp", 0, 110, "new lane C file"
+   "src/riemann/riemann.cpp", 0, 175, "new lane C file"
+   "src/riemann/riemann_kernels.h", 0, 525, "new lane C file"
+   "src/riemann/riemann_dispatch.cpp", 0, 60, "new lane C file"
    "src/hydro/x1_reference.hpp", 0, 70, "new lane C file"
    "src/hydro/x1_reference.cpp", 0, 230, "new lane C file"
    "src/hydro/x1_reference_dispatch.hpp", 0, 35, "new lane C file"
    "src/hydro/x1_reference_dispatch.cpp", 0, 65, "new lane C file"
    "src/hydro/x1_reference_dispatch.cu", 0, 95, "new lane C file"
-   "TOTAL baseline files", 5841, 999, ""
+   "TOTAL baseline files", 5841, 1069, ""
    "TOTAL moved in from lane R", 587, 0, ""
-   "TOTAL new files", 0, 1965, ""
-   "TOTAL lane C", 6428, 2964, "-49.3% vs baseline; -53.9% vs baseline+moved"
+   "TOTAL new files", 0, 2260, ""
+   "TOTAL lane C", 6428, 3329, "-43.0% vs baseline; -48.2% vs baseline+moved"
 
 10. Migration
 -------------
@@ -1088,21 +1285,32 @@ File by file:
      - content
      - class and why
    * - C1
-     - kill lists (section 3.6), dead options and code, tests adapted
-     - bitwise for every deck: removed paths are unreachable from decks
+     - dead code only: the commented blocks (``reconstruct.cpp:118-141``,
+       ``hydro_forward.cpp:630-633``), ``_revise_x1*_ghost``
+       (``hydro.cpp:565-603``), the unread ``ReconstructOptions`` fields
+       ``is_boundary_lower``, ``is_boundary_upper`` and ``limiter``, and
+       plume-roe's unused Roe averages and Jacobian (``plume_roe.cpp:57-92``)
+     - bitwise: nothing removed is executed or read
    * - C2
-     - MPS through ``OnHost`` for recon, Riemann, reference
+     - MPS through ``OnHost`` for recon, Riemann (hllc, lmars, roe,
+       shallow-roe), reference
      - CPU/CUDA bitwise (untouched); MPS changes to the CPU float32 result
-       (FOR CHENG 3)
+       (FOR CHENG)
    * - C3
-     - ``Scheme`` + tables, one dispatch stub, one CUDA line kernel
-     - bitwise: same point functions, same order
+     - ``Scheme`` + tables for all six schemes (and dc), one dispatch stub,
+       one CUDA line kernel
+     - bitwise: same point functions, same order; ppm still throws
    * - C4
-     - one ``RiemannSolver``, one EOS pass, one CPU and one CUDA loop
+     - one ``RiemannSolver`` for all six kinds, one EOS pass, one CPU and
+       one CUDA loop; upwind and plume-roe keep their torch formulas
      - bitwise: per-kind EOS order kept
    * - C5
-     - post into the register; ``FaceFloor``; in-kernel ``mass_central``
-     - bitwise except AAM full (round-off, expected; no deck)
+     - post into the register (after lane R's API); ``FaceFloor``;
+       in-kernel ``riemann.central``; plume-roe writes its slot;
+       upwind/plume-roe refused at ``reset()`` where they cannot solve
+       (FOR CHENG)
+     - bitwise except AAM full (round-off, expected; no deck; lane A gate
+       H1)
    * - C6
      - ``x1_rows``, ``Conversion`` shared with ``balance_column``
      - key 2 bitwise; key 4 to round-off (expected; weights rebuilt in
@@ -1118,19 +1326,19 @@ File by file:
      - FP32 typed constants; uniform rows read ``d``
      - FP64 bitwise; FP32 re-baselined against FP64 (no deck runs FP32)
    * - C10
-     - FOR CHENG items 1 and 2 once ruled
+     - the ``shock`` default and shock-path floors, if Cheng accepts them
      - deck results change where floors fire
 
-**Options and paths removed:**
+**Options removed: none.** Every ``riemann-solver`` type, every
+``reconstruct`` type and every YAML key of the pin stays. The removals are
+code paths and unread fields:
 
-* ``riemann-solver: {type: roe | plume-roe | upwind}`` under ``dynamics``;
-* ``reconstruct`` ``type: ppm | weno3 | cp3``;
-* the ``ReconstructOptions`` fields ``is_boundary_lower``,
-  ``is_boundary_upper`` and ``limiter``;
-* the Python ``UpwindSolver``, ``RoeSolver``, ``LmarsSolver`` and
-  ``ShallowRoeSolver``;
-* ``hydro_pressure_scan_x1_tensor`` and the MPS reference;
-* ``recon_dispatch_nu`` and the stretched-x1 refusal on MPS.
+* the MPS rewrites (replaced by ``OnHost``, FOR CHENG) and
+  ``hydro_pressure_scan_x1_tensor``;
+* ``recon_dispatch_nu.*`` (one dispatch with per-face rows);
+* the unread ``ReconstructOptions`` fields and the commented code (C1);
+* the Python per-solver modules, only if Cheng accepts one
+  ``RiemannSolver`` binding (FOR CHENG).
 
 11. Open questions to other lanes
 ---------------------------------
@@ -1143,13 +1351,19 @@ provisional (section 4):
 * R2: the accumulation dtype in FP32 runs? X (``Quantity::kRegister``) and
   lane O both assume FP64.
 * R3: the declared increment order, the ``(theta - 1) F`` rule for
-  positivity, and whether ``mass_central`` is a register field or AAM's?
+  positivity, and named parts: can ``riemann`` carry ``riemann.central``
+  (stored mass rows) and ``riemann.dissipative`` (derived)? This is also
+  lane A's R-1. Field or integral?
 * R4: will the monitor hold the ``FaceFloor`` counters and
   ``FaceFlux::events``, and who resets them on a redo? X section 4 resets
   registers at stage 0 and on rollback.
 * R5: who owns the x1 seam reconciliation?
-* R6 (answered): the 587-line split of section 9 is confirmed. Linfeng
-  will check lane R's deleted ranges against ``C_lines.csv``.
+* R6: the 587-line split of section 9. It was accepted in the home thread
+  but is provisional until lane R's own table shows the same ranges as
+  deletions.
+* R7: lane R's header and numbered review notes on lane C were not
+  available to this revision. Lane C will align names and dtypes to them
+  only once they are published.
 
 **Lane S (Jiheng):**
 
@@ -1159,9 +1373,19 @@ provisional (section 4):
 * S3: the cubed-sphere face-state exchange between ``reconstruct_faces`` and
   ``solve_faces``.
 
-**Lane A:** is ``mass_central`` (IDN and ICY.. rows, FP64, x2/x3) enough,
-or must AAM keep every row, as ``_aam_mass_flux`` does today
-(``hydro_forward.cpp:1356-1361``)?
+**Lane A (from ``A.rst`` at ``2c9589c6``):**
+
+* Lane C provides ``riemann.central`` as A-r2 asks: the mass rows (dry and
+  species), x2/x3, formed from the solver's face states, in ``kFlux``
+  (section 4). Mass rows only, so ``_aam_mass_flux``'s other rows are not
+  kept. A1: confirm that is enough.
+* Under perturbation-flux the face densities are totals (section 3.6).
+* Lane A's C-1 asks who posts the implicit x1 mass transfer and the
+  tangential momentum correction (``hydro_forward.cpp:1645-1646``,
+  ``:1668-1669``). Not lane C: lane C posts only ``riemann`` and its parts.
+  These are lane I's (implicit) and the register's (R).
+* A2: upwind and plume-roe give no ``riemann.central`` for hydro mass
+  rows. Is a ``reset()`` refusal of AAM modes with those solvers right?
 
 **Lane O (Jiachen):** the display of the floor counts and solver events.
 
@@ -1183,12 +1407,12 @@ keep it that way?
 * X5: are the eager boundaries acceptable for G4/G6 until lane S makes them
   capture-safe?
 
-**Cheng:** section 3.8 items 1-3.
+**Cheng:** the ``FOR CHENG`` rows of section 3.8.
 
 12. Skeleton index
 ------------------
 
-``docs/v3/skeleton/C/``: declarations and comments only, 287 lines
+``docs/v3/skeleton/C/``: declarations and comments only, 292 lines
 (``wc -l``). It is outside ``src/``, so no CMake glob, Doxygen input or
 clang-format hook reads it.
 
@@ -1199,9 +1423,9 @@ clang-format hook reads it.
      - lines
      - declares
    * - ``recon_point.h``
-     - 31
-     - ``Scheme``, ``SchemeTraits``, ``poly_point``, ``weno5_point``,
-       ``recon_point``
+     - 34
+     - ``Scheme`` (dc, plm, ppm, cp3, weno3, cp5, weno5), ``SchemeTraits``,
+       ``poly_point``, ``weno3_point``, ``weno5_point``, ``recon_point``
    * - ``x1_rows.hpp``
      - 48
      - ``face_value_row``, ``ReconRows``, ``recon_rows``, ``conv4_rows``,
@@ -1216,8 +1440,9 @@ clang-format hook reads it.
      - ``ReferenceInput``, ``ReferenceFaces``, ``X1ColumnLink``,
        ``X1ReferenceConfig``, ``X1Reference``
    * - ``riemann.hpp``
-     - 68
-     - ``RiemannKind``, ``RiemannSolverOptionsImpl``, ``FaceFlux``,
+     - 70
+     - ``RiemannKind`` (all six), ``RiemannSolverOptionsImpl``, ``FaceFlux``
+       (with the ``central`` part),
        ``kRiemannIncrement``, ``FaceThermo``, ``FaceBackground``,
        ``RiemannSolverImpl``, ``riemann_face``, ``riemann_fn``
    * - ``sweep.hpp``
@@ -1233,4 +1458,4 @@ Measurements in this revision (on the lane's build host, at the pin):
   ``DISPATCH_MACRO``, 1,000,000 faces, ``mt19937`` seed 7; ``g++ -S``
   instruction counts);
 * ``grep`` for host reads, allocations and communication;
-* the ``mass_central`` sizes, from the deck's ``cells`` and ``species``.
+* the ``riemann.central`` sizes, from the deck's ``cells`` and ``species``.

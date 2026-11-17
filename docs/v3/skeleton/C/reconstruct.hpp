@@ -7,7 +7,7 @@
 namespace snap {
 
 struct ReconstructOptionsImpl {
-  ADD_ARG(std::string, type) = "dc";  // dc|plm|cp5|weno5
+  ADD_ARG(std::string, type) = "dc";  // dc|plm|ppm|cp3|weno3|cp5|weno5
   ADD_ARG(bool, scale) = false;
   ADD_ARG(bool, shock) = false;       // one default (today true vs false)
 };

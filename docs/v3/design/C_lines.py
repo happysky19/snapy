@@ -1,4 +1,4 @@
-"""Lane C file-by-file line budget. 'now' is measured (git show <pin>:<file> | wc -l);
+"""Lane C file-by-file line budget, revision 4: every solver and scheme kept. 'now' is measured (git show <pin>:<file> | wc -l);
 'after' is a design estimate. Run from the snapy clone."""
 import subprocess, csv, sys
 PIN = "9e5de2d4ce497d0b2d4da3295fc1fe969fe7e410"
@@ -9,15 +9,15 @@ def now(path, lo=None, hi=None):
 # (file, after, fate) ; after=0 means removed or merged elsewhere
 SPEC = [
  # recon
- ("src/recon/cp3.cpp",0,"removed: cp3 killed (no deck)"),
+ ("src/recon/cp3.cpp",0,"merged: table -> x1_rows.cpp, calls -> reconstruct.cpp"),
  ("src/recon/cp5.cpp",0,"merged: table -> x1_rows.cpp, calls -> reconstruct.cpp"),
  ("src/recon/interp_impl.cuh",0,"merged -> recon_line.cuh (Op wrappers, interp_nu_untiled deleted)"),
  ("src/recon/interp_impl.h",0,"deleted: line loops are the CPU loop in recon_dispatch.cpp"),
- ("src/recon/interp_point.h",0,"renamed -> recon_point.h (weno3_point deleted)"),
+ ("src/recon/interp_point.h",0,"renamed -> recon_point.h (all point functions kept)"),
  ("src/recon/interpolation.cpp",0,"deleted: factory -> Scheme parse in reconstruct.cpp"),
  ("src/recon/interpolation.hpp",0,"deleted: 7 Interp classes -> Scheme + ReconRows"),
  ("src/recon/plm.cpp",0,"merged -> reconstruct.cpp (torch ops kept)"),
- ("src/recon/ppm.cpp",0,"removed: ppm killed (throws)"),
+ ("src/recon/ppm.cpp",0,"merged -> reconstruct.cpp (ppm kept; not implemented at the pin, as today)"),
  ("src/recon/recon_dispatch.cpp",70,"MPS rewrites :83-158 deleted (OnHost); one stub"),
  ("src/recon/recon_dispatch.cu",70,"one launcher for uniform and per-face rows"),
  ("src/recon/recon_dispatch.hpp",15,"one dispatch stub"),
@@ -25,9 +25,9 @@ SPEC = [
  ("src/recon/recon_dispatch_nu.cu",0,"deleted: second path"),
  ("src/recon/recon_dispatch_nu.hpp",0,"deleted: second path"),
  ("src/recon/recon_launch.cuh",0,"merged -> recon_line.cuh"),
- ("src/recon/reconstruct.cpp",150,"dead block :118-141 and floors removed; plm, Scheme parse added"),
+ ("src/recon/reconstruct.cpp",165,"dead block :118-141 and floors removed; plm, ppm stub, Scheme parse and group table added"),
  ("src/recon/reconstruct.hpp",60,"dead options is_boundary_*, limiter removed"),
- ("src/recon/weno3.cpp",0,"removed: weno3 killed (no deck)"),
+ ("src/recon/weno3.cpp",0,"merged: table -> x1_rows.cpp, calls -> reconstruct.cpp"),
  ("src/recon/weno5.cpp",0,"merged: table -> x1_rows.cpp"),
  ("src/recon/x1_coeffs.cpp",0,"merged -> x1_rows.cpp"),
  ("src/recon/x1_coeffs.hpp",0,"merged -> x1_rows.hpp"),
@@ -39,14 +39,14 @@ SPEC = [
  ("src/riemann/lmars.cpp",0,"merged -> riemann.cpp"),
  ("src/riemann/lmars_dispatch.cpp",0,"CPU loop -> riemann_dispatch.cpp; MPS :44-102 deleted"),
  ("src/riemann/lmars_impl.h",0,"moved -> riemann_kernels.h"),
- ("src/riemann/plume_roe.cpp",0,"removed: plume-roe killed (no deck, no output)"),
- ("src/riemann/riemann_dispatch.cu",55,"one CUDA loop switching on kind"),
+ ("src/riemann/plume_roe.cpp",45,"kept as tensor code; writes its slot; unused Roe averages, Jacobian and polynomial (:57-92) dropped"),
+ ("src/riemann/riemann_dispatch.cu",65,"one CUDA loop switching on kind (hllc, lmars, roe, shallow-roe)"),
  ("src/riemann/riemann_dispatch.hpp",0,"merged -> riemann.hpp"),
- ("src/riemann/riemann_solver.cpp",0,"-> riemann.cpp; rotation -> coord (lane S)"),
+ ("src/riemann/riemann_solver.cpp",0,"-> riemann.cpp (incl. upwind); rotation :12-47 -> coord (lane S)"),
  ("src/riemann/riemann_solver.hpp",0,"-> riemann.hpp; 6 classes -> 1"),
- ("src/riemann/roe.cpp",0,"removed: roe killed (no deck)"),
- ("src/riemann/roe_dispatch.cpp",0,"removed: roe killed"),
- ("src/riemann/roe_impl.h",0,"removed: roe killed"),
+ ("src/riemann/roe.cpp",0,"merged -> riemann.cpp (ideal-moist params in RiemannParams)"),
+ ("src/riemann/roe_dispatch.cpp",0,"CPU loop -> riemann_dispatch.cpp; MPS :50-219 deleted"),
+ ("src/riemann/roe_impl.h",0,"moved -> riemann_kernels.h"),
  ("src/riemann/shallow_roe.cpp",0,"merged -> riemann.cpp"),
  ("src/riemann/shallow_roe_dispatch.cpp",0,"CPU loop -> riemann_dispatch.cpp; MPS :33-81 deleted"),
  ("src/riemann/shallow_roe_impl.h",0,"moved -> riemann_kernels.h"),
@@ -69,13 +69,13 @@ MOVED = [  # lane R ranges whose code moves into lane C files
  ("src/hydro/hydro.cpp",605,872,"_hydro_ref_x1 -> x1_reference.cpp"),
 ]
 NEW = [
- ("src/recon/recon_point.h",95),("src/recon/recon_line.cuh",165),
- ("src/recon/x1_rows.hpp",45),("src/recon/x1_rows.cpp",250),
+ ("src/recon/recon_point.h",125),("src/recon/recon_line.cuh",165),
+ ("src/recon/x1_rows.hpp",45),("src/recon/x1_rows.cpp",260),
  ("src/recon/conversion.hpp",30),("src/recon/conversion.cpp",100),
  ("src/recon/well_balanced_x1.hpp",20),("src/recon/well_balanced_x1.cpp",100),
  ("src/recon/face_floor.hpp",25),("src/recon/face_floor.cpp",25),
- ("src/riemann/riemann.hpp",100),("src/riemann/riemann.cpp",140),
- ("src/riemann/riemann_kernels.h",320),("src/riemann/riemann_dispatch.cpp",55),
+ ("src/riemann/riemann.hpp",110),("src/riemann/riemann.cpp",175),
+ ("src/riemann/riemann_kernels.h",525),("src/riemann/riemann_dispatch.cpp",60),
  ("src/hydro/x1_reference.hpp",70),("src/hydro/x1_reference.cpp",230),
  ("src/hydro/x1_reference_dispatch.hpp",35),("src/hydro/x1_reference_dispatch.cpp",65),
  ("src/hydro/x1_reference_dispatch.cu",95),
