@@ -64,9 +64,9 @@ class HydroStage {
                      FluxRegister& reg);
   //! the whole stage in that order, then reg.end_stage(dt); returns du
   torch::Tensor forward(StageInputs const& in, FluxRegister& reg);
-  //! X's after_combine hook (after meshblock.cpp:901): EF's conserved
-  //! limiter and floors (:907-909), K's saturation (:949-981) and chemistry
-  //! on the last stage, A's closure Fixer (:983-990); cell_amount weight 1.0
+  //! X's after_combine hook, every stage (after meshblock.cpp:901): EF's F1
+  //! (:907-909), S's solid fill (:936-938), A's closure (:983-990); last
+  //! stage: finish_step first (:903-905), F1b (:952), K (:954-972) before A
   void after_combine(torch::Tensor u, FluxRegister& reg);
 
  private:

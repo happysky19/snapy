@@ -19,21 +19,21 @@ enum class RegisterPhase : uint8_t {
   pre_implicit,   // A's sources; gravity work reads the limited x1 total
   implicit,       // I: add() posts, then keep(), then cell_amount()
   post_implicit,  // apply_prescribed(1); A's m1; I's G remainder, tracers
-  after_combine,  // after each stage's combine: EF floors; last: K, fixers
+  after_combine,  // every stage: F1, solid fill, A fixer; last: +F1b, K (R.rst)
 };
 enum class SeamRule : uint8_t { mean, owner_copy };  // S rows 9 and 16r
 enum class AmountKind : uint8_t {  // O's R-O3: how the budget treats it
   flux_correction,  // a face change, already inside boundary(d): report only
   cell_source,      // volume source (A, K, vic.cell): the budget adds it
-  floor,            // local floor or repair (EF, C): the budget adds it
+  floor,            // cell floor or repair (EF); C face floors: count() only
   fixer,            // global Fixer (A's closure): the budget adds it
   diagnostic,       // changes no row (chem.elements, vic.momentum_t.top)
 };
 struct RegisterRequest {
   std::vector<std::string> row_names;  // nvar conserved rows, in row order
-  std::vector<std::string> derived;    // hydro only: "e+pe" (I), "aam" (A)
-  std::vector<std::string> keep;       // e.g. "riemann.central@2"
-  std::vector<std::string> counters;   // C's five, EF's names (R.rst 4.2)
+  std::vector<std::string> derived;    // "e+pe", "aam", "element/<name>" (K)
+  std::vector<std::string> keep;       // "riemann.central@2": to next stage
+  std::vector<std::string> counters;   // C, EF, K thermo.*_solve (R.rst 4.2)
   std::vector<std::string> retry;      // causes, e.g. "implicit.column"
   std::vector<int> step_field;         // dims whose step field is read
 };
@@ -93,12 +93,12 @@ class RegisterMonitor {
   std::vector<std::string> row_names() const;  // conserved, then derived
   std::vector<std::string> amount_names() const;
   AmountKind kind(std::string const& name) const;
-  torch::Tensor amounts(std::string const& name) const;  // (nrows,) FP64
-  torch::Tensor boundary(int dim) const;  // area-integrated, outward, FP64
-  torch::Tensor domain_total() const;     // fluid cells, (nrows,) FP64
+  torch::Tensor amounts(std::string const& name) const;  // (nrows,) FP64*
+  torch::Tensor boundary(int dim) const;  // area-integrated, outward, FP64*
+  torch::Tensor domain_total() const;     // fluid cells, (nrows,), FP64*
   std::vector<std::string> counter_names() const;
   torch::Tensor counters() const;     // int64, counter_names() order
-  torch::Tensor minima() const;       // FP64, record_min names in order
+  torch::Tensor minima() const;  // FP64* (*FP32 on MPS), record_min order
   torch::Tensor retry_flags() const;  // int32 0/1 per cause, X's one read
 };
 //! fixer base (A: AxialClosureFixer : Fixer); registry and collective: X

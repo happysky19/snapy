@@ -3,12 +3,15 @@
 V3 lane R: flux register, monitor and the hydro stage
 =====================================================
 
-Revision 2.2, 2026-11-17: amendment of revision 2.1 (``6df93fda``) after
-reading X revision 3 (``100bc9b33514ebffd8c92b22c93cf25bc5c382d9``).
+Revision 2.3, 2026-11-17: comments and text only, on revision 2.2
+(``4c59162ae37080d0ab307b2823742b44f46da7c3``). No declaration and no header
+line number changed, so the freeze stands and no client re-cites. Revision
+2.2 amended revision 2.1 (``6df93fda``) after reading X revision 3
+(``100bc9b33514ebffd8c92b22c93cf25bc5c382d9``).
 Owner: Tianhao Le (backup owner). Reviewers: Xinyue Wang and Zoey Hu. Design
 only: no implementation change. Declarations are in ``docs/v3/skeleton/R/``
 (not built): ``flux_register.hpp`` (rev 4.2, 117 lines) and
-``hydro_stage.hpp`` (82 lines), 200 lines in all.
+``hydro_stage.hpp`` (82 lines), 199 lines in all.
 
 Every ``path:line`` is at chengcli/snapy
 ``9e5de2d4ce497d0b2d4da3295fc1fe969fe7e410`` unless another commit is named.
@@ -17,6 +20,34 @@ line count read at the pin with ``git show <pin>:<file> | sed -n 'a,bp'``
 and ``b - a + 1``; "estimate" means a design target, not counted code.
 Nothing in this revision was built, compiled, syntax-checked, tested or
 timed. A claim that needs a run is marked **hypothesis**.
+
+**Changes in revision 2.3** (from ``4c59162a``; Cheng's batch of nine and
+Zoey's requests 5, 6, 12 and 13). Header comments are edited in place, so
+every ``flux_register.hpp:N`` and ``hydro_stage.hpp:N`` citation still holds.
+Client heads read: C ``559dd0b7``, X ``0fe47c6f``, O ``dfa8ecd0``, A
+``2b0ac426``, EF ``b7bece9c``, S ``d03e4888``, K (kintera) ``fc619eec``.
+
+1. ``derived`` (``:34``) is not hydro only: K's ``element/<name>`` rows
+   (4.2 K) are derived rows of the hydro register too.
+2. ``after_combine`` (``:22``; ``hydro_stage.hpp:67-69``): A's closure runs
+   every stage (``meshblock.cpp:983-990``; several blocks:
+   ``mesh.cpp:370-383``). The order at the pin is in 4.2 "X and A".
+3. Retry causes are EF's four names (4.5). ``minima()`` and the other FP64
+   monitor values are FP32 on MPS (section 6). Solid faces: tangential
+   momentum is free-slip, and S calls ``set_prescribed`` on every register
+   instance, hydro and each Scalar (3.5).
+4. K's two solve counters, ``thermo.temp_solve`` and ``thermo.pres_solve``
+   (``:36``; 4.2 K).
+5. Only ``retry_flags()`` is read in X's step-end read. O reads the rest in
+   ``observe`` and sums in ``flush`` (4.1 item 6).
+6. ``riemann.central`` (any kept part) is valid until the next
+   ``begin_stage`` (``:35``; 4.1 item 4).
+7. R-C4: ``AmountKind::floor`` (``:28``) names EF only. C's face floors post
+   counts (4.2 C).
+8. Ruling V3-2: monitor census counts are accepted steps only. That is what
+   ``begin_step`` (``:48``) and ``rollback`` (``:86``) give; no change.
+9. Mesh fixer lines are lane X's (ruling V3-1); R's table books none
+   (section 9).
 
 **Changes in revision 2.2** (from ``6df93fda``). Matrix rows 97-102.
 
@@ -407,13 +438,18 @@ X9 and X confirms ``bim_i / gamma_i``.
 **3.5 boundary.prescribed.** Lane S gives, per direction, the mask of
 physical wall faces and immersed-solid faces and the prescribed rows
 (default: zero for mass, species, energy and scalars; normal momentum
-keeps the solver's mirrored wall flux). Tangential momentum is open: S asks
-EF whether it is zeroed or mirrored. S's ``SolidFaceMask``
-(``seam_register.hpp`` at ``fe1612b1``) is the mask. R makes the call and
-the name is ``boundary.prescribed``; S's draft names it ``bc.solid_face``
-and posts it with ``add``. ``apply_prescribed(d)`` runs after
-``reconcile`` and again after ``post_implicit``, before any phase reads the
-total. The change it makes is booked as the named correction
+keeps the solver's mirrored wall flux). Tangential momentum is free-slip:
+no momentum row is prescribed (EF's decision, ``EF.rst`` section 4 at
+``b7bece9c``; S's ``PrescribedFaces``, ``seam_register.hpp:52-65`` at
+``d03e4888``). S builds the mask per register instance with that instance's
+``nvar`` and calls ``set_prescribed`` (``supply_prescribed``,
+``seam_register.hpp:67-69``) on the hydro register and on each Scalar
+module's register, whose mask sets every scalar row. That second call is a
+request to S rev 2. R makes the call and the name is
+``boundary.prescribed``; S's draft names it ``bc.solid_face``.
+``apply_prescribed(d)`` runs after ``reconcile``, and
+``apply_prescribed(1)`` runs again at the start of ``post_implicit``
+(4.2 I), before any phase reads the total. The change it makes is booked as the named correction
 ``boundary.prescribed``. ``domain_total`` sums fluid cells only. EF's
 ``fix_vapor`` column break stays in EF. **Hypothesis:** at the pin the
 solver already returns zero mass flux on these faces, from the reflected
@@ -454,13 +490,24 @@ was profiled.
    weights (section 3.4).
 4. **Corrections.** ``add`` in order, ``scale`` in place, ``replace`` for
    shared faces, ``apply_prescribed`` for walls and solids. Kept parts are
-   reconciled and prescribed but never scaled.
+   reconciled and prescribed but never scaled. A kept part is written in
+   its stage's ``sweep`` (``riemann.central`` by C's kernel) and stays
+   valid until the next ``begin_stage``; only ``replace`` and
+   ``apply_prescribed`` change it meanwhile. A reads ``riemann.central`` in
+   ``divergence`` and ``pre_implicit`` of the same stage (``A.rst:287-289``
+   at ``2b0ac426``). The pin's own copy lives only inside the stage
+   (``_aam_mass_flux``, set at ``:1356-1362``, cleared at ``:1391``).
 5. **Reads.** ``total(d)`` at the caller's phase, ``kept()``,
    ``step_field()``, monitor views. No EOS call.
 6. **Monitor.** One per register instance. Rows (``row_names()``), FP64
    amounts with an ``AmountKind``, area-integrated boundary sums,
    fluid-cell domain totals, int64 counters, FP64 minima and int32 retry
-   flags. All are on device, read once in X's step-end read.
+   flags, all on device (FP32 for the FP64 values on MPS, section 6). Only
+   ``retry_flags()`` is read in X's step-end read (``X.rst:104``,
+   ``:207-211`` at ``0fe47c6f``). O reads the amounts, boundary sums,
+   domain totals, counters and minima in ``observe`` after the accept, and
+   makes the sum over blocks and ranks and the host read in ``flush``
+   (``O.rst`` 11.7 at ``dfa8ecd0``).
 7. **Reset.** ``begin_step()`` zeroes the step and the monitor.
    ``FluxRegister::rollback()`` zeroes the register and calls
    ``RegisterMonitor::rollback()``; X's ``decide_retry`` calls it on every
@@ -513,11 +560,11 @@ was profiled.
   * I posts ``vic.momentum_t.top`` as an amount in ``implicit``, before
     ``post_implicit``, so the diagnostic never reads the prescribed total.
 
-  If EF ever chose to prescribe tangential momentum (S's open option), the
-  top face of ``vic.momentum_t`` would be zeroed in ``total(1)`` and in the
-  kept part, and A's axial source would change. That option then needs
-  A's and I's agreement. Whether ``.top`` enters the axial torque stays A's
-  question.
+  EF chose free-slip (``EF.rst`` section 4 at ``b7bece9c``), so no
+  momentum row is prescribed and the top face of ``vic.momentum_t`` is not
+  zeroed. A confirms that ``.top`` does not enter the axial torque
+  (``A.rst`` 11.2 (c) at ``2b0ac426``). Prescribing tangential momentum
+  later would need A's and I's agreement.
 * ``total(1)`` includes the vic posts after ``implicit``. The phase is
   ``post_implicit``. Energy as a face transfer stays a **hypothesis**
   (G-R7). ``retry_flags`` is in 4.5.
@@ -633,10 +680,16 @@ was profiled.
   it (pin: ``begin_step`` of diffusion at ``meshblock.cpp:715``, ``u0``
   saved at ``:721``).
 * **``after_combine``.** ``RegisterPhase::after_combine``, run by X's hook
-  after the combine (``meshblock.cpp:901``) and before boundaries. It holds
-  EF's conserved limiter and floors (``:907-909``), K's chemistry on the
-  last stage (``:949-981``) and A's closure (``:983-990``). Naming the hook
-  in X's schedule is X's (row 49).
+  after the combine (``meshblock.cpp:901``) and before boundaries. Its
+  order at the pin, every stage: EF's conserved limiter F1 (``:907-909``,
+  every stage when hydro has species or there are scalars, else the last
+  only), the scalar combine (``:920-923``), S's solid fill when a solid
+  field exists (``:936-938``), then A's closure (``:983-990``; with several
+  blocks after all blocks, ``mesh.cpp:370-383``). On the last stage X's
+  ``finish_step`` (``:903-905``) comes first, and, when thermo has
+  reactions (``:950-951``), EF's F1b (``:952``) and K's saturation
+  adjustment (``:954-972``) come after the solid fill and before A's
+  closure. Naming the hook in X's schedule is X's (row 49).
 * **``Fixer::apply``** receives ``stage_weight`` = ``w2`` of the stage just
   combined, passed by X. A's closure applies ``-w2 dt R`` with it, and
   posts its change with ``cell_amount(..., 1.0, AmountKind::fixer)``.
@@ -767,15 +820,20 @@ was profiled.
 * **Counter names.** C's five are adopted: ``face_floor.rho``,
   ``face_floor.p``, ``face_floor.species``, ``riemann.pstar_clamp`` and
   ``riemann.llf`` (``C.rst:1086-1088``).
+* **R-C4, closed.** C's face-state floors change face states, not cells,
+  and post ``count()`` only (``C.rst:898-901``, ``:1818-1822`` at
+  ``559dd0b7``). ``AmountKind::floor`` names EF only (``:28``). A face floor
+  books no ``cell_amount``.
 * **Moved citations.** Rev 1.2 cited ``C.rst:776`` and ``:978-981`` at
   ``2d6aef4d``. At ``ab14e5a7`` those statements are revised, and the
   citations above are at ``ab14e5a7``.
 
 **K (Xi, UCzhangxi/kintera ``f61d0d80``, ``K.rst`` section 4).**
 
-* **Phase:** ``after_combine`` on the last stage. That is after the last
-  stage's limiter (``meshblock.cpp:951``) and its ``end_stage``, and before
-  X's step-end read (``K.rst`` section 4, "Ordering").
+* **Phase:** ``after_combine`` on the last stage, when thermo has
+  reactions (``meshblock.cpp:950-951``). That is after S's solid fill
+  (``:936-938``) and EF's F1b (``:952``), before A's closure (``:983-990``)
+  and X's step-end read (``K.rst`` section 4, "Ordering").
 
   * The saturation adjustment is in ``src`` at the pin
     (``meshblock.cpp:949-981``; species rows written at ``:972``).
@@ -796,8 +854,13 @@ was profiled.
   zero on rows not changed. ``stage_weight`` is 1.0, because the change is
   applied to ``u``. K's text calls ``cell_amount(name, vol_du)`` at
   ``543ff84f``; the rev 2 signature adds ``(1.0, kind)``.
-* **Failures:** K writes slot 4 of X's retry stack (``K.rst`` 3.2). R's
-  ``flag_retry`` is an alternative; K and X choose.
+* **Failures:** K writes slot 4 of X's retry stack; R's ``flag_retry`` is
+  not used (``K.rst:206-212`` at ``fc619eec``).
+* **Counters:** ``thermo.temp_solve`` and ``thermo.pres_solve``, declared in
+  ``RegisterRequest::counters`` and posted once per step with
+  ``count(name, failures()[1])`` and ``count(name, failures()[2])`` in the
+  last ``after_combine`` (``K.rst:212-217`` at ``fc619eec``). They are not
+  retry causes.
 
 4.3 Conflicts
 ~~~~~~~~~~~~~
@@ -1253,9 +1316,12 @@ the program manager's eight additions, C = lane C rev 5, I = lane I rev 2.
 (``meshblock.cpp:1058-1061``, ``:1565-1566``). X's ``decide_retry`` redoes
 the step if any slot is set, as today.
 
-Causes: ``implicit.column`` (I), ``eos.limiter_mark`` (EF; today
-``meshblock.cpp:1052-1056``), and EF's vapor-repair cause (today slots 6
-and 7, ``meshblock.cpp:1571-1577``; EF names it).
+Causes: ``implicit.column`` (I), and EF's four, ``ef.floor_patch``,
+``ef.nan``, ``ef.vapor_fail`` and ``ef.heat_capacity`` (``EF.rst`` section
+4 at ``b7bece9c``; today the limiter marks ``meshblock.cpp:1052-1056`` and
+slots 6 and 7, ``:1571-1577``). Lane X maps each name to a cause bit
+(``X.rst:200-206`` at ``0fe47c6f`` still names ``eos.limiter_mark``). K's
+failures stay slot 4 of X's stack (4.2 K).
 
 Written on lane I's proposal (c), which is still open with Cheng (``I.rst``
 section 10(c) at ``8c2ba226``). The FP32 solve fails per column. Only the
@@ -1372,12 +1438,15 @@ None of these has run. Each says how it would be checked.
 * ``T_d``, kept parts and posts: ``kFlux``. In a CUDA FP32 run they are
   FP32 storage.
 * ``riemann.pstar`` and ``pressure_base1``: ``kGauge``, FP64.
-* CUDA and CPU: ``S_d``, boundary sums, amounts and counters are FP64. A
+* CUDA and CPU: ``S_d``, boundary sums, amounts, domain totals and minima
+  are FP64; counters are int64 and retry flags int32. A
   post is cast once, inside the post (amounts) or inside ``end_stage``
   (step).
 * **MPS contract** (MPS has no FP64, ``meshblock.cpp:1057``):
 
-  * ``S_d``, boundary sums and amounts are FP32;
+  * ``S_d``, boundary sums, amounts, domain totals and minima are FP32;
+    counters stay int64 and retry flags int32 (**hypothesis**: the MPS
+    backend supports the int64 adds and sums they need);
   * the recursion of 3.4 runs in FP32;
   * G-R3 on MPS is 1e-6 relative per step, and G-R4 is reported, not gated
     at 1e-12;
@@ -1426,7 +1495,10 @@ Every range was read at the pin. No line is in two groups. Cheng's ruling
 V3-1 (kickoff thread): a deletion is counted by the lane that owns the
 file. All of D4 is therefore R's; A counts only its new code, and A's
 remaining 25 + 15 lines in R's files stay in R's "after". ``:988``, the
-(3.A) heading, stays.
+(3.A) heading, stays. The mesh fixer lines (``meshblock.cpp``,
+``meshblock.hpp``, ``mesh.cpp``) are in lane X's files, so X counts them
+once (gw1, gw2, d, hp, M; ``X.rst:1040-1044`` at ``0fe47c6f``) and this
+table books none of them.
 
 .. list-table:: Deletions from R's files
    :header-rows: 1
@@ -1595,25 +1667,26 @@ Each step is one PR and keeps every existing test.
 11. Open questions to other lanes
 ---------------------------------
 
-* **A:** post AAM values with ``derived_amount`` on row ``aam``; update R
-  citations from ``543ff84f``. K4 (confirm the post-solid reading). Confirm the
-  ``"<row>.boundary.<dim>"`` convention for ``aam``. Whether
-  ``vic.momentum_t.top`` enters the axial torque.
+* **A:** answered at ``2b0ac426`` (``A.rst`` 11.2): K4 confirmed,
+  ``aam.boundary.1``, and ``vic.momentum_t.top`` does not enter the torque.
+  The lifetime of ``riemann.central`` is in 4.1 item 4. Nothing open.
 * **I:** confirm ``vic.mass_clamped`` as ``flux_correction``. Confirm the
   ``e+pe`` derived row. Gate G-R7.
-* **O:** confirm ``AmountKind`` and the budget formula of 4.2 against
-  ``c12f78bb``.
-* **EF:** Q-R-i (the carry at seams); name the vapor-repair retry cause;
-  the tangential-momentum option (with S).
+* **O:** agreed at ``dfa8ecd0`` (``O.rst`` 11.7); its request on 4.1 item
+  6 is made. Nothing open.
+* **EF:** answered at ``b7bece9c``: the cause names (4.5) and free-slip
+  (3.5). Q-R-i stays on gate G-R2 (hypothesis).
 * **S:** the per-row edge map of Xi's note 11 in S rev 2, and
   ``peer_dim``/``normal_sign`` in ``SeamEntry`` (G-R13); R-C1 (in-place
   rotation is kept, so a copy or a hook); relabel "C's 50" as R's D1; K7 (with X
   and EF).
-* **X:** rename ``reset_step`` to ``begin_step``; enter ``after_combine``
-  after each stage's combine; agree with O on who sums the amounts; per-op time in ``report()`` (margin); who counts the
-  meshblock fixer lines.
-* **K:** confirm ``element/<name>`` derived rows for ``chem.elements``,
-  and the retry slot (X's stack or ``flag_retry``).
+* **X:** done in rev 3.1-3.3 (``begin_step``, ``after_combine`` every
+  stage, O sums, X counts the mesh fixer lines). Open: map EF's four cause
+  names to bits (``X.rst:200-206`` still names ``eos.limiter_mark``); name
+  who calls ``StateStore::register_storage`` and the ``GraphKey`` trigger
+  for ``set_prescribed`` (R.rst 7).
+* **K:** answered at ``fc619eec``: slot 4 of X's stack and the two solve
+  counters (4.2 K).
 * **Xinyue:** the five notes whose text I never had (row 54).
 * **Cheng:** I's ruling (c), which decides row 1 of the 4.5 table.
 
