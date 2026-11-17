@@ -1,42 +1,43 @@
 #pragma once
-// V3 lane R skeleton: declarations only, in no build. PROVISIONAL, rev 1.
-// Pin chengcli/snapy 9e5de2d4ce497d0b2d4da3295fc1fe969fe7e410; lines are at
-// the pin (hydro_forward.cpp unless named). Untested claims: "hypothesis".
+// V3 lane R skeleton: declarations only, in no build. PROVISIONAL, rev 1.1
+// (R.rst rev 1). Pin chengcli/snapy 9e5de2d4ce497d0b2d4da3295fc1fe969fe7e410;
+// lines are hydro_forward.cpp at the pin unless named. Untested: hypothesis.
 // 1 UNITS. A post is a flux density per unit face area and time at the step
 //   dt, before stage weights, in global components after coord's rotation.
 //   Face i lies between cells i-1, i. The divergence applies face_area<d>
 //   (coordinate.cpp:706). vic.* posts M/(A dt), as :1641,1646 do today.
 // 2 PARTS. Posts are named. A part is a field only if requested (keep):
 //   riemann.central = ONE summed mass row, dry + species, from the solver's
-//   own face states, totals under perturbation flux, valid to the next
-//   begin_stage. Other parts: FP64 monitor amounts only, no per-face read.
+//   face states after the immersed-solid step (:1090, :1108, :1124), totals
+//   under perturbation flux, valid to the next begin_stage. Other parts are
+//   FP64 monitor amounts only, with no per-face read.
 // 3 WEIGHTS. Stage total in Quantity::kFlux. end_stage adds c_s*dt*total to
-//   an FP64 step accumulator (kRegister FP64 in both precisions), with
-//   c_s = w2_s * prod_{t>s} w1_t in host double (:1682-1691).
-// 4 CORRECTIONS. add() is in place, in post order (carry). scale()
-//   multiplies the running total, bitwise F*=theta
-//   (flux_positivity.cpp:99-121). replace() applies the seam rule. Kept parts
+//   the step accumulator, kRegister: FP64 (FP32 on MPS, meshblock.cpp:1057).
+//   c_s = w2_s * prod_{t>s} w1_t, host double (:1682-1691), from reset's table.
+// 4 CORRECTIONS. add() in place, in post order (carry). scale() multiplies
+//   the running total: bitwise F*=theta (flux_positivity.cpp:99-121); C's
+//   (theta-1)F form is withdrawn. replace() applies the seam rule. Kept parts
 //   are reconciled, never scaled (cen2 :1356 and bflux1 :847 are unscaled).
 // 5 READS. total(d) at the caller's phase; kept(); boundary sums. No EOS call.
 // 6 MONITOR. R owns it: per-post FP64 amounts, counters and domain totals,
 //   stacked into X's one step-end read (meshblock.cpp:1566).
 // 7 RESET. begin_stage(0) zeroes the step, rollback() all (X's reset list,
 //   meshblock.cpp:735). Nothing to restart. EF's 108 lines are R deletions.
-// Order: x1 riemann :845 < sedimentation :861-866 < x1 seam replace :882 <
-//   x2/x3 riemann, covariance :1050-1152 < positivity :1154-1252 <
-//   divergence :1254 < forcings, gravity work :1412 < implicit :1554-1616 <
-//   post_implicit :1618-1680 < end_stage.
-// CONFLICTS/OPEN: C posts positivity as (theta-1)F, R scales. X keeps face
-//   data only, so vic.cell is a monitor amount. X's begin_stage weight lacks
-//   w1_t, t>s. Namespace snap vs snap::v3. vic.mass_clamped is a floor
-//   amount, not a post. vic energy as face transfer only if the wall
-//   residual is round-off (hypothesis). Gravity-work deletion: 133 vs 112.
+// Order: x1 riemann :845 < sedimentation :861-866 < x1 seam replace :868-946
+//   < x2/x3 riemann, covariance :1050-1152 < positivity :1154-1252 <
+//   divergence :1254 < forcings, gravity work :1306-1552 < implicit
+//   :1554-1616 < post_implicit :1618-1680 < end_stage.
+// Resolved and open points: R.rst sections 4 and 11.
 #include <cstdint>
 #include <string>
 #include <vector>
 #include <torch/torch.h>
 
-namespace snap {  // X and C use snap; A and EF drafts use snap::v3
+namespace harp {
+struct IntegratorWeight;  // pyharp integrator.hpp:20-29 (main 6bc01d53)
+}
+
+namespace snap {  // A and EF drafts use snap::v3; R asks them to use snap
 class CoordinateImpl;
 class PrecisionPolicy;  // lane X
 //! posts allowed per phase (checked in debug builds only)
@@ -50,9 +51,6 @@ enum class RegisterPhase : uint8_t {
   post_implicit,  // A's m1 rows, gravity-work remainder, tracer transfer
 };
 
-//! pyharp IntegratorWeight of every stage, host doubles
-struct StageWeights { std::vector<double> w0, w1, w2; };
-
 //! keep: "riemann.central@2", "vic.mass_total@1"; step_field: FP64 dims read
 struct RegisterRequest {
   std::vector<std::string> keep;
@@ -61,11 +59,13 @@ struct RegisterRequest {
 
 class FluxRegister {
  public:
-  //! fixed storage from X's StateStore; nvar rows per active dim
+  //! fixed storage from X's StateStore; nvar rows per active dim; the stage
+  //! table fixes every c_s once (host doubles)
   void reset(CoordinateImpl const* coord, PrecisionPolicy const& policy,
-             int nvar, StageWeights const& weights, RegisterRequest const& req);
-  //! X's call; the table gives w1_t for t > s; a graph bakes c_s in
-  void begin_stage(int stage, StageWeights const& weights);
+             int nvar, std::vector<harp::IntegratorWeight> const& stages,
+             RegisterRequest const& req);
+  //! X's call (X.rst s4); w must equal stages[stage]; a graph bakes c_s in
+  void begin_stage(int stage, harp::IntegratorWeight const& w);
   void enter(RegisterPhase phase);
 
   //! first post of a stage: the solver writes the total in place
@@ -88,8 +88,8 @@ class FluxRegister {
 
   torch::Tensor total(int dim) const;                         // kFlux view
   torch::Tensor kept(int dim, std::string const& part) const;  // view
-  torch::Tensor step_field(int dim) const;  // FP64 sum c_s dt F, per area
-  void end_stage(double dt);                // FP64 step and boundary sums
+  torch::Tensor step_field(int dim) const;  // kRegister sum c_s dt F, per area
+  void end_stage(double dt);                // step and boundary sums
   void rollback();
 };
 
