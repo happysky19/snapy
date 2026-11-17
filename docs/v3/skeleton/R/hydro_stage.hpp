@@ -1,6 +1,6 @@
 #pragma once
 // V3 lane R skeleton: declarations only, in no build. PROVISIONAL (R.rst
-// rev 1.1, section 3). Pin chengcli/snapy 9e5de2d4. What HydroImpl::forward
+// rev 1.2, section 3). Pin chengcli/snapy 9e5de2d4. What HydroImpl::forward
 // (hydro_forward.cpp:370-1696) becomes: one stage driver that calls the
 // lanes' ops in RegisterPhase order and owns no flux, no fixer and no
 // AAM state. Lines the driver no longer holds are counted in R.rst s9.
@@ -11,14 +11,15 @@
 #include "flux_register.hpp"
 
 namespace snap {
-class Sweep;               // lane C (sweep.hpp): recon + solve_faces
+struct FaceDir;           // lane C sweep.hpp:13-17; C's free functions
+struct FaceStates;        // reconstruct_faces, solve_faces (sweep.hpp:21-26)
 class PositivityLimiter;   // lane EF
 class SedimentationPost;   // lane EF: add(1, "sedimentation", ...)
 class GravityWork;         // lane I: G[M] reads the register's x1 mass
 class VerticalImplicit;    // lane I: posts vic.*
 class SourceRegistry;      // lane A: SourcePhase pre/post_implicit, split
-class SeamExchange;        // lane S: moves the peer entry of shared faces
-class SolidFaces;          // lane S: wall and immersed-solid mask, values
+class SeamExchange;        // lane S: peer entries (rows 9, 16r), x1 relay
+class SolidFaces;          // lane S: SolidFaceMask and prescribed values
 
 //! what one stage reads that R does not own; all borrowed, never stored
 struct StageInputs {
@@ -36,9 +37,12 @@ class HydroStage {
   //! {1}; EF its counter names; scalars "covariance.dry@2/3" for EF's R4
   RegisterRequest request() const;
 
-  //! sweep: x1, then x2/x3. C writes slot(d, "riemann") and the part slots;
-  //! C's covariance and EF's sedimentation are add()s
+  //! sweep: x1, then x2/x3, by C's reconstruct_faces and solve_faces (slot,
+  //! part slots); EF's sedimentation is an add()
   void sweep(StageInputs const& in, FluxRegister& reg);
+  //! R's own #289 covariance (hydro_forward.cpp:41-289) from the face states
+  //! before the solve, posted after it: add(d, "covariance", ...)
+  void covariance(FaceStates const& faces, int dim, FluxRegister& reg);
   //! reconcile: x1 seam replace() (:868-946 today, process seams only),
   //! after sedimentation, before positivity; then apply_prescribed(d)
   void reconcile(FluxRegister& reg);
@@ -62,7 +66,6 @@ class HydroStage {
   void after_combine(torch::Tensor u, FluxRegister& reg);
 
  private:
-  std::shared_ptr<Sweep> sweep_;
   std::shared_ptr<PositivityLimiter> limiter_;
   std::shared_ptr<SedimentationPost> sed_;
   std::shared_ptr<GravityWork> gravity_;

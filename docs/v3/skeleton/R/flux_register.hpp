@@ -1,18 +1,19 @@
 #pragma once
-// V3 lane R skeleton: declarations only, in no build. PROVISIONAL, rev 2
-// (R.rst rev 1.1). Pin chengcli/snapy 9e5de2d4ce497d0b2d4da3295fc1fe969fe7e410;
+// V3 lane R skeleton: declarations only, in no build. PROVISIONAL, rev 3
+// (R.rst rev 1.2). Pin chengcli/snapy 9e5de2d4ce497d0b2d4da3295fc1fe969fe7e410;
 // lines are hydro_forward.cpp at the pin unless named. Untested: hypothesis.
 // 1 UNITS. Posts are flux densities per unit face area and time at X's step
 //   dt, before stage weights. The pin forms area-integrated rates instead,
 //   Phi = A F1 + M/dt (:1641, :1646). vic.* posts M/(A_f dt), not dt_corr.
-// 2 FRAME. The output of coord's flux2global<d>_ (coordinate.hpp:353-361).
+// 2 FRAME. The output of coord's flux2global<d>_ (coordinate.hpp:353-361):
+//   x2/x3 momentum in the panel face basis; panel seams rotate via coord.
 // 3 PARTS. Fields only on request, else FP64 monitor amounts.
 //   riemann.central@2/@3: ONE summed x2/x3 mass row, dry + species, from the
 //   states after pib->forward (:1089-1090, :1123-1124; cen2 :1108), totals.
 //   No x1 Riemann-only row: bflux1 (:846-849) was the removed cell form.
 // 4 WEIGHTS. X owns them (begin_stage). end_stage runs S = w1_s S + w2_s dt T:
-//   coefficients w2_s prod_{t>s} w1_t (:1685-1691). FP64; FP32 on MPS
-//   (meshblock.cpp:1057).
+//   coefficients w2_s prod_{t>s} w1_t (:1685-1691). FP64; on MPS FP32 under
+//   its own contract (meshblock.cpp:1057; R.rst s6).
 // 5 CORRECTIONS. add() in place, in call order, never pre-summed (carry:
 //   x1 advected, then settling, before scale). scale() is bitwise F*=theta
 //   (flux_positivity.cpp:99-121, :154-159). replace(): own and peer entry,
@@ -41,10 +42,10 @@ enum class RegisterPhase : uint8_t {
   post_implicit,  // boundary.prescribed again; A's m1, I's G remainder
   after_combine,  // fixers after the RK combine (meshblock.cpp:907-909)
 };
-//! one rule per shared face; S moves the peer entry (S.rst row 9)
-enum class SeamRule : uint8_t { mean };
-//! keep: "riemann.central@2", "vic.mass_total@1", "vic.mass_dry@1";
-//! dims 1 = x1, 2 = x2, 3 = x3; counters: names (EF's 12 among them)
+//! x1 process seams: mean (S row 9); panel seams: lower-rank owner's copy,
+enum class SeamRule : uint8_t { mean, owner_copy };  // momentum rotated (16r)
+//! keep: riemann.central@2, vic.mass_total@1, vic.mass_dry@1,
+//! vic.momentum_t@1; dims 1 = x1, 2 = x2, 3 = x3; counters incl. EF's 12
 struct RegisterRequest {
   std::vector<std::string> keep, counters;
   std::vector<int> step_field;  // dims whose step field a reader needs
