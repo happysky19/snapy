@@ -14,7 +14,7 @@ struct RiemannSolverOptionsImpl {
   ADD_ARG(std::string, dir) = "omni";   // shallow-roe only
 };
 
-//! Lane R rev 1.2 (v3-design/R 3490d7e1, provisional): flux = slot(d,
+//! Lane R rev 2.2 (v3-design/R 4c59162a, header rev 4.2): flux = slot(d,
 //! "riemann") in place, then post_slot; parts through part_slot() in place.
 //! Frame: coord's flux2global<d>_ (x2/x3 in panel face basis). Per unit face
 //! area; the register's divergence applies face_area<d>. Dtypes are lane X's
