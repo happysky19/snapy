@@ -63,8 +63,8 @@ struct ColumnSegments {
 struct VicIncrement {
   torch::Tensor mass_dry;    //!< add(1, "vic.mass_dry", {IDN}); also kept
   torch::Tensor mass_species;//!< add(1, "vic.mass_species", {ICY..})
-  torch::Tensor momentum_t;  //!< add(1, "vic.momentum_t", {IVY, IVZ}); both
-                             //!< matrices; scheme 9: bottom-up prefix sum
+  torch::Tensor momentum_t;  //!< add(1, "vic.momentum_t", {IVY, IVZ}); also
+                             //!< kept (3rd part); scheme 9: bottom-up prefix sum
   torch::Tensor mass_total;  //!< keep(1, "vic.mass_total"): G's remainder
   torch::Tensor cell;        //!< cell_amount("vic.cell", V du, w2_s, cell_source)
                              //!< x1 momentum, energy (no gw), scheme-9 m_t
@@ -72,7 +72,6 @@ struct VicIncrement {
                              //!< flux_correction): V div(moved - requested)
   torch::Tensor momentum_top;//!< diagnostic amount, scheme 9: minus column sum
 };
-
 class VerticalImplicitImpl
     : public torch::nn::Cloneable<VerticalImplicitImpl> {
  public:
@@ -85,16 +84,18 @@ class VerticalImplicitImpl
   explicit VerticalImplicitImpl(VerticalImplicitOptions const& options,
                                 torch::nn::Module* p = nullptr);
   void reset() override;
-
   //! Phase `implicit` of one stage. du: the explicit increment, G[M_exp]
   //! already in its energy row. dt_dev: 0-d FP64 device scalar of the
   //! stage-weighted operator dt (hydro_forward.cpp:1568-1583; I.rst s7, note
-  //! 12). Posts VicIncrement to reg, then books G[kept vic.mass_total] - R dq
-  //! into du (s4). No host read: failures set col_status() bits only.
+  //! 12). Posts VicIncrement to reg (adds, keep, cell_amount). No host
+  //! read: failures set col_status() bits only.
   void forward(torch::Tensor du, torch::Tensor w, torch::Tensor gamma,
                torch::Tensor const& dt_dev, GravityWork const& gw,
                FluxRegister& reg, torch::Tensor const& solid = {});
-
+  //! Phase post_implicit, after apply_prescribed(1), before A's m1 (I.rst s4):
+  //! books G[kept vic.mass_total] - R dq into du's energy row (dq from du0).
+  void book_remainder(torch::Tensor du, GravityWork const& gw,
+                      FluxRegister const& reg) const;
   torch::Tensor col_status() const;  //!< [nc3, nc2] int32 VicStatusBit
   torch::Tensor status() const;      //!< 0-d OR-reduction of col_status
   void reset_status();
@@ -104,7 +105,6 @@ class VerticalImplicitImpl
   torch::Tensor clamp_residual() const;
   torch::Tensor dry_clamp_step() const;
   torch::Tensor fp64_fallbacks() const;
-
   //! on a redo only (the host already synchronised): log the failed columns
   void report_failure(std::ostream& os) const;
  private:

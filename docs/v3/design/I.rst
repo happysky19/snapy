@@ -3,7 +3,9 @@ V3 lane I: vertical implicit solver and gravity work
 
 :Lane: I (vertical implicit solver and gravity work)
 :Owner: Xinyue Wang (alternate: Tianhao Le)
-:Revision: 2.1 (re-cite to lane R's frozen header; backup owner Zoey Hu from
+:Revision: 2.2 (Tianhao's two rev 2.1 findings: the gravity-work remainder
+           moves to ``post_implicit``; ``vic.momentum_t@1`` is the third kept
+           part). Revision 2.1: re-cite to lane R's frozen header; backup owner Zoey Hu from
            18:00 EST 2026-11-17, while Xinyue is rate limited). Revision 2:
            lane R's provisional header, Cheng's rulings, Tianhao's 15 notes.
 :Pin: chengcli/snapy ``9e5de2d4ce497d0b2d4da3295fc1fe969fe7e410``
@@ -292,12 +294,13 @@ change):
           -> reg.keep(1, "vic.mass_total")
           -> reg.cell_amount("vic.cell", Vdu, w2_s, cell_source),
              ("vic.mass_clamped", .., flux_correction), ("vic.momentum_t.top", .., diagnostic)
-          -> remainder G[kept vic.mass_total] - R dq -> du_E
           -> per-column status (device); reg.flag_retry("implicit.column", any)
      |
-   phase post_implicit (A, R): apply_prescribed(1) first; then m1 from
-          total(1), axial source from vic.momentum_t, tracer transfer from
-          kept vic.mass_dry
+   phase post_implicit (A, I, R): apply_prescribed(1) first, on the total and
+          every x1 kept part (R.rst:486-488); then, in the pin's order:
+          I's remainder G[kept vic.mass_total] - R dq -> du_E;
+          A's m1 from total(1); axial source from kept vic.momentum_t;
+          tracer transfer from kept vic.mass_dry
      |
    end_stage: S = w1 S + w2 dt T -> FP64 step accumulator (R.hpp:85)
 
@@ -310,8 +313,8 @@ and the calls (``R.hpp:41-88``). The solve runs in phase ``implicit``
 (``R.hpp:20``: "add() posts, then keep(), then cell_amount()"), after
 ``pre_implicit``, where the gravity work reads the limited x1 total
 (``R.hpp:19``). Its readers run in ``post_implicit`` (``R.hpp:21``), after
-``apply_prescribed(1)``: lane A's m1 rows, the gravity-work remainder and
-the tracer transfer. Lane I uses ``add`` for posts, ``keep``
+``apply_prescribed(1)`` (``R.rst:486-488``): lane I's gravity-work
+remainder, lane A's m1 rows and axial source, and the tracer transfer. Lane I uses ``add`` for posts, ``keep``
 for a kept part, and ``cell_amount`` for monitor amounts. It uses no
 ``slot``/``post_slot`` (those are for the first post of a stage, the
 Riemann flux), no ``scale``, no ``replace`` (the solve posts no seam face,
@@ -343,17 +346,27 @@ accepted).
      - scheme 1 ``vic_redistribute_impl.h:186-201``; scheme 9
        ``vic_redistribute_impl.h:217-218`` (``delta(2), delta(3)``)
 
-**Kept parts:** ``vic.mass_total`` through ``reg.keep(1, "vic.mass_total",
+**Kept parts** (three, all on x1; ``R.rst:167, 187, 479-481``): ``vic.mass_total``,
+``vic.mass_dry`` and ``vic.momentum_t``.
+
+``vic.mass_total`` through ``reg.keep(1, "vic.mass_total",
 f)``, requested as ``"vic.mass_total@1"`` (``R.hpp:35, 66``;
 ``R.rst:166-167, 482``). It is the
 dry + species total each face moved after the clamps
 (``vic_redistribute_impl.h:88-89, 144, 172``). The gravity-work remainder
-reads it, and lane I checks that it equals the sum of the two mass posts.
+reads it in ``post_implicit``, after ``apply_prescribed(1)``, and lane I
+checks that it equals the sum of the two mass posts.
 ``vic.mass_dry`` is a **second kept part** (Tianhao): lane I requests
 ``"vic.mass_dry@1"``. The tracer donor transfer needs the implicit dry
 transfer alone (``meshblock.cpp:786-806``). The ``add`` of ``vic.mass_dry``
 copies its rows into the requested part in the same call (``R.hpp:56``;
 ``R.rst:479-481``), so no separate ``keep`` is made for it.
+``vic.momentum_t`` is the **third kept part**: lane I requests
+``"vic.momentum_t@1"`` (``R.rst:167, 187, 479-481``; R rev 2.3
+``2b4c5775`` ``R.rst:207, 227``). Its ``add`` fills the part in the same call. Lane A's
+axial source reads it per face in ``post_implicit``. Under scheme 9 that
+includes the top face, whose value is also the ``diagnostic`` amount
+``vic.momentum_t.top``.
 
 **Monitor amounts**, through ``reg.cell_amount(name, V du, stage_weight,
 kind)`` (``R.hpp:67-70``), made after the posts and the ``keep``. Revision
@@ -423,14 +436,18 @@ I would post zero there and set the column's status bit, which is unchecked.
 **Reads.**
 
 - ``GravityWork::apply`` reads ``reg.total(1)`` mass rows (IDN + species)
-  in ``pre_implicit`` for :math:`M^{\rm exp}`, and ``reg.kept(1,
-  "vic.mass_total")`` in ``implicit`` for the remainder (``R.hpp:82-83``).
+  in ``pre_implicit`` for :math:`M^{\rm exp}`. The remainder reads
+  ``reg.kept(1, "vic.mass_total")`` in ``post_implicit``, after
+  ``apply_prescribed(1)`` and before lane A's m1 (``R.hpp:82-83``;
+  ``R.rst:486-488``). It is booked by ``VerticalImplicit::book_remainder``
+  (skeleton) from the solve's fixed ``du0`` (the pin's ``R dq`` uses ``du -
+  du0``, ``implicit_hydro.cpp:564-594``).
   This replaces the rebuilt ``vertical_mass_flux1`` at
   ``hydro_forward.cpp:1422-1425``.
 - In ``post_implicit``, after ``apply_prescribed(1)`` on the total and every
-  x1 kept part (``R.rst:485-487``): lane A's m1 reads ``reg.total(1)`` mass rows
+  x1 kept part (``R.rst:486-488``), and after the remainder: lane A's m1 reads ``reg.total(1)`` mass rows
   (explicit + vic, today ``hydro_forward.cpp:1637-1646``); the axial source
-  reads ``vic.momentum_t`` (today ``picorr->correction()``, ``:1668-1669``);
+  reads the kept ``vic.momentum_t`` (today ``picorr->correction()``, ``:1668-1669``);
   the tracer transfer reads ``reg.kept(1, "vic.mass_dry")``.
 - ``mass_correction()`` stops being public. ``correction()`` stays as an
   output-only accessor for the ``implicit`` diagnostic
@@ -541,6 +558,18 @@ term, the row was edited separately:
    solve (#355 commit 6; ``hydro_forward.cpp:1378-1385``).
 #. Every ``vic.*`` post and the ``keep`` are made before ``implicit`` ends,
    and so before any ``post_implicit`` reader (``hydro_forward.cpp:1618-1680``).
+#. ``post_implicit`` starts with ``apply_prescribed(1)`` on the total and
+   every x1 kept part (``R.rst:486-488``). Then lane I books the
+   gravity-work remainder, and only then do lane A's m1, the axial source
+   and the tracer transfer run. That is the pin's order for ``du[IPR]``:
+   the remainder is added at ``implicit_hydro.cpp:551-555, 578-594`` and
+   ``hydro_forward.cpp:1604, 1621``, before m1 at ``:1645-1653``.
+   **Hypothesis:** reading the prescribed kept ``vic.mass_total`` changes
+   the remainder at most by round-off at the top wall face. The pin's
+   bottom-face transfer is exactly zero and its top face telescopes to
+   zero up to round-off (``vic_redistribute_impl.h:70-71, 117``). A solid
+   face is merged as the mirror in the assembly
+   (``vic_assemble_partial_impl.h:38-39``).
 #. Implicit posts are made after the divergence. They never enter ``du``
    through the register (``R.hpp:18``), because the solve writes ``du``
    itself. They do enter the stage total, which ``end_stage`` accumulates
@@ -561,7 +590,7 @@ term, the row was edited separately:
    * - R1 one owner, frame, area weighting
      - Lane I owns no face flux. The solve posts its transfers into the register (this section, "Posts") instead of keeping ``_mass_corr``. Frame: global components after ``flux2global1_`` (``implicit_hydro.cpp:561``). Area: posted per unit face area per unit time, lane C's ``riemann`` convention, before stage weights ("Frame and units").
    * - R2 named increments, declared order, total and parts
-     - Three posts in declared order (``vic.mass_dry``, ``vic.mass_species``, ``vic.momentum_t``), two kept parts (``vic.mass_total``, ``vic.mass_dry``), monitor amounts ``vic.cell``, ``vic.mass_clamped`` and ``vic.momentum_t.top``. Parts are reportable through the monitor's per-post amounts (``R.hpp:90-102``); ``vic.mass_total`` = dry + species is checked.
+     - Three posts in declared order (``vic.mass_dry``, ``vic.mass_species``, ``vic.momentum_t``), three kept parts (``vic.mass_total``, ``vic.mass_dry``, ``vic.momentum_t``), monitor amounts ``vic.cell``, ``vic.mass_clamped`` and ``vic.momentum_t.top``. Parts are reportable through the monitor's per-post amounts (``R.hpp:90-102``); ``vic.mass_total`` = dry + species is checked.
    * - R3 stage weights into the step transfer
      - Lane I posts the stage transfer, unweighted. ``end_stage`` adds :math:`c_s\,\Delta t` times it, with :math:`c_s = w_{2,s}\prod_{t>s} w_{1,t}`, into the FP64 step accumulator (``R.hpp:85``; ``R.rst:488-494``). These are the weights the fixer uses today (``hydro_forward.cpp:1682-1691``); that fixer code is deleted (section 10).
    * - R4 divergence and flux-derived terms read the register
@@ -575,7 +604,7 @@ term, the row was edited separately:
    * - R8 FP32 dtype, graph-capturable storage
      - The solve dtype follows section 6. Posts are in ``Quantity::kFlux``, the stage-total dtype; the step accumulator is ``kRegister``, FP64 in both precisions except on MPS, where it is FP32 (``R.rst:1372-1378``). Scratch is fixed per (shape, dtype, device) (section 7).
    * - R9 no added full-field copy per stage
-     - V3 adds no copy. It removes ``w_in = w.clone()`` (``implicit_hydro.cpp:480``) and the ``rx_mass0`` clone (``:421``). ``_du0`` (one ``du``-sized copy, ``:212``) already exists and stays. Memory: the posts add into the register's existing x1 total, and the two kept parts are 2 face fields. Together they replace ``_mass_corr`` (nvar cell fields), so the net is ≤ 0. **How cost will be measured** (specified, not run): ``examples/jupiter_gcm_dry`` C48 x 100 on one GPU, minimum of 3 interleaved runs of 30 timed steps against the pin, as #358 measured; GPU time of the implicit kernels from a profiler; bytes of the scratch and register slots counted from the shapes. **Hypothesis:** within the #358 spread.
+     - V3 adds no copy. It removes ``w_in = w.clone()`` (``implicit_hydro.cpp:480``) and the ``rx_mass0`` clone (``:421``). ``_du0`` (one ``du``-sized copy, ``:212``) already exists and stays. Memory: the posts add into the register's existing x1 total, and the three kept parts are 4 x1 face rows (mass total, mass dry, and the two tangential momenta). Together they replace ``_mass_corr`` (nvar cell fields), so the net is ≤ 0. **How cost will be measured** (specified, not run): ``examples/jupiter_gcm_dry`` C48 x 100 on one GPU, minimum of 3 interleaved runs of 30 timed steps against the pin, as #358 measured; GPU time of the implicit kernels from a profiler; bytes of the scratch and register slots counted from the shapes. **Hypothesis:** within the #358 spread.
    * - R10 rebuilt, not in restart
      - Met at the pin and kept. Restart writes the ``Variables`` map, the reference and the times (``restart.cpp:26-123``: variables ``:31-38``, reference ``:44-66``, times ``:70-99``), not the module buffers. The register resets at ``begin_step()`` and ``rollback()`` (``R.hpp:48, 86``). V3's scratch is unregistered and ``ColumnSegments`` and ``GravityWork`` are rebuilt from the grid and the mask.
 
@@ -804,14 +833,14 @@ are estimates for the design, not counts of written code.
      - deletions named
    * - ``implicit/implicit_hydro.hpp``
      - 158
-     - 95
-     - -63
-     - ``GeoKey`` (:137-152), ``_rx_*`` (:127-133), ``_g_*``, ``_solve_failed`` and ``solve_failed()`` (:101-116), the scheme bit test (:36-42)
+     - 96
+     - -62
+     - ``GeoKey`` (:137-152), ``_rx_*`` (:127-133), ``_g_*``, ``_solve_failed`` and ``solve_failed()`` (:101-116), the scheme bit test (:36-42); rev 2.2: +1 for the ``book_remainder`` declaration (a target)
    * - ``implicit/implicit_hydro.cpp``
      - 627
-     - 420
-     - -207
-     - scheme-0 path (:179-188); grid caches (:262-294); host screens and ``reject`` (:219-252, 474-488); two remainders become one call (:522-556, 569-594); Woodbury 2x2 moves into the kernel (:446-472); ``set_data`` resizes (:139-168)
+     - 423
+     - -204
+     - scheme-0 path (:179-188); grid caches (:262-294); host screens and ``reject`` (:219-252, 474-488); two remainders become one call (:522-556, 569-594); Woodbury 2x2 moves into the kernel (:446-472); ``set_data`` resizes (:139-168); rev 2.2: +3 for ``book_remainder`` as its own method in ``post_implicit`` (a target)
    * - ``implicit/implicit_dispatch.hpp``
      - 37
      - 25
@@ -882,9 +911,9 @@ are estimates for the design, not counts of written code.
      - moved in by lane O, counted by neither lane; kept as is (the #361 FP32 pivot lives here)
    * - **total**
      - **2,821**
-     - **2,028**
-     - **-793 (-28.1%)**
-     - target: at least 20% (at most 2,256). Without the move: 2,655 -> 1,862 (-29.9%). Rev 2 was 2,033 (-788); rev 2.1 adds the ``SourceTerm`` migration (-5)
+     - **2,032**
+     - **-789 (-28.0%)**
+     - target: at least 20% (at most 2,256). Without the move: 2,655 -> 1,866 (-29.7%). Rev 2 was 2,033 (-788); rev 2.1 adds the ``SourceTerm`` migration (-5); rev 2.2 adds ``book_remainder`` (+4)
 
 The deletions that rulings (a) and (b) cause outside lane I's files are
 listed by owner in section 10 ("Outside-lane deletions"). They are counted
@@ -1167,6 +1196,23 @@ section 4.2 (``R.rst:472-523``) settles lane I's R-1 to R-4:
 - R-4, **settled**: ``cell_amount`` takes ``stage_weight``. Lane I passes
   ``w2_s`` for ``vic.cell`` and ``vic.mass_clamped`` (``R.rst:488-494``).
 
+**Rev 2.2 round notes, answering Tianhao's two findings on rev 2.1**
+(``a379fe39``; the PM upheld both):
+
+1. *Gravity-work remainder read too early.* Lane I read
+   ``kept(1, "vic.mass_total")`` in ``implicit``, before
+   ``apply_prescribed(1)``. **Changed:** the remainder now runs in
+   ``post_implicit`` after ``apply_prescribed(1)`` (``R.rst:486-488``; the
+   same text at ``R.rst:542-544`` in rev 2.3 ``2b4c5775``), and before lane
+   A's m1, which is the pin's order for ``du[IPR]``. See section 4,
+   "Reads" and "Ordering constraints", and ``book_remainder`` in the
+   skeleton. **No conflict with the pin.** At the pin the walls carry
+   (round-off-)zero transfer, so the change is at most round-off at the top
+   face (**hypothesis**).
+2. *Third kept part missing.* **Changed:** ``vic.momentum_t@1`` is named
+   as the third kept part, next to ``vic.mass_total`` and ``vic.mass_dry``
+   (section 4, "Kept parts"; the R2 and R9 rows).
+
 **Answers to lane R's asks** (``R.rst:1602-1603``):
 
 (a) **Confirmed:** ``vic.mass_clamped`` is ``AmountKind::flux_correction``.
@@ -1212,7 +1258,8 @@ lane I ("migration owner: K-1", section 3.6, line 492; K-1, lines
   sums its terms in the scratch before adding them (pin: three ``+=`` at
   ``:52-53, 58, 63``), which is a **rounding change**.
 - Line effect on section 9: ``const_gravity.cpp`` 50 -> 45 (-5, a target).
-  Total 2,821 -> 2,028 (-793, -28.1%).
+  Total 2,821 -> 2,028 (-793, -28.1%) at rev 2.1; 2,032 at rev 2.2 (see
+  section 9).
 
 **Lane A (Jiachen), earlier.** Answered in the lane I thread (I-1). m1 reads
 ``total(1)`` mass rows in ``post_implicit``, and the axial source reads
