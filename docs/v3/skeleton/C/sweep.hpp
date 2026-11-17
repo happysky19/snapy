@@ -7,7 +7,7 @@
 
 namespace snap {
 
-struct FluxRegister;  // lane R: owner of every conservative face flux
+class FluxRegister;  // lane R (flux_register.hpp, 543ff84f, provisional)
 
 //! what differs between directions; everything else is shared
 struct FaceDir {
@@ -20,7 +20,8 @@ struct FaceDir {
 //! runs between reconstruction and solve for x2 and x3 together
 FaceStates reconstruct_faces(HydroImpl& hydro, FaceDir const& dir,
                              torch::Tensor const& w, Variables const& other);
-//! FaceFloor -> immersed solid -> Riemann into reg's "riemann" slot of dir
+//! RegisterPhase::sweep: FaceFloor -> solid -> Riemann into reg.slot(d,
+//! "riemann"), post_slot, keep riemann.pstar / riemann.central if requested
 void solve_faces(HydroImpl& hydro, FaceDir const& dir, FaceStates& faces,
                  FluxRegister& reg);
 
