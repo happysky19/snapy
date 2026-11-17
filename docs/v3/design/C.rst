@@ -3,7 +3,7 @@
 V3 lane C: reconstruction, Riemann solvers, well-balanced reference, conversion order
 =====================================================================================
 
-Revision 6, 2026-11-17. Owner: Tianhao Le (alternate: Xinyue). Design only:
+Revision 6.1, 2026-11-17. Owner: Tianhao Le (alternate: Xinyue). Design only:
 no implementation change. Declarations are in ``docs/v3/skeleton/C/`` (not
 built); the file-by-file line table is ``docs/v3/design/C_lines.csv``,
 produced by ``docs/v3/design/C_lines.py``.
@@ -12,6 +12,18 @@ Every ``path:line`` is at chengcli/snapy
 ``9e5de2d4ce497d0b2d4da3295fc1fe969fe7e410`` unless another commit is named.
 "Measured" means produced by a command named in the text; "estimate" means a
 design target.
+
+Changes in revision 6.1 (from ``5caf684c``), after Cheng's read of 5.1:
+
+* no R citation is at R 1.2's head; the two mentions of it left record
+  revision 5.1's alignment as history;
+* the monitor has no ``reset_step()``. The frozen header has
+  ``FluxRegister::begin_step()`` (``flux_register.hpp:48``),
+  ``FluxRegister::rollback()`` for the register and monitor (``:86``) and
+  ``RegisterMonitor::rollback()`` (``:92``). The 5.1 history entry and R4
+  in section 11 now say so;
+* R-C1 is stated as ``R.rst:743-758`` states it: open, with lane S. Lane C's
+  ``before_solve`` hook is a proposal, not a settled contract.
 
 Changes in revision 6 (from ``ab14e5a7``), aligned with lane R revision 2.2, header rev 4.2
 (happysky19/snapy ``v3-design/R`` ``4c59162ae37080d0ab307b2823742b44f46da7c3``), the head frozen at R's
@@ -27,10 +39,10 @@ amend it):
 * the sweep stays C's two free functions; there is no ``Sweep`` class
   (``hydro_stage.hpp:14-15``, ``:42-44``);
 * the #289 covariance is R's post, ``add(d, "covariance", ...)``. R reopens
-  R-C1 because lane S keeps in-place rotation (``R.rst:743-758``). Lane C
-  takes R's preferred option: ``solve_faces`` calls a ``before_solve`` hook
-  after the floors and the solid step, where R builds its covariance with no
-  extra copy (``sweep.hpp``);
+  R-C1 because lane S keeps in-place rotation (``R.rst:743-758``); it stays
+  open, with lane S. Lane C proposes R's preferred option: ``solve_faces``
+  calls a ``before_solve`` hook after the floors and the solid step, where R
+  would build its covariance with no extra copy (``sweep.hpp``);
 * ``riemann.mass@1`` stays dropped (``R.rst:168``, ``:741``);
 * ``riemann.central`` is formed from the post-immersed-solid states
   (``hydro_forward.cpp:1089-1090``, ``:1123-1124``; ``R.rst:809``, K4);
@@ -66,7 +78,8 @@ home thread that every solver and scheme stays:
   confirmed; that was premature.
 
 Revision 5.1 (on ``2d6aef4d``), aligned with lane R revision 1.2
-(happysky19/snapy ``v3-design/R`` ``3490d7e1``; ``R.rst``, header
+(happysky19/snapy ``v3-design/R`` ``3490d7e1``, superseded by ``4c59162a``
+in revision 6; ``R.rst``, header
 ``flux_register.hpp`` rev 3 and ``hydro_stage.hpp``):
 
 * the #289 covariance is lane R's post, ``add(d, "covariance", ...)``
@@ -83,8 +96,11 @@ Revision 5.1 (on ``2d6aef4d``), aligned with lane R revision 1.2
   momentum in the panel face basis;
 * the step accumulator is FP64, FP32 on MPS;
 * ``begin_stage(stage, harp::IntegratorWeight)`` is X's call, and
-  ``reset`` takes no weights. ``RegisterMonitor::reset_step()`` and
-  ``rollback()`` exist;
+  ``reset`` takes no weights. (Corrected in 6.1: the frozen R 2.2 has no
+  ``reset_step()``; ``FluxRegister::begin_step()`` zeroes the step sums,
+  monitor and counters, and ``FluxRegister::rollback()`` and
+  ``RegisterMonitor::rollback()`` undo a retried step,
+  ``flux_register.hpp:48``, ``:86``, ``:92`` at ``4c59162a``.)
 * ``riemann.central`` is formed from the post-solid states;
 * contract gaps kept open: R-C1 (the face states covariance reads),
   R-C2 (the 50 lines S counts inside D1), R-C3 (who posts
@@ -805,8 +821,9 @@ Register owner: lane R. Lane C stores no face flux. ``_flux1/2/3``,
 register slots or views of them. The executor side of the register
 (allocation by ``StateStore`` at ``reset()``, ``begin_step()`` at step start,
 which zeroes the step sums, monitor and counters, ``begin_stage(stage,
-harp::IntegratorWeight)``, which resets nothing, ``rollback()``, and the monitor read with the
-retry flags; ``flux_register.hpp:43-49``, ``:86``) is lane
+harp::IntegratorWeight)``, which resets nothing, ``FluxRegister::rollback()``
+and ``RegisterMonitor::rollback()``, and the monitor read with the retry
+flags; ``flux_register.hpp:43-49``, ``:86``, ``:92``) is lane
 X's to call, ``X.rst`` section 4. Lane C takes it as stated
 there.
 
@@ -930,17 +947,19 @@ lane R revision 2.2, header rev 4.2 (``flux_register.hpp`` at ``4c59162a``).
   ``apply_prescribed`` are ``reconcile`` (``:16``). ``scale()`` is
   ``limit`` (``:17``). None of them is lane C's.
 * R's #289 covariance (``hydro_stage.hpp:45-48``) needs the post-solid,
-  unrotated face states. Lane C's ``solve_faces`` calls a ``before_solve``
-  hook after ``FaceFloor`` and the solid step, before the rotation and the
-  solve. R builds the covariance there and posts it after the solve (R-C1,
-  R's preferred option in ``R.rst:743-758``).
+  unrotated face states. How R gets them is R-C1, open with lane S
+  (``R.rst:743-758``). Lane C proposes that ``solve_faces`` call a
+  ``before_solve`` hook after ``FaceFloor`` and the solid step, before the
+  rotation and the solve, where R would build the covariance and post it
+  after the solve. The other option is one face-state copy per x2/x3
+  direction.
 * Counters post with ``count(name, n)`` (``flux_register.hpp:76``), are
   listed in ``RegisterRequest::counters`` (``:36``), and are read through
   ``RegisterMonitor::counter_names()`` and ``counters()`` (int64,
   ``:99-100``). ``begin_step()`` zeroes them (``:48``; ``R.rst:464``).
 
-The R contracts that stay open for lane C are in section 11 (R-C1's
-confirmation by R and S, R-C4). Lane C's own computation (what the solve
+The R contracts that stay open for lane C are in section 11 (R-C1, open
+with lane S; R-C4). Lane C's own computation (what the solve
 produces, its frame, area weighting and compute dtype) does not depend on
 them.
 
@@ -1015,7 +1034,8 @@ them.
     loop at ``:1378``) and lane A's ``post_implicit`` phase
     (``:1618-1680``). The next stage's ``solve_faces`` overwrites it;
     ``begin_stage`` resets nothing (``R.rst`` revision 2 changes), and
-    ``rollback()`` clears it with the register (``flux_register.hpp:86``). Today's ``_aam_mass_flux`` is cleared after the first Coriolis
+    ``FluxRegister::rollback()`` clears it with the register
+    (``flux_register.hpp:86``). Today's ``_aam_mass_flux`` is cleared after the first Coriolis
     call (``:1391``); that early clear goes.
   * **Panel seams.** At the pin a panel-seam face is single-valued because
     both sides solve the same exchanged face states (``:1005-1048``).
@@ -1097,10 +1117,11 @@ segment, X section 4: post before pack):
    positivity sees single-valued seam faces (comment at ``:1158-1159``).
 3. x2/x3: lane C's ``riemann`` with ``riemann.central`` (``:1088-1152``),
    then lane R's own #289 covariance, ``add(d, "covariance", ...)``. Its code
-   is ``hydro_forward.cpp:41-289``. R builds it in ``solve_faces``'s
-   ``before_solve`` hook, from the post-solid, unrotated states, as the pin
-   does at ``:1099``, and posts it after the solve (``hydro_stage.hpp:45-48``;
-   R-C1, R's preferred option, ``R.rst:743-758``).
+   is ``hydro_forward.cpp:41-289``. R builds it from the post-solid,
+   unrotated states, as the pin does at ``:1099``, and posts it after the
+   solve (``hydro_stage.hpp:45-48``). Where R reads those states, lane C's
+   proposed ``before_solve`` hook or a face-state copy, is R-C1, open with
+   lane S (``R.rst:743-758``).
 4. Positivity (4.C, ``:1154-1252``), in ``RegisterPhase::limit``. Its theta
    exchange is at ``:1227``. It multiplies the species rows of all three
    directions in place, ``f.mul_(theta)`` (``flux_positivity.cpp:99-121``).
@@ -1741,10 +1762,11 @@ Settled by R's header and ``R.rst`` 2.2:
 * R3: R's phase order (``flux_register.hpp:14-23``). Positivity is
   ``scale()``, and lane C withdrew its ``(theta - 1) F`` increment in
   revision 5 (``R.rst`` 4.3, K1).
-* R4: ``count()``; ``begin_step()`` zeroes the step sums, monitor and
-  counters; ``rollback()``. ``reset_step()`` is removed and
-  ``begin_stage`` resets nothing (``flux_register.hpp:48-49``, ``:86``;
-  ``R.rst:464``). ``begin_stage`` takes ``harp::IntegratorWeight``; lane C does not call it.
+* R4: ``count()``; ``FluxRegister::begin_step()`` zeroes the step sums,
+  monitor and counters; ``FluxRegister::rollback()`` (register and monitor)
+  and ``RegisterMonitor::rollback()``. There is no ``reset_step()``, and
+  ``begin_stage`` resets nothing (``flux_register.hpp:48-49``, ``:86``,
+  ``:92``; ``R.rst:464``). ``begin_stage`` takes ``harp::IntegratorWeight``; lane C does not call it.
 * R5: ``replace()`` with ``SeamRule`` is R's rule (``mean`` on every x1
   seam, ``owner_copy`` on panel seams); S does the transport.
 * R6: the 587-line split. ``R.rst`` 2.2 lists D1, "to C" =
@@ -1773,18 +1795,26 @@ Settled by R's header and ``R.rst`` 2.2:
 
 Still open:
 
-* R-C1, the covariance face states. R reopens it (``R.rst:743-758``):
-  lane S keeps in-place tensor rotation (``coord_rotation.hpp:37-40`` at S
-  ``d03e4888``, cited by R, not read here). So ``solve_faces`` cannot leave
-  the faces unrotated without a copy. R gives two options: one face-state
-  copy per x2/x3 direction (against req. 9), or a call between the solid
-  step and the solve. Lane C takes the second, which R prefers:
-  ``solve_faces(..., before_solve)`` calls ``before_solve(faces, d)`` after
-  ``FaceFloor`` and the solid step, before the rotation and the solve
-  (``sweep.hpp``). R builds ``dcov`` there, as the pin does at ``:1099``,
-  and posts it after the solve. This adds no copy beyond the pin's. Open
-  until R's ``covariance`` is split into the hook and the post, and S
-  confirms its rotation stays after the hook.
+* R-C1, the covariance face states. **Open (R rev 2.1), with lane S**, as
+  ``R.rst:743-758`` states it. R needs the post-solid, unrotated face
+  states. The pin reads ``wlr2`` after ``pib->forward`` and before the
+  solver rotates them in place (``hydro_forward.cpp:1089-1097``). Lane C
+  proposed that ``solve_faces`` leave ``faces`` unrotated, which needs an
+  in-kernel rotation. S rev 1.1 keeps ``prim2local_``/``flux2global_`` as
+  today's in-place tensor rotations, "unchanged in V3"
+  (``coord_rotation.hpp:37-40`` at S ``d03e4888``, cited by R, not read
+  here). So either:
+
+  * C keeps one face-state copy per x2/x3 direction (requirement 9 cost);
+    or
+  * C gives R a call between the solid step and the solve, where R builds
+    ``dcov`` as the pin does (``:1099``) and posts it after the solve.
+    That adds no copy beyond the pin's.
+
+  R prefers the second. C and S decide. Lane C proposes the second:
+  ``sweep.hpp`` declares ``solve_faces(..., before_solve)``, called after
+  ``FaceFloor`` and the solid step, before the rotation and the solve. S
+  has not answered, so the copy stays the fallback and R-C1 stays open.
 * R-C4 (new). ``AmountKind::floor``'s comment reads "local floor or repair
   (EF, C)" (``flux_register.hpp:28``). Lane C's face-state floors change
   face states, not cells, and post counts only (``face_floor.*``). Lane C
