@@ -35,6 +35,7 @@ struct X1ReferenceConfig {
   int iu;
   bool stretched, phys_in, phys_out, wall_clamp;
   int conversion_order;  // 4 adds the face-density rows (wb_ref4)
+  // PR #369 (open), if merged first: wb-wall-reference mode and depth index
   Scheme face_scheme;    // cp5 rows for weno5/cp5, else the kernel's dsf
 };
 

@@ -23,9 +23,9 @@ struct FaceFlux {
   torch::Tensor flux;          // (nvar, nc3, nc2, nc1), Quantity::kFlux
   torch::Tensor pressure;      // x1: TOTAL p*, Quantity::kGauge (FP64);
                                // none for shallow water
-  torch::Tensor central;  // riemann.central: mass rows (1+ny) of 1/2 (F_L+F_R),
-                          // kFlux, on request (lane A); hllc, lmars, roe,
-                          // shallow-roe only. dissipative = flux - central
+  torch::Tensor central;  // riemann.central: ONE row, dry + sum of species of
+                          // 1/2 (F_L + F_R), kFlux, on request (lane A), kept
+                          // to stage end; hllc, lmars, roe, shallow-roe only
   torch::Tensor wave_speed;    // optional, max |S| per face
   torch::Tensor events;        // optional uint8: bit0 p* clamped (hllc)
 };
