@@ -1,6 +1,6 @@
 #pragma once
-// V3 lane R skeleton: declarations only, in no build. Rev 4, with R.rst rev
-// 2 (section 3). Pin chengcli/snapy 9e5de2d4. What HydroImpl::forward
+// V3 lane R skeleton: declarations only, in no build. Rev 4.1, with R.rst
+// rev 2.1 (section 3). Pin chengcli/snapy 9e5de2d4. What HydroImpl::forward
 // (hydro_forward.cpp:370-1696) becomes: one stage driver that calls the
 // lanes' ops in RegisterPhase order and owns no flux, no fixer and no
 // AAM state. Lines the driver no longer holds are counted in R.rst s9.
@@ -27,7 +27,7 @@ struct StageInputs {
   torch::Tensor solid;  // immersed solid mask or undefined
   double dt;            // X's host dt (step dt, never dt_corr)
   int stage;
-  harp::IntegratorWeight const* weight;  // this stage's, from X
+  RegisterWeights const* weight;  // this stage's, from X (both tableaux)
 };
 
 //! the slimmed Hydro module: options parse, ownership and the stage driver
@@ -44,7 +44,7 @@ class HydroStage {
   void sweep(StageInputs const& in, FluxRegister& reg);
   //! R's #289 covariance (hydro_forward.cpp:41-289), posted after the solve
   //! from faces left post-floor, post-solid and unrotated by solve_faces
-  //! (C's R-C1 proposal; needs S's in-kernel rotation, S2)
+  //! (C's R-C1; open: S keeps in-place rotation, coord_rotation.hpp:37-40)
   void covariance(FaceStates const& faces, int dim, FluxRegister& reg);
   //! reconcile: replace() on every x1 seam (mean) and panel seam
   //! (owner_copy), after sedimentation, before positivity; apply_prescribed
@@ -65,8 +65,8 @@ class HydroStage {
   //! the whole stage in that order, then reg.end_stage(dt); returns du
   torch::Tensor forward(StageInputs const& in, FluxRegister& reg);
   //! X's after_combine hook (after meshblock.cpp:901): EF's conserved
-  //! limiter and floors (:907-909), K's chemistry on the last stage
-  //! (:949-990), A's closure Fixer (:983-990); cell_amount weight 1.0
+  //! limiter and floors (:907-909), K's saturation (:949-981) and chemistry
+  //! on the last stage, A's closure Fixer (:983-990); cell_amount weight 1.0
   void after_combine(torch::Tensor u, FluxRegister& reg);
 
  private:
