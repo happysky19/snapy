@@ -14,18 +14,18 @@ struct RiemannSolverOptionsImpl {
   ADD_ARG(std::string, dir) = "omni";   // shallow-roe only
 };
 
-//! Lane R's header (v3-design/R 543ff84f, provisional): flux = slot(d,
-//! "riemann") written in place, then post_slot; parts through keep().
-//! Frame: global components (coord's to_global_frame_). Area: per unit face
+//! Lane R rev 1.2 (v3-design/R 3490d7e1, provisional): flux = slot(d,
+//! "riemann") in place, then post_slot; parts through part_slot() in place.
+//! Frame: coord's flux2global<d>_ (x2/x3 in panel face basis). Per unit face
 //! area; the register's divergence applies face_area<d>. Dtypes are lane X's
 //! PrecisionPolicy rows (X.rst section 6). Storage: register slots only.
 struct FaceFlux {
   torch::Tensor flux;          // (nvar, nc3, nc2, nc1), Quantity::kFlux
-  torch::Tensor pressure;      // x1: keep(1, "riemann.pstar"), TOTAL p*,
+  torch::Tensor pressure;      // x1: part_slot(1, "riemann.pstar"), TOTAL p*,
                                // kGauge (FP64); none for shallow water
-  torch::Tensor central;  // keep(d, "riemann.central") if "riemann.central@d"
-                          // requested: ONE row, dry + species, 1/2 (F_L+F_R),
-                          // kFlux, to next begin_stage; hllc/lmars/roe/sw
+  torch::Tensor central;  // part_slot(d, "riemann.central") if requested @2/@3:
+                          // ONE row, dry + species, 1/2 (F_L+F_R), post-solid
+                          // states, kFlux; hllc/lmars/roe/sw only
   torch::Tensor wave_speed;    // optional, max |S| per face
   torch::Tensor events;        // optional uint8: bit0 p* clamped (hllc)
 };
@@ -49,7 +49,7 @@ class RiemannSolverImpl : public torch::nn::Cloneable<RiemannSolverImpl> {
   RiemannSolverOptions options;
   RiemannKind kind;
   //! states in the global frame; rotated in place by coord's helper (S)
-  //! out.flux is reg.slot(d, "riemann"); keep() copy vs view is R8 (C.rst)
+  //! out.flux is reg.slot(d, "riemann"); out.central a part_slot view
   void forward(torch::Tensor wl, torch::Tensor wr, int dim, FaceFlux& out,
                FaceBackground const* bg = nullptr);
 };

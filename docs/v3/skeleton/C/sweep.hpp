@@ -7,7 +7,7 @@
 
 namespace snap {
 
-class FluxRegister;  // lane R (flux_register.hpp, 543ff84f, provisional)
+class FluxRegister;  // lane R rev 1.2 (flux_register.hpp, 3490d7e1)
 
 //! what differs between directions; everything else is shared
 struct FaceDir {
@@ -20,8 +20,8 @@ struct FaceDir {
 //! runs between reconstruction and solve for x2 and x3 together
 FaceStates reconstruct_faces(HydroImpl& hydro, FaceDir const& dir,
                              torch::Tensor const& w, Variables const& other);
-//! RegisterPhase::sweep: FaceFloor -> solid -> Riemann into reg.slot(d,
-//! "riemann"), post_slot, keep riemann.pstar / riemann.central if requested
+//! sweep: FaceFloor -> solid -> Riemann into slot(d, "riemann"), post_slot,
+//! part slots; faces left post-solid, unrotated for R's covariance (R-C1)
 void solve_faces(HydroImpl& hydro, FaceDir const& dir, FaceStates& faces,
                  FluxRegister& reg);
 

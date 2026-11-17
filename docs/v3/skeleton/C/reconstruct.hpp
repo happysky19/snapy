@@ -15,7 +15,7 @@ struct ReconstructOptionsImpl {
 //! the faces of one sweep: lr[ILT|IRT], plus what the floors did
 struct FaceStates {
   torch::Tensor lr;      // (2, nvar, nc3, nc2, nc1)
-  torch::Tensor floors;  // int64 (3,): R's counters(); post call open (R10)
+  torch::Tensor floors;  // int64 (3,): posted with R's count() (rev 1.2)
 };
 
 //! conversion-order 2 (identity) or 4: w = W(u - L u) + L W(u), the key-4
