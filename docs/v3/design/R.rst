@@ -25,7 +25,7 @@ timed. A claim that needs a run is marked **hypothesis**.
 Zoey's requests 5, 6, 12 and 13). Header comments are edited in place, so
 every ``flux_register.hpp:N`` and ``hydro_stage.hpp:N`` citation still holds.
 Client heads read: C ``559dd0b7``, X ``0fe47c6f``, O ``dfa8ecd0``, A
-``2b0ac426``, EF ``5e6b5b18``, S ``d03e4888``, K (kintera) ``fc619eec``.
+``2b0ac426``, EF ``5e30b31b`` (rev 3.6), S ``d03e4888``, K (kintera) ``fc619eec``.
 
 1. ``derived`` (``:34``) is not hydro only: K's ``element/<name>`` rows
    (4.2 K) are derived rows of the hydro register too.
@@ -442,7 +442,7 @@ physical wall faces and immersed-solid faces and the prescribed rows
 (default: zero for mass, species, energy and scalars; normal momentum
 keeps the solver's mirrored wall flux). Tangential momentum is free-slip:
 no momentum row is prescribed (EF's decision, ``EF.rst`` section 4 at
-``5e6b5b18``, ``EF.rst:761-763``; S's ``PrescribedFaces``, ``seam_register.hpp:52-65`` at
+``5e30b31b``, ``EF.rst:765-767``; S's ``PrescribedFaces``, ``seam_register.hpp:52-65`` at
 ``d03e4888``). S builds the mask per register instance with that instance's
 ``nvar`` and calls ``set_prescribed`` (``supply_prescribed``,
 ``seam_register.hpp:67-69``) on the hydro register and on each Scalar
@@ -562,7 +562,7 @@ was profiled.
   * I posts ``vic.momentum_t.top`` as an amount in ``implicit``, before
     ``post_implicit``, so the diagnostic never reads the prescribed total.
 
-  EF chose free-slip (``EF.rst:761-763`` at ``5e6b5b18``), so no
+  EF chose free-slip (``EF.rst:765-767`` at ``5e30b31b``), so no
   momentum row is prescribed and the top face of ``vic.momentum_t`` is not
   zeroed. A confirms that ``.top`` does not enter the axial torque
   (``A.rst`` 11.2 (c) at ``2b0ac426``). Prescribing tangential momentum
@@ -1320,7 +1320,7 @@ the step if any slot is set, as today.
 
 Causes: ``implicit.column`` (I), and EF's four, ``ef.floor_patch``,
 ``ef.nan``, ``ef.vapor_fail`` and ``ef.heat_capacity`` (``EF.rst`` section
-4, ``:673-674`` at ``5e6b5b18``; today the limiter marks ``meshblock.cpp:1052-1056`` and
+4, ``:677-678`` at ``5e30b31b``; today the limiter marks ``meshblock.cpp:1052-1056`` and
 slots 6 and 7, ``:1571-1577``). Lane X maps each name to a cause bit
 (``X.rst:200-206`` at ``0fe47c6f`` still names ``eos.limiter_mark``). K's
 failures stay slot 4 of X's stack (4.2 K).
@@ -1676,12 +1676,11 @@ Each step is one PR and keeps every existing test.
   ``e+pe`` derived row. Gate G-R7.
 * **O:** agreed at ``dfa8ecd0`` (``O.rst`` 11.7); its request on 4.1 item
   6 is made. Nothing open.
-* **EF:** answered at ``5e6b5b18``: the cause names (4.5) and free-slip
-  (3.5). Q-R-i stays on gate G-R2 (hypothesis). Wording for EF's next sha
-  (Cheng): ``EF.rst:514`` labels S's solid fill "last stage, reactions
-  only", but the pin runs it every stage when a solid field exists
-  (``meshblock.cpp:936-938``); ``EF.rst:517`` gives K as ``:953-970``,
-  the pin's block is ``:954-972``.
+* **EF:** answered at ``5e30b31b`` (rev 3.6): the cause names (4.5) and
+  free-slip (3.5). Q-R-i stays on gate G-R2 (hypothesis). The solid-fill
+  and K wording is fixed in rev 3.6: S's solid fill every stage when a
+  solid field exists (``EF.rst:516``, ``:556-558``; pin
+  ``meshblock.cpp:936-938``), K at ``:954-972`` (``EF.rst:520``).
 * **S:** the per-row edge map of Xi's note 11 in S rev 2, and
   ``peer_dim``/``normal_sign`` in ``SeamEntry`` (G-R13); R-C1 (in-place
   rotation is kept, so a copy or a hook); relabel "C's 50" as R's D1; K7 (with X
