@@ -25,7 +25,7 @@ timed. A claim that needs a run is marked **hypothesis**.
 Zoey's requests 5, 6, 12 and 13). Header comments are edited in place, so
 every ``flux_register.hpp:N`` and ``hydro_stage.hpp:N`` citation still holds.
 Client heads read: C ``559dd0b7``, X ``0fe47c6f``, O ``dfa8ecd0``, A
-``2b0ac426``, EF ``b7bece9c``, S ``d03e4888``, K (kintera) ``fc619eec``.
+``2b0ac426``, EF ``5e6b5b18``, S ``d03e4888``, K (kintera) ``fc619eec``.
 
 1. ``derived`` (``:34``) is not hydro only: K's ``element/<name>`` rows
    (4.2 K) are derived rows of the hydro register too.
@@ -44,8 +44,10 @@ Client heads read: C ``559dd0b7``, X ``0fe47c6f``, O ``dfa8ecd0``, A
    ``begin_stage`` (``:35``; 4.1 item 4).
 7. R-C4: ``AmountKind::floor`` (``:28``) names EF only. C's face floors post
    counts (4.2 C).
-8. Ruling V3-2: monitor census counts are accepted steps only. That is what
-   ``begin_step`` (``:48``) and ``rollback`` (``:86``) give; no change.
+8. Ruling V3-2: from R's PR R-1, the monitor's census counts accepted
+   steps only, which is what ``begin_step`` (``:48``) and ``rollback``
+   (``:86``) give. Before R-1 the existing meters stay as at the pin and
+   include rejected attempts; there is no interim hook. No header change.
 9. Mesh fixer lines are lane X's (ruling V3-1); R's table books none
    (section 9).
 
@@ -440,7 +442,7 @@ physical wall faces and immersed-solid faces and the prescribed rows
 (default: zero for mass, species, energy and scalars; normal momentum
 keeps the solver's mirrored wall flux). Tangential momentum is free-slip:
 no momentum row is prescribed (EF's decision, ``EF.rst`` section 4 at
-``b7bece9c``; S's ``PrescribedFaces``, ``seam_register.hpp:52-65`` at
+``5e6b5b18``, ``EF.rst:761-763``; S's ``PrescribedFaces``, ``seam_register.hpp:52-65`` at
 ``d03e4888``). S builds the mask per register instance with that instance's
 ``nvar`` and calls ``set_prescribed`` (``supply_prescribed``,
 ``seam_register.hpp:67-69``) on the hydro register and on each Scalar
@@ -560,7 +562,7 @@ was profiled.
   * I posts ``vic.momentum_t.top`` as an amount in ``implicit``, before
     ``post_implicit``, so the diagnostic never reads the prescribed total.
 
-  EF chose free-slip (``EF.rst`` section 4 at ``b7bece9c``), so no
+  EF chose free-slip (``EF.rst:761-763`` at ``5e6b5b18``), so no
   momentum row is prescribed and the top face of ``vic.momentum_t`` is not
   zeroed. A confirms that ``.top`` does not enter the axial torque
   (``A.rst`` 11.2 (c) at ``2b0ac426``). Prescribing tangential momentum
@@ -1318,7 +1320,7 @@ the step if any slot is set, as today.
 
 Causes: ``implicit.column`` (I), and EF's four, ``ef.floor_patch``,
 ``ef.nan``, ``ef.vapor_fail`` and ``ef.heat_capacity`` (``EF.rst`` section
-4 at ``b7bece9c``; today the limiter marks ``meshblock.cpp:1052-1056`` and
+4, ``:673-674`` at ``5e6b5b18``; today the limiter marks ``meshblock.cpp:1052-1056`` and
 slots 6 and 7, ``:1571-1577``). Lane X maps each name to a cause bit
 (``X.rst:200-206`` at ``0fe47c6f`` still names ``eos.limiter_mark``). K's
 failures stay slot 4 of X's stack (4.2 K).
@@ -1674,8 +1676,12 @@ Each step is one PR and keeps every existing test.
   ``e+pe`` derived row. Gate G-R7.
 * **O:** agreed at ``dfa8ecd0`` (``O.rst`` 11.7); its request on 4.1 item
   6 is made. Nothing open.
-* **EF:** answered at ``b7bece9c``: the cause names (4.5) and free-slip
-  (3.5). Q-R-i stays on gate G-R2 (hypothesis).
+* **EF:** answered at ``5e6b5b18``: the cause names (4.5) and free-slip
+  (3.5). Q-R-i stays on gate G-R2 (hypothesis). Wording for EF's next sha
+  (Cheng): ``EF.rst:514`` labels S's solid fill "last stage, reactions
+  only", but the pin runs it every stage when a solid field exists
+  (``meshblock.cpp:936-938``); ``EF.rst:517`` gives K as ``:953-970``,
+  the pin's block is ``:954-972``.
 * **S:** the per-row edge map of Xi's note 11 in S rev 2, and
   ``peer_dim``/``normal_sign`` in ``SeamEntry`` (G-R13); R-C1 (in-place
   rotation is kept, so a copy or a hook); relabel "C's 50" as R's D1; K7 (with X
@@ -1684,7 +1690,10 @@ Each step is one PR and keeps every existing test.
   stage, O sums, X counts the mesh fixer lines). Open: map EF's four cause
   names to bits (``X.rst:200-206`` still names ``eos.limiter_mark``); name
   who calls ``StateStore::register_storage`` and the ``GraphKey`` trigger
-  for ``set_prescribed`` (R.rst 7).
+  for ``set_prescribed`` (R.rst 7). Wording for X rev 3.4 (Cheng, V3-1):
+  ``X.rst:959-962`` at ``0fe47c6f`` says R's count books 98 + 6 + 20 mesh
+  fixer lines; R books none (section 9), and ``X.rst:1040-1044`` already
+  books them in X.
 * **K:** answered at ``fc619eec``: slot 4 of X's stack and the two solve
   counters (4.2 K).
 * **Xinyue:** the five notes whose text I never had (row 54).
