@@ -4,8 +4,10 @@ V3 lane R: flux register, monitor and the hydro stage
 =====================================================
 
 Revision 2.3, 2026-11-17: comments and text only, on revision 2.2
-(``4c59162ae37080d0ab307b2823742b44f46da7c3``). No declaration and no header
-line number changed, so the freeze stands and no client re-cites. Revision
+(``4c59162ae37080d0ab307b2823742b44f46da7c3``), and RULING V3-3, which
+closes R-C1. ``flux_register.hpp`` is unchanged in declarations and line
+numbers, so the freeze stands and no client re-cites. The one declaration
+change is in ``hydro_stage.hpp`` (item 10), which no client calls. Revision
 2.2 amended revision 2.1 (``6df93fda``) after reading X revision 3
 (``100bc9b33514ebffd8c92b22c93cf25bc5c382d9``).
 Owner: Tianhao Le (backup owner). Reviewers: Xinyue Wang and Zoey Hu. Design
@@ -50,6 +52,11 @@ Client heads read: C ``559dd0b7``, X ``0fe47c6f``, O ``dfa8ecd0``, A
    include rejected attempts; there is no interim hook. No header change.
 9. Mesh fixer lines are lane X's (ruling V3-1); R's table books none
    (section 9).
+10. R-C1 closed by RULING V3-3 (4.2 C). ``hydro_stage.hpp:45-48``:
+    ``covariance(faces, dim, reg)`` becomes ``build_covariance(faces,
+    dim)``, called in C's ``before_solve`` hook, and
+    ``post_covariance(dim, reg)``, called after the solve. The file stays
+    82 lines.
 
 **Changes in revision 2.2** (from ``6df93fda``). Matrix rows 97-102.
 
@@ -795,22 +802,24 @@ was profiled.
 * The sweep is C's two free functions, with no ``Sweep`` class. The #289
   covariance is R's (``C.rst:44-46``). ``riemann.mass@1`` is dropped
   (``C.rst:47-49``).
-* **R-C1** (``C.rst:1708-1717``). **Open (rev 2.1).** R needs the
-  post-solid, unrotated face states. The pin reads ``wlr2`` after
-  ``pib->forward`` and before the solver rotates them in place
-  (``:1089-1097``). C proposed that ``solve_faces`` leave ``faces``
-  unrotated, which needs an in-kernel rotation. S rev 1.1 keeps
-  ``prim2local_``/``flux2global_`` as today's in-place tensor rotations,
-  "unchanged in V3" (``coord_rotation.hpp:37-40`` at ``d03e4888``). So
-  either:
-
-  * C keeps one face-state copy per x2/x3 direction (requirement 9 cost);
-    or
-  * C gives R a call between the solid step and the solve, where R builds
-    ``dcov`` as the pin does (``:1099``) and posts it after the solve.
-    That adds no copy beyond the pin's.
-
-  R prefers the second. C and S decide.
+* **R-C1** (``C.rst:1798-1817`` at ``559dd0b7``). **Closed (rev 2.3,
+  RULING V3-3).** C's ``solve_faces`` runs ``FaceFloor``, the solid step,
+  ``before_solve(faces, d)``, then the rotation and the Riemann solve into
+  ``slot(d, "riemann")`` (``sweep.hpp:23-28`` at ``559dd0b7``; ``FaceHook``
+  is ``std::function<void(FaceStates const&, int)>``). R's
+  ``build_covariance(faces, d)`` runs in that hook and builds the #289
+  increment from the post-solid, unrotated states into a fixed
+  per-direction buffer (the pin's ``dcov``). ``post_covariance(d, reg)``
+  runs after the solve and calls ``add(d, "covariance", ...)``, so nothing
+  is posted before C's ``riemann`` slot. This is the pin's order: ``wlr2``
+  after ``pib->forward`` (``:1089-1090``), ``dcov`` built (``:1099-1100``),
+  the solve (``:1109``), then ``add_cov`` (``:1110``). No face-state copy
+  is added for the hydro covariance. S's ``prim2local_``/``flux2global_``
+  stay functions the solver calls, "unchanged in V3"
+  (``coord_rotation.hpp:37-40``, ``S.rst:118-122`` at ``d03e4888``), so S
+  has no ordering of its own here. The pin's scalar covariance rows keep
+  their own clones of the seam rows (``_cov_wl``/``_cov_wr``,
+  ``:1103-1106``, ``:1136-1139``); this ruling does not change them.
 * **R-C2** (``C.rst:1718-1723``). Resolved: ``hydro.cpp:727-776`` is
   counted once, in R's D1. C counts no deletion of it, and neither does S
   (S.rst section 9, last paragraph). Request to S: relabel "C's 50" as R's
@@ -871,8 +880,8 @@ was profiled.
 * **K2, weights.** Resolved: ``begin_stage(stage, w)``, the recursion of
   3.4 and ``cell_amount``'s ``stage_weight``.
 * **K3, namespace.** Resolved: ``snap``.
-* **K4, "post-terrain".** Resolved at the source level (post-solid states,
-  ``:1089-1090``). A's separate confirmation is still pending.
+* **K4, "post-terrain".** Resolved: post-solid states (``:1089-1090``),
+  confirmed by A (``A.rst`` 11.2 (a) at ``2b0ac426``).
 * **K5, cell increments.** Resolved: monitor amounts only.
 * **K6, same-process x1 seams.** Resolved by S rev 1.1 (``mean`` on every
   x1 seam). G-R10 measures the change.
@@ -1206,7 +1215,7 @@ the program manager's eight additions, C = lane C rev 5, I = lane I rev 2.
    * - 77
      - C R-C1
      - covariance face states
-     - post-solid, unrotated; needs S2
+     - post-solid, unrotated; closed by V3-3 (rev 2.3)
    * - 78
      - C R-C2
      - 50 lines at ``hydro.cpp:727-776``
@@ -1278,7 +1287,7 @@ the program manager's eight additions, C = lane C rev 5, I = lane I rev 2.
    * - 95
      - C R-C1 vs S
      - unrotated states need in-kernel rotation
-     - **open**; R prefers a hook before the solve
+     - closed by V3-3: C's ``before_solve`` hook, R posts after the solve
    * - 96
      - R
      - rev 2's K section wrong
@@ -1682,9 +1691,9 @@ Each step is one PR and keeps every existing test.
   solid field exists (``EF.rst:516``, ``:556-558``; pin
   ``meshblock.cpp:936-938``), K at ``:954-972`` (``EF.rst:520``).
 * **S:** the per-row edge map of Xi's note 11 in S rev 2, and
-  ``peer_dim``/``normal_sign`` in ``SeamEntry`` (G-R13); R-C1 (in-place
-  rotation is kept, so a copy or a hook); relabel "C's 50" as R's D1; K7 (with X
-  and EF).
+  ``peer_dim``/``normal_sign`` in ``SeamEntry`` (G-R13); relabel "C's 50"
+  as R's D1; K7 (with X and EF). R-C1 is closed by V3-3 and needs nothing
+  from S.
 * **X:** done in rev 3.1-3.3 (``begin_step``, ``after_combine`` every
   stage, O sums, X counts the mesh fixer lines). Open: map EF's four cause
   names to bits (``X.rst:200-206`` still names ``eos.limiter_mark``); name
@@ -1693,6 +1702,9 @@ Each step is one PR and keeps every existing test.
   ``X.rst:959-962`` at ``0fe47c6f`` says R's count books 98 + 6 + 20 mesh
   fixer lines; R books none (section 9), and ``X.rst:1040-1044`` already
   books them in X.
+* **C:** C's next revision states R-C1 closed (``C.rst:25-26``, ``:42-44``,
+  ``:950-952``, ``:1798-1817`` and ``sweep.hpp:24-25`` at ``559dd0b7`` still
+  say open) and calls ``build_covariance`` in ``before_solve``.
 * **K:** answered at ``fc619eec``: slot 4 of X's stack and the two solve
   counters (4.2 K).
 * **Xinyue:** the five notes whose text I never had (row 54).

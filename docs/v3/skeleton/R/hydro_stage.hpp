@@ -42,10 +42,10 @@ class HydroStage {
   //! sweep: x1, then x2/x3, by C's reconstruct_faces and solve_faces
   //! (slot, part slots); EF's sedimentation is an add()
   void sweep(StageInputs const& in, FluxRegister& reg);
-  //! R's #289 covariance (hydro_forward.cpp:41-289), posted after the solve
-  //! from faces left post-floor, post-solid and unrotated by solve_faces
-  //! (C's R-C1; open: S keeps in-place rotation, coord_rotation.hpp:37-40)
-  void covariance(FaceStates const& faces, int dim, FluxRegister& reg);
+  //! #289 covariance, RULING V3-3: build in C's before_solve (sweep.hpp:23)
+  //! from post-solid, unrotated faces, no copy; post after the riemann slot
+  void build_covariance(FaceStates const& faces, int dim);  // :1099-1100
+  void post_covariance(int dim, FluxRegister& reg);  // add(d, "covariance")
   //! reconcile: replace() on every x1 seam (mean) and panel seam
   //! (owner_copy), after sedimentation, before positivity; apply_prescribed
   void reconcile(FluxRegister& reg);
