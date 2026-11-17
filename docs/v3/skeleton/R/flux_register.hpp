@@ -1,118 +1,118 @@
 #pragma once
-// V3 lane R skeleton: declarations only, in no build. PROVISIONAL, rev 3
-// (R.rst rev 1.2). Pin chengcli/snapy 9e5de2d4ce497d0b2d4da3295fc1fe969fe7e410;
-// lines are hydro_forward.cpp at the pin unless named. Untested: hypothesis.
-// 1 UNITS. Posts are flux densities per unit face area and time at X's step
-//   dt, before stage weights. The pin forms area-integrated rates instead,
-//   Phi = A F1 + M/dt (:1641, :1646). vic.* posts M/(A_f dt), not dt_corr.
-// 2 FRAME. The output of coord's flux2global<d>_ (coordinate.hpp:353-361):
-//   x2/x3 momentum in the panel face basis; panel seams rotate via coord.
-// 3 PARTS. Fields only on request, else FP64 monitor amounts.
-//   riemann.central@2/@3: ONE summed x2/x3 mass row, dry + species, from the
-//   states after pib->forward (:1089-1090, :1123-1124; cen2 :1108), totals.
-//   No x1 Riemann-only row: bflux1 (:846-849) was the removed cell form.
-// 4 WEIGHTS. X owns them (begin_stage). end_stage runs S = w1_s S + w2_s dt T:
-//   coefficients w2_s prod_{t>s} w1_t (:1685-1691). FP64; on MPS FP32 under
-//   its own contract (meshblock.cpp:1057; R.rst s6).
-// 5 CORRECTIONS. add() in place, in call order, never pre-summed (carry:
-//   x1 advected, then settling, before scale). scale() is bitwise F*=theta
-//   (flux_positivity.cpp:99-121, :154-159). replace(): own and peer entry,
-//   one rule. Kept parts are never scaled (_flux2 - cen2 at :1358-1359).
-// 6 MONITOR. Amounts, counters, fluid-cell domain totals, retry flags; read
-//   once at step end (meshblock.cpp:1566).
-// 7 BOUNDARY. "boundary.prescribed": S's wall/solid mask and values, applied
-//   after reconcile and after post_implicit, booked as a correction.
+// V3 lane R skeleton: declarations only, in no build. Rev 4, FROZEN with
+// R.rst rev 2. Pin chengcli/snapy 9e5de2d4ce497d0b2d4da3295fc1fe969fe7e410;
+// bare :N is hydro_forward.cpp:N there. The contract is R.rst section 4.
+// Units: flux density per unit face area and time at X's step dt, before
+// stage weights. Frame: coord's flux2global<d>_ output. Dims 1..3 = x1..x3.
+// Step: begin_step < post_split (meshblock.cpp:715) < stages < after_combine.
 #include <cstdint>
 #include <string>
 #include <vector>
 #include <torch/torch.h>
 
 namespace harp { struct IntegratorWeight; }  // pyharp integrator.hpp:20-29
-
-namespace snap {  // A rev 2, C rev 5, EF and X use snap
+namespace snap {
 class CoordinateImpl; class PrecisionPolicy; class RegisterMonitor;
-//! posts allowed per phase (checked in debug builds only)
 enum class RegisterPhase : uint8_t {
-  sweep,          // riemann and part slots, sedimentation, covariance
-  reconcile,      // replace() on shared faces, then boundary.prescribed
-  limit,          // positivity: carry adds in order, then scale
+  sweep,          // C's riemann + part slots; sedimentation; R's covariance
+  reconcile,      // replace() on shared faces, then apply_prescribed(d)
+  limit,          // EF: total read, theta sync (an exchange), carry, scale
   divergence,     // du reads total(d); later posts never enter du via R
   pre_implicit,   // A's sources; gravity work reads the limited x1 total
-  implicit,       // vic.mass_dry/species/momentum_t adds; vic.mass_* kept
-  post_implicit,  // boundary.prescribed again; A's m1, I's G remainder
-  after_combine,  // fixers after the RK combine (meshblock.cpp:907-909)
+  implicit,       // I: add() posts, then keep(), then cell_amount()
+  post_implicit,  // apply_prescribed(1); A's m1; I's G remainder, tracers
+  after_combine,  // after X's RK combine: fixers, EF floors, K's chemistry
 };
-//! x1 process seams: mean (S row 9); panel seams: lower-rank owner's copy,
-enum class SeamRule : uint8_t { mean, owner_copy };  // momentum rotated (16r)
-//! keep: riemann.central@2, vic.mass_total@1, vic.mass_dry@1,
-//! vic.momentum_t@1; dims 1 = x1, 2 = x2, 3 = x3; counters incl. EF's 12
+enum class SeamRule : uint8_t { mean, owner_copy };  // S rows 9 and 16r
+//! O's R-O3: how the budget treats an amount
+enum class AmountKind : uint8_t {
+  flux_correction,  // a face change, already inside boundary(d): report only
+  cell_source,      // volume source (A, K, vic.cell): the budget adds it
+  floor,            // local floor or repair (EF, C): the budget adds it
+  fixer,            // global Fixer (A's closure): the budget adds it
+};
 struct RegisterRequest {
-  std::vector<std::string> keep, counters;
-  std::vector<int> step_field;  // dims whose step field a reader needs
+  std::vector<std::string> row_names;  // nvar conserved rows, in row order
+  std::vector<std::string> derived;    // hydro only: "e+pe" (I), "aam" (A)
+  std::vector<std::string> keep;       // e.g. "riemann.central@2"
+  std::vector<std::string> counters;   // C's five, EF's names (R.rst 4.2)
+  std::vector<std::string> retry;      // causes, e.g. "implicit.column"
+  std::vector<int> step_field;         // dims whose step field is read
 };
 
-class FluxRegister {
+class FluxRegister {  // one for hydro, one per Scalar module (R owns class)
  public:
-  //! fixed storage (X's StateStore); one instance for hydro, one per Scalar
-  //! module; R owns the class, not the instances
   void reset(CoordinateImpl const* coord, PrecisionPolicy const& policy,
              int nvar, RegisterRequest const& req);
-  //! lane S's wall and immersed-solid faces: mask and prescribed rows
+  //! S: mask bool [nvar, faces...] (row dimension), value [nvar, faces...]
   void set_prescribed(int dim, torch::Tensor const& mask,
                       torch::Tensor const& value);
-  //! X's call (X.rst s4), the only owner of the stage weights
-  void begin_stage(int stage, harp::IntegratorWeight const& w);
+  void begin_step();  // X, step start: zero step sums, monitor, counters
+  void begin_stage(int stage, harp::IntegratorWeight const& w);  // X only
   void enter(RegisterPhase phase);
-  //! in-place slots: the total for the first post, or a requested part
+  //! in-place slots: the total (first post) or a requested part
   torch::Tensor slot(int dim, std::string const& name);
   torch::Tensor part_slot(int dim, std::string const& part);
   void post_slot(int dim, std::string const& name);
+  //! in call order; a requested part of the same name is copied in the call
   void add(int dim, std::string const& name, std::vector<int> const& rows,
            torch::Tensor const& increment);
-  //! total[rows] *= factor; the amount (factor-1)*F goes to the monitor
+  //! total[rows] *= factor; factor [faces...] or [rows, faces...]
   void scale(int dim, std::string const& name, std::vector<int> const& rows,
              torch::Tensor const& factor);
-  //! own vs peer entry on shared faces, then the rule: total, kept parts,
-  //! companions (riemann.pstar, pressure_base1)
+  //! peer is already in this face's dim, basis and outward sign (S)
   void replace(int dim, torch::Tensor const& faces, torch::Tensor const& peer,
                SeamRule rule);
   void apply_prescribed(int dim);  // books "boundary.prescribed"
-  //! a computed one-row part (one row copied)
   void keep(int dim, std::string const& part, torch::Tensor const& value);
-  //! cell increment (vic.cell, fixers, floors): monitor amount, no field
-  void cell_amount(std::string const& name, torch::Tensor const& vol_du);
-  //! named counter += n on device (face floors, p* clamps, EF status)
-  void count(std::string const& name, torch::Tensor const& n);
-  //! split op outside stages; radial conduction 0.5 a half (meshblock:715,905)
+  //! V du per row (cell_volume interior). stage_weight: w2_s for an amount
+  //! of this stage's du, 1.0 for a change already applied to u
+  void cell_amount(std::string const& name, torch::Tensor const& vol_du,
+                   double stage_weight, AmountKind kind);
+  //! amount and step-end total on a derived row ("e+pe", "aam")
+  void derived_amount(std::string const& name, std::string const& row,
+                      torch::Tensor const& value, double stage_weight,
+                      AmountKind kind);
+  void derived_total(std::string const& row, torch::Tensor const& value);
+  void count(std::string const& name, torch::Tensor const& n);  // += n
+  void record_min(std::string const& name, torch::Tensor const& v);
+  void flag_retry(std::string const& cause, torch::Tensor const& any);
+  //! outside stages, weight as given, never scaled by later w1
   void post_split(int dim, std::string const& name, torch::Tensor const& flux,
                   double weight, double dt);
   torch::Tensor total(int dim) const;                         // kFlux view
   torch::Tensor kept(int dim, std::string const& part) const;  // view
   torch::Tensor step_field(int dim) const;  // kRegister, per unit area
-  void end_stage(double dt);                // step and boundary recursion
-  void rollback();                          // also rolls the monitor back
+  void end_stage(double dt);  // S = w1 S + w2 dt T; amounts likewise
+  void rollback();            // register and monitor, on every block
   RegisterMonitor& monitor();
 };
-//! one device monitor per register; O reads it after accept, never posts
+//! one per register instance; O reads after accept, never posts
 class RegisterMonitor {
  public:
-  void reset_step();  // at begin_stage(0)
-  void rollback();    // X's decide_retry, on every block
+  void rollback();
+  std::vector<std::string> row_names() const;  // conserved, then derived
+  std::vector<std::string> amount_names() const;
+  AmountKind kind(std::string const& name) const;
   torch::Tensor amounts(std::string const& name) const;  // (nrows,) FP64
-  torch::Tensor boundary(int dim) const;  // outward step transfer, FP64
-  torch::Tensor domain_total() const;     // fluid cells only, FP64
-  torch::Tensor counter(std::string const& name) const;
-  torch::Tensor retry_flags() const;      // joins X's stacked read
+  torch::Tensor boundary(int dim) const;  // area-integrated, outward, FP64
+  torch::Tensor domain_total() const;     // fluid cells, (nrows,) FP64
+  std::vector<std::string> counter_names() const;
+  torch::Tensor counters() const;     // int64, counter_names() order
+  torch::Tensor minima() const;       // FP64, record_min names in order
+  torch::Tensor retry_flags() const;  // int32 0/1 per cause, X's one read
 };
-//! fixer/floor base (A: AxialClosureFixer : Fixer); registry is X's (X-2)
+//! fixer base (A: AxialClosureFixer : Fixer); registry and collective: X
 class Fixer {
  public:
   virtual ~Fixer() = default;
   virtual std::string name() const = 0;
   virtual std::vector<int> rows() const = 0;
   virtual torch::Tensor partial_sums() const = 0;  // FP64, to collective
+  //! stage_weight: w2 of the stage just combined; posts cell_amount(...,
+  //! 1.0, AmountKind::fixer) for the change it applies
   virtual void apply(torch::Tensor u, torch::Tensor const& global_sums,
                      double dt, double stage_weight,
-                     FluxRegister& reg) const = 0;  // posts cell_amount
+                     FluxRegister& reg) const = 0;
 };
 }  // namespace snap

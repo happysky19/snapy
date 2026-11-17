@@ -3,11 +3,11 @@
 V3 lane R: flux register, monitor and the hydro stage
 =====================================================
 
-Revision 1.2, 2026-11-17. Owner: Tianhao Le (backup owner). Reviewers:
-Xinyue Wang and Zoey Hu. Design only: no implementation change.
-Declarations are in ``docs/v3/skeleton/R/`` (not built):
-``flux_register.hpp`` (rev 3, 118 lines) and ``hydro_stage.hpp`` (78 lines),
-196 lines in all.
+Revision 2, 2026-11-17: the frozen header that every lane's skeleton cites.
+Owner: Tianhao Le (backup owner). Reviewers: Xinyue Wang and Zoey Hu. Design
+only: no implementation change. Declarations are in ``docs/v3/skeleton/R/``
+(not built): ``flux_register.hpp`` (rev 4, 118 lines) and
+``hydro_stage.hpp`` (82 lines), 200 lines in all.
 
 Every ``path:line`` is at chengcli/snapy
 ``9e5de2d4ce497d0b2d4da3295fc1fe969fe7e410`` unless another commit is named.
@@ -17,7 +17,117 @@ and ``b - a + 1``; "estimate" means a design target, not counted code.
 Nothing in this revision was built, compiled, syntax-checked, tested or
 timed. A claim that needs a run is marked **hypothesis**.
 
-**Changes in revision 1.2** (from ``e0e9adee``). Matrix rows 41-54.
+**Changes in revision 2** (from ``3490d7e1``). Matrix rows 55-80; the
+names are settled in section 4.2, ``retry_flags`` in 4.5.
+
+* Cheng's ruling V3-1 (deletions are counted by the lane that owns the
+  file) is applied: all of D4 is R's, A's remaining 25 + 15 lines stay in
+  R's "after", and ``:988`` stays. The "under A's convention" alternative
+  and conflict K8 are removed. S accepted D7 at rev 1.1
+  (``d03e48880dc28b33eca6c62ff6ad8ad162bdcdb2``, section 9). R stands at
+  3,493 -> 2,761 against 2,794 (section 9).
+* ``begin_step()`` is new: X's step-start call. It zeroes the step sums and
+  the monitor, so the radial ``post_split`` before stage 0 survives.
+  ``begin_stage(0)`` no longer resets anything, and
+  ``RegisterMonitor::reset_step()`` is removed.
+* ``cell_amount`` takes the stage weight and an ``AmountKind``. The register
+  carries every amount through the same ``w1`` recursion as the step field.
+* New: ``AmountKind``, ``derived_amount``, ``derived_total``,
+  ``record_min``, ``flag_retry``, ``RegisterMonitor::row_names``,
+  ``amount_names``, ``kind``, ``counter_names``, ``minima``; the
+  ``RegisterRequest`` fields ``row_names``, ``derived``, ``retry``.
+* ``RegisterMonitor::counter(name)`` is replaced by ``counter_names()`` and
+  ``counters()`` (int64). ``boundary(dim)`` is stated as area-integrated.
+* The stage skeleton settles C's R-C1 and R-C3 and adds K's chemistry to
+  ``after_combine``.
+
+**Every name or signature changed since ``543ff84f`` (rev 1).**
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 33 33
+
+   * - name
+     - at ``543ff84f``
+     - at rev 2
+   * - ``StageWeights``
+     - struct ``{w0, w1, w2}``
+     - removed (X owns the weights)
+   * - ``FluxRegister::reset``
+     - ``(coord, policy, nvar, StageWeights, RegisterRequest)``
+     - ``(coord, policy, nvar, RegisterRequest)``
+   * - ``begin_stage``
+     - ``(int, StageWeights const&)``
+     - ``(int, harp::IntegratorWeight const&)``, X only
+   * - ``begin_step``
+     - none
+     - ``()``, X's step start
+   * - ``RegisterPhase``
+     - seven phases
+     - ``+ after_combine``
+   * - ``SeamRule``
+     - none
+     - ``{mean, owner_copy}``
+   * - ``replace``
+     - ``(dim, name, seam)``
+     - ``(dim, faces, peer, SeamRule)``; ``peer`` already in this face's
+       dim, basis and outward sign
+   * - ``set_prescribed``, ``apply_prescribed``
+     - none
+     - ``(dim, mask[nvar, faces...], value)``, ``(dim)``; books
+       ``boundary.prescribed``
+   * - ``part_slot``
+     - none
+     - ``(dim, part)``
+   * - ``add``
+     - in place
+     - in call order; also copies into a requested part of the same name
+   * - ``scale``
+     - ``factor`` unstated
+     - ``factor`` ``[faces...]`` or ``[rows, faces...]``
+   * - ``cell_amount``
+     - ``(name, vol_du)``
+     - ``(name, vol_du, stage_weight, AmountKind)``
+   * - ``AmountKind``
+     - none
+     - ``{flux_correction, cell_source, floor, fixer}``
+   * - ``derived_amount``, ``derived_total``
+     - none
+     - ``(name, row, value, stage_weight, kind)``, ``(row, value)``
+   * - ``count``, ``record_min``, ``flag_retry``
+     - none
+     - ``(name, n)``, ``(name, v)``, ``(cause, any)``
+   * - ``post_split``
+     - ``(dim, name, flux, weight, dt)``
+     - unchanged signature; now never scaled by later ``w1``
+   * - ``monitor()``
+     - none
+     - ``RegisterMonitor& monitor()``
+   * - ``RegisterRequest``
+     - ``{keep, step_field}``
+     - ``{row_names, derived, keep, counters, retry, step_field}``
+   * - ``RegisterMonitor``
+     - ``amounts, boundary, domain_total, counters, retry_flags``
+     - ``+ rollback, row_names, amount_names, kind, counter_names,
+       minima``; ``counters`` int64; ``retry_flags`` int32;
+       ``boundary`` area-integrated; ``domain_total`` fluid cells
+   * - ``Fixer::apply``
+     - ``(u, sums, dt, stage_weight, reg)``
+     - unchanged; ``stage_weight`` is the combined stage's ``w2``, posts
+       ``cell_amount(..., 1.0, AmountKind::fixer)``
+   * - parts
+     - none named
+     - ``riemann.central@2/@3``, ``riemann.pstar`` (companion),
+       ``pressure_base1@1`` (split path), ``vic.mass_total@1``,
+       ``vic.mass_dry@1``, ``vic.momentum_t@1``, ``covariance.dry@2/@3``,
+       ``mass.dry.limited@1/@2/@3`` (scalars); no x1 Riemann-only row
+   * - stage skeleton
+     - ``Sweep`` class
+     - C's free functions; ``HydroStage::covariance``,
+       ``after_combine``; ``StageInputs::weight``
+
+**Changes in revision 1.2** (from ``e0e9adee``, kept for the record).
+Matrix rows 41-54.
 
 * Lane C's sweep is two free functions, ``reconstruct_faces`` and
   ``solve_faces`` (C ``sweep.hpp:21-26`` at ``2d6aef4d``). R's stage no
@@ -36,11 +146,10 @@ timed. A claim that needs a run is marked **hypothesis**.
   * FP32 on CUDA uses FP32 parts and FP64 step accumulation, and MPS has its
     own contract (section 6).
 
-* K8 is confirmed with line numbers: A rev 2 books 169 lines of R's files
-  (``A.rst:181-185``, ``:766-767``, ``:776``). The ceiling arithmetic for
-  both conventions is in section 9.
+* (Rev 1.2 flagged A's 169 booked lines; ruling V3-1 settles them for R,
+  see revision 2.)
 * New D7: ``hydro.cpp:344-377`` (``_x1_ghost_rows``, 34 lines), which S's
-  transport takes (S section 9). It is conditional on S.
+  transport takes (S section 9). S accepted it at rev 1.1.
 
 **Changes in revision 1.1** (from ``1bc247f9``), after Zoey's notes (7
 agree, 1 conflict, 8 request), Xinyue's notes (6/3/9), the program
@@ -85,16 +194,21 @@ rule (lane S supplies the mask and values). The stage order. The
 
 **Read, owned elsewhere (heads read through the GitHub API).**
 
-* C: happysky19 ``v3-design/C`` ``2d6aef4dd15f14d1cc5c1d8d38166182b6eea9e0``;
-* X: UCzhangxi ``v3-design/X`` ``77c65d5a``;
-* A: JiachenLiu-Atmos ``v3-design/A`` ``b6a40897``;
-* O: JiachenLiu-Atmos ``v3-design/O`` ``b66b6745`` (rev 2; the head is now
-  ``c12f78bb``, not re-read);
-* I: XinyueWang05 ``v3-design/I`` ``c6f9d957`` (the head is now
-  ``8c2ba226``, not re-read);
-* S: XinyueWang05 ``v3-design/S`` ``fe1612b14521bcd511f15129f29ce702d7c9c262``
-  (rev 1; the exchange table first read at ``48b2328d``);
-* EF: zoeyzyhu ``v3-design/EF`` ``1a529719``;
+* C rev 5.1: happysky19 ``v3-design/C``
+  ``ab14e5a7cd021387d6422de6cc36d9514e12a8cb``;
+* X rev 2: UCzhangxi ``v3-design/X`` ``034ef405dd3e0385493dc8fab9fcf1e03482db13``
+  (its live head; not re-read for this revision beyond the hook names);
+* A rev 2: JiachenLiu-Atmos ``v3-design/A``
+  ``b6a40897b16273475bbf245cb4029c6572e411ce``;
+* O: JiachenLiu-Atmos ``v3-design/O`` ``c12f78bbfe131808274f1e338f40eafd04a860c8``
+  (not re-read; R-O1 to R-O3 as carried by the program manager);
+* I rev 2: XinyueWang05 ``v3-design/I``
+  ``8c2ba2261a7c25821c64b58670af68c4d5907cbb``;
+* S rev 1.1: XinyueWang05 ``v3-design/S``
+  ``d03e48880dc28b33eca6c62ff6ad8ad162bdcdb2``;
+* EF: zoeyzyhu ``v3-design/EF`` ``b58e12bb42133a3830f8f07f3aaf1cbb06663763``;
+* K: no ``v3-design/K`` branch on any of the forks I listed
+  (``git ls-remote``), so section 4.2 K answers from the pin;
 * pyharp ``src/integrator/integrator.hpp:19-29`` at main ``6bc01d53``.
 
 **Inputs I could not read.** Linfeng's ``fd3d68a`` text, the 12:29 seven
@@ -206,12 +320,23 @@ That keeps the pin's ``E = (E - c_adv) - c_sed`` rounding
 (``flux_positivity.cpp:154-159``). ``scale`` multiplies the rows in place,
 as ``f.mul_(where(f > 0, th_lo, th_hi))`` does (``flux_positivity.cpp:99-121``).
 
-**3.4 Step transfer.** ``begin_stage(s, w)`` gives this stage's weights.
-``end_stage(dt)`` updates ``S <- w1_s S + w2_s dt T_s`` and the same for
-the boundary sums. Unrolled over the stages, the coefficient of ``T_s`` is
-``w2_s prod_{t>s} w1_t``, the weight at ``:1685-1691``. So no lane needs
-the whole stage table. **Hypothesis:** the recursion and the product form
-differ only in FP64 rounding (gate G-R3).
+**3.4 Step transfer.** ``begin_step()`` (X, step start) zeroes ``S_d``,
+the boundary sums, the amounts, the counters, the minima and the retry
+flags. Then the step-start ``post_split`` runs (the first radial half,
+``meshblock.cpp:715``), before ``u0`` is saved (``meshblock.cpp:721``). So
+it enters the step with its own weight, not scaled by any ``w1``, and goes
+to a direct part of the sums. ``begin_stage(s, w)`` gives this stage's
+weights. ``end_stage(dt)`` updates ``S <- w1_s S + w2_s dt T_s``. The
+boundary sums and every amount follow the same recursion, ``A <- w1_s A +
+sum_k (w_k a_k)``, where ``w_k`` is the ``stage_weight`` passed with each
+amount: ``w2_s`` for an amount of this stage's ``du``, and 1.0 for a change
+already applied to ``u``. Amounts posted after ``end_stage(s)``, in
+``after_combine``, are scaled by the later stages' ``w1`` only, which is how
+a change to ``u_s`` reaches the step's result. The final step sum is
+``direct + sum_s w2_s prod_{t>s} w1_t (dt T_s)``, the weight at
+``:1685-1691``. So no lane needs the whole stage table. **Hypothesis:** the
+recursion and the product form differ only in FP64 rounding (gates G-R3,
+G-R14).
 
 **3.5 boundary.prescribed.** Lane S gives, per direction, the mask of
 physical wall faces and immersed-solid faces and the prescribed rows
@@ -266,10 +391,11 @@ was profiled.
    reconciled and prescribed but never scaled.
 5. **Reads.** ``total(d)`` at the caller's phase, ``kept()``,
    ``step_field()``, monitor views. No EOS call.
-6. **Monitor.** Per-post FP64 amounts (area-weighted for faces,
-   volume-weighted for cells), named counters, fluid-cell domain totals and
-   retry flags. All are on device, read once in X's step-end read.
-7. **Reset.** ``begin_stage(0)`` calls ``RegisterMonitor::reset_step()``.
+6. **Monitor.** One per register instance. Rows (``row_names()``), FP64
+   amounts with an ``AmountKind``, area-integrated boundary sums,
+   fluid-cell domain totals, int64 counters, FP64 minima and int32 retry
+   flags. All are on device, read once in X's step-end read.
+7. **Reset.** ``begin_step()`` zeroes the step and the monitor.
    ``FluxRegister::rollback()`` zeroes the register and calls
    ``RegisterMonitor::rollback()``; X's ``decide_retry`` calls it on every
    block. Nothing is written to restart.
@@ -277,137 +403,240 @@ was profiled.
 4.2 Client answers
 ~~~~~~~~~~~~~~~~~~
 
-**EF (Zoey).**
+**I (Xinyue, ``8c2ba226``).**
 
-* Q1: ``:858-866`` (9) and ``:1154-1252`` (99) are R's deletion.
-* Q2: per-post amounts. A field only on request. EF keeps its own settling
-  buffer (Zoey's note).
-* Q3: ``scale``, with the carry as ordered ``add`` calls before it.
-* Q4: ``replace`` in ``reconcile``, after sedimentation and before
-  positivity.
-* Q5: no EOS call.
-* EF's R4 (hydro mass flux without covariance): the Scalar module requests
-  ``covariance.dry@2`` and ``@3``, as the pin keeps ``_cov_dry``
-  (``:1106``); R4 = summed total mass row minus that part.
-* EF's 12 status counters are ``count()`` names, listed by EF in
-  ``RegisterRequest::counters``.
-* EF's renames (``reg.add``, ``reg.scale``, string names, ``Fixer``
-  subclasses) match the header.
+* Posts in ``implicit``, in this order: ``add(1, "vic.mass_dry", {IDN},
+  f)``, ``add(1, "vic.mass_species", {ICY..}, f)``, ``add(1,
+  "vic.momentum_t", {IVY, IVZ}, f)``.
+* **Post-and-keep order, settled.**
 
-**I (Xinyue).**
+  1. The three ``add`` calls. Each one also copies its summed rows into the
+     requested part of the same name in the same call (``vic.mass_dry@1``,
+     ``vic.momentum_t@1``), so no later call can reorder them.
+  2. ``keep(1, "vic.mass_total", f)``.
+  3. The ``cell_amount`` calls.
+  4. The per-column status (4.5).
 
-* Posts ``vic.mass_dry`` (IDN), ``vic.mass_species`` (ICY..),
-  ``vic.momentum_t`` (IVY, IVZ) by ``add`` on x1.
-* Kept: ``vic.mass_total@1``, ``vic.mass_dry@1`` (I's R-1: accepted) and
-  ``vic.momentum_t@1`` (home-thread decision on A's R-4). ``total(1)``
-  includes the vic posts after ``implicit``.
-* Monitor amounts: ``vic.cell``, ``vic.mass_clamped``,
-  ``vic.momentum_t.top`` (I's R-2: accepted as I defines it).
-* Dims are numbered 1, 2, 3 for x1, x2, x3 (I's R-3).
-* Phase: ``post_implicit``.
-* ``retry_flags`` takes the OR of I's per-column status after any retry.
-  Only columns that still fail set it. The per-column FP64 retry is still
-  open (Cheng's ruling (c)).
-* Energy as a face transfer stays a **hypothesis** (gate G-R7); until then
-  it is in ``vic.cell``.
+  ``post_implicit`` starts with ``apply_prescribed(1)`` on the total and on
+  every x1 kept part. Only after it do A's m1, I's gravity-work remainder
+  and the tracer transfer read.
+* **The stage weight of ``cell_amount`` (I's R-4), settled.** The
+  signature is ``cell_amount(name, V du, stage_weight, kind)``. For
+  ``vic.cell`` I passes ``w2_s``, the ``w2`` of the ``w`` that X gave
+  ``begin_stage``, because the amount is part of this stage's ``du``.
+  ``end_stage`` then scales by the later ``w1_t``, so the step amount is
+  ``c_s V du`` with ``c_s = w2_s prod_{t>s} w1_t`` (``:1685-1691``,
+  section 3.4).
+* **Kinds.**
 
-**A (Jiachen).**
+  * ``vic.cell`` is ``cell_source``.
+  * ``vic.mass_clamped`` is ``flux_correction``: the posted transfers are
+    already the clamped ones, so its effect is inside ``boundary(1)``, and
+    it is reported, not re-added. This is R's classification, and I to
+    confirm, because ``I.rst`` calls it a floor amount.
+  * ``vic.momentum_t.top`` is ``flux_correction``: it reports a face value
+    of a posted transfer.
+* **How the scheme-9 top value survives ``boundary.prescribed``, settled.**
+  ``vic.momentum_t`` is posted under scheme 9 as the bottom-up prefix sum,
+  top face included, as I proposes (I's R-2). It survives
+  ``apply_prescribed(1)`` in ``post_implicit`` for two reasons:
 
-* ``riemann.central@2/@3`` is one summed mass row. It comes from the states
-  after ``pib->forward`` (``:1089-1090``, ``:1123-1124``), the tensor that
-  both ``cen2`` (``:1108``) and the solver (``:1109``) read. A rev 2 found
-  the same one tensor (``A.rst`` R-1 at ``b6a40897``). Densities are totals.
-* Split radial conduction: ``post_split(..., 0.5, dt)`` per half
-  (``meshblock.cpp:715``, ``:905``).
-* Fixer base: ``snap::Fixer``.
-* A's R-3, settled in the home thread: the monitor tracks AAM by named
-  source; A posts its corrections with ``cell_amount``. R adds no AAM code.
-* A's R-4, settled: ``vic.momentum_t@1`` is kept per face. The x1-wall AAM
-  is A's K-weighted boundary reduction of ``step_field(1)``, posted with
-  ``cell_amount``; R adds no read for it.
-* A's R-5, settled: kept face parts are FP32 in a CUDA FP32 run, and the
-  step accumulation is FP64. MPS: section 6.
+  * S's mask sets only the mass, species, energy and scalar rows, and
+    leaves the momentum rows unset (``seam_register.hpp:52-60`` at
+    ``d03e4888``);
+  * I posts ``vic.momentum_t.top`` as an amount in ``implicit``, before
+    ``post_implicit``, so the diagnostic never reads the prescribed total.
 
-**O (Jiachen).** R's monitor owns the fluid-cell domain totals. O formats
-the cycle line. Readers multiply densities by ``face_area<d>``; monitor
-amounts are already weighted. A single increment is an amount, not a field.
-The boundary transfer is direct, after reconciliation and
-``boundary.prescribed``. ``observe`` runs after accept and before the next
-``begin_stage(0)``.
+  If EF ever chose to prescribe tangential momentum (S's open option), the
+  top face of ``vic.momentum_t`` would be zeroed in ``total(1)`` and in the
+  kept part, and A's axial source would change. That option then needs
+  A's and I's agreement. Whether ``.top`` enters the axial torque stays A's
+  question.
+* ``total(1)`` includes the vic posts after ``implicit``. The phase is
+  ``post_implicit``. Energy as a face transfer stays a **hypothesis**
+  (G-R7). ``retry_flags`` is in 4.5.
 
-**X (Xi).** ``begin_stage(stage, w)`` with host doubles is the only weight
-input. ``rollback`` is in the reset list. FP64 accumulator (FP32 on MPS).
-Corrections are per stage, plus the ``after_combine`` phase for fixers that
-run after the combine (``meshblock.cpp:907-909``, ``:983-990``). The
-monitor joins the stacked retry read.
+**O (Jiachen; R-O1 to R-O3 as carried by the program manager; O's head
+``c12f78bb`` was not re-read).**
 
-**C (Tianhao), rev 5 questions R8-R12.**
+* **R-O1, ``row_names()``.** The conserved rows come first, in row order,
+  from ``RegisterRequest::row_names``: Hydro's from its EOS, and a Scalar
+  module's from its scalar names. The derived rows follow, from
+  ``RegisterRequest::derived`` (hydro instance only). Who supplies what:
 
-* R8: ``part_slot`` gives a writable view, so there is no copy.
-* R9: there is no ``riemann.mass@1``; the cell form is gone.
-* R10: ``count(name, n)``.
-* R11: ``pressure_base1`` is a companion, reconciled by ``replace`` as the
-  pin's message carries it (S row 9).
-* R12: ``snap``.
-* Sweep: C's two free functions (``sweep.hpp:21-26``) are called from R's
-  ``HydroStage::sweep``; there is no ``Sweep`` class.
-* Covariance: R's (``hydro_forward.cpp:41-289``). Its rotations are already
-  coord's calls (``prim2local2_/3_`` at ``:94-96`` and ``:258-260``,
-  ``flux2global2_/3_`` at ``:213-215``). Moving them to coord's one rotation
-  claims no line change.
-* C's ``riemann.mass@1`` (``C.rst:978-981``) was proposed for the cell form,
-  which is removed. Request to C: drop it.
+  * conserved rows of ``domain_total``: R, from the state over fluid
+    cells;
+  * ``e+pe``: I, with ``derived_total("e+pe", ...)`` from
+    ``GravityWork::potential`` at step end, and its amounts by
+    ``derived_amount``;
+  * ``aam``: A, with the same two calls;
+  * scalars: each Scalar module's own register instance and monitor (EF's
+    Q-R-b).
 
-**S (Xinyue).**
+  ``boundary(dim)`` covers the conserved rows. A derived row's owner posts
+  its boundary transfer as ``derived_amount("<row>.boundary.<dim>", row,
+  value, w, AmountKind::cell_source)``, inflow positive, so O's budget
+  formula needs no special case. That convention is R's proposal; A and I
+  to confirm.
+* **R-O2.** ``counter_names()`` lists ``RegisterRequest::counters`` in
+  order. ``counters()`` is int64 ``[ncounters]`` on device. ``minima()``
+  is FP64, one entry per ``record_min`` name (EF's ``pos_min``).
+* **R-O3, ``AmountKind``.** ``flux_correction`` is a face change already
+  inside ``boundary``; it is reported, never added. ``cell_source``,
+  ``floor`` and ``fixer`` are added. The budget is ``delta domain_total +
+  sum_d boundary(d) - sum(amounts of kind cell_source, floor, fixer) =
+  residual``.
+* **``boundary(dim)``.** Area-integrated: the sum over the block's physical
+  boundary faces of ``A_f S_d``, outward positive, FP64 (FP32 on MPS), in
+  units of the row's conserved quantity. ``S_d`` already carries ``dt`` and
+  the stage weights. It includes ``boundary.prescribed`` and ``post_split``
+  entries.
+* ``observe`` runs after accept and before the next ``begin_step()``.
 
-* ``replace(d, faces, peer, rule)`` takes S's peer entry for each shared
-  face. ``SeamRule::mean`` is the pin's x1 rule on process seams (S row 9,
-  ``:937``, ``:942``).
-* ``SeamRule::owner_copy`` is S's row 16r for cubed-sphere panel seams. The
-  lower-rank block owns the face. Non-momentum rows are copied raw, and
-  momentum goes through coord's ``PanelRotation::panel_to_panel_rows_``.
-  The gate is 1e-14 relative on momentum, a **hypothesis** in S.
-* x2/x3 edges inside one panel need no ``replace``. Gate G-R2 checks that
-  bitwise.
-* The replaced amount (owner minus own) is a monitor amount named
-  ``reconcile.x1`` or ``reconcile.panel`` (S's question 3).
-* S supplies the ``boundary.prescribed`` mask and values. R calls
-  ``apply_prescribed`` (S's question 1).
-* Still open: S rev 1's seam table lists x1 **process** seams only. It does
-  not state a rule for same-process x1 seams (K6).
+**EF (Zoey, ``b58e12bb``, Q-R-a to Q-R-i).** Q1-Q5 stand as in rev 1.2.
+
+* **a.** Write calls:
+
+  * ``count(name, n)`` adds into an int64 counter;
+  * ``record_min(name, v)`` keeps an FP64 minimum;
+  * ``flag_retry(cause, any)`` ORs into an int32 flag.
+
+  The names are declared in ``RegisterRequest::counters`` and ``retry``.
+  ``EfStatus``'s slots move to the monitor in R-1. Until then ``EfStatus``
+  stays EF's device tensor in X's stacked read.
+* **b.** Passive scalars are their own ``FluxRegister``: one per Scalar
+  module, ``nvar`` = its scalars, with its own monitor.
+* **c.** At the pin the scalars read ``phydro->flux<d>()`` after the hydro
+  forward, when the IDN row is the post-reconcile one (positivity scales
+  species only, and the carry writes IPR and momentum;
+  ``flux_positivity.cpp:99-121``, ``:124-167``). In V3 the hydro
+  ``total(1)`` also holds the vic posts by then. So the Scalar module
+  requests ``mass.dry.limited@1/@2/@3``: a one-row part that the hydro
+  register fills with ``total(d)[IDN]`` as ``limit`` ends.
+
+  * R3 reads that part.
+  * R4 is ``mass.dry.limited@d - covariance.dry@d``, the same operation as
+    ``scalar.cpp:161`` (**hypothesis**: bitwise, because the operands are
+    the same values).
+* **d.** The theta sync is an exchange inside ``limit``. X splits ``limit``
+  into the read, S's exchange (pack, host, unpack) and the posts. Any phase
+  may hold an X exchange; ``reconcile`` is only the phase that owns
+  ``replace``.
+* **e.** ``cell_amount`` in ``after_combine`` passes ``stage_weight =
+  1.0``: the change is already in ``u``. Later stages' ``w1`` still apply
+  (section 3.4). ``vol_du`` is either a per-row field ``[nrows,
+  cells...]``, already times the cell volume, which the register sums, or
+  a summed ``(nrows,)``.
+* **f.** Local floors and repairs are **not** ``Fixer`` subclasses. They
+  post ``cell_amount(..., AmountKind::floor)`` directly. ``Fixer`` is for
+  corrections that need a global collective; X's registry lists only
+  those.
+* **g.** ``factor`` is ``[faces...]``, broadcast over ``rows``, or
+  ``[rows, faces...]``, per row.
+* **h.** EF's names are adopted: ``sedimentation`` (a post);
+  ``positivity.carry``, ``positivity.withhold``, ``scalar.upper_bound`` and
+  ``scalar.positivity.withhold`` (``flux_correction``); ``eos.floor``,
+  ``eos.borrow`` and ``eos.fix_vapor`` (``floor``).
+* **i.** Open. R keeps the pin's behaviour: no second ``replace`` after the
+  carry. The carry may be two-valued at internal x1 seams (**hypothesis**,
+  as EF says), and the same holds at panel seams (S's K7). G-R2 is extended
+  to the end of ``limit``. If it fails, S's second ``replace`` in
+  ``limit`` is the fix (lanes X and EF).
+
+**X and A.**
+
+* **Step-start hook.** ``begin_step()`` is X's step-start call. It runs
+  before the radial ``post_split``, so the stage-0 reset no longer erases
+  it (pin: ``begin_step`` of diffusion at ``meshblock.cpp:715``, ``u0``
+  saved at ``:721``).
+* **``after_combine``.** ``RegisterPhase::after_combine``, run by X's hook
+  after the combine (``meshblock.cpp:901``) and before boundaries. It holds
+  EF's conserved limiter and floors (``:907-909``), K's chemistry on the
+  last stage (``:949-981``) and A's closure (``:983-990``). Naming the hook
+  in X's schedule is X's (row 49).
+* **``Fixer::apply``** receives ``stage_weight`` = ``w2`` of the stage just
+  combined, passed by X. A's closure applies ``-w2 dt R`` with it, and
+  posts its change with ``cell_amount(..., 1.0, AmountKind::fixer)``.
+* ``begin_stage(stage, w)`` remains the only weight input. ``rollback`` is
+  in X's reset list. Accumulation is FP64, FP32 on MPS.
+
+**S (Xinyue, ``d03e4888``).**
+
+* **The prescribed mask has a row dimension**: bool ``[nvar, faces...]``,
+  with value ``[nvar, faces...]`` (``seam_register.hpp:59-60``). That is
+  settled in the header.
+* **Transposed panel edges.** I did not have the text of Xi's note 11 on S.
+  The rule R adopts: ``replace``'s ``peer`` arrives already mapped into
+  this block's face ``dim``, covariant basis and outward normal sign.
+
+  * Where an edge is x2 on one panel and x3 on the other, S maps the dims.
+  * Where the outward normals are opposite after mapping, S multiplies
+    every flux row by -1: a flux through a face changes sign with its
+    normal.
+  * Momentum rows also go through ``PanelRotation``.
+
+  ``owner_copy`` then copies. **Request to S:** add ``peer_dim`` and
+  ``normal_sign`` to ``SeamEntry``, which has only ``dim``
+  (``seam_register.hpp:35-40``). Gate G-R13.
+* D7 is accepted unconditionally (S.rst at ``d03e4888``, section 9).
+* K6 is settled by S rev 1.1: every x1 seam, process or same-process, takes
+  ``replace(1, ..., SeamRule::mean)``.
+* S counts no hydro deletions (S.rst section 9). See 9 for R-C2.
+
+**C (Tianhao, ``ab14e5a7``).**
+
+* The sweep is C's two free functions, with no ``Sweep`` class. The #289
+  covariance is R's (``C.rst:44-46``). ``riemann.mass@1`` is dropped
+  (``C.rst:47-49``).
+* **R-C1** (``C.rst:1708-1717``). Adopted, with a condition: ``solve_faces``
+  leaves ``faces`` holding the post-floor, post-solid, unrotated states,
+  and R's ``covariance`` reads them after the solve. The pin reads ``wlr2``
+  after ``pib->forward`` and before the solver rotates (``:1089-1097``).
+  This needs S's in-kernel rotation (S2). If S keeps in-place tensor
+  rotation, it costs one face-state copy per direction (requirement 9).
+  Open with S.
+* **R-C2** (``C.rst:1718-1723``). Resolved: ``hydro.cpp:727-776`` is
+  counted once, in R's D1. C counts no deletion of it, and neither does S
+  (S.rst section 9, last paragraph). Request to S: relabel "C's 50" as R's
+  D1.
+* **R-C3** (``C.rst:1724-1728``). Adopted: ``part_slot(1,
+  "pressure_base1")``, written by C's ``WellBalancedX1``. It is requested
+  as ``pressure_base1@1`` on the split path only, and reconciled by
+  ``replace`` as a companion.
+* **Counter names.** C's five are adopted: ``face_floor.rho``,
+  ``face_floor.p``, ``face_floor.species``, ``riemann.pstar_clamp`` and
+  ``riemann.llf`` (``C.rst:1086-1088``).
+* **Moved citations.** Rev 1.2 cited ``C.rst:776`` and ``:978-981`` at
+  ``2d6aef4d``. At ``ab14e5a7`` those statements are revised, and the
+  citations above are at ``ab14e5a7``.
+
+**K (no published design; answered from the pin).**
+
+* Chemistry at the pin is the last stage's saturation adjustment after the
+  combine (``meshblock.cpp:949-981``). It writes only the species rows
+  (``:972``).
+* Phase: ``after_combine``, last stage only, as at the pin.
+* Posts: ``cell_amount("kintera.chemistry", V du, 1.0,
+  AmountKind::cell_source)``. ``V`` is ``cell_volume`` over the interior
+  cells, the ``part`` the pin uses (``:967-968``). ``du`` is the change of
+  each species row. **Hypothesis:** the species amounts sum to round-off,
+  because the reaction moves mass between species.
+* K to confirm both points.
 
 4.3 Conflicts
 ~~~~~~~~~~~~~
 
-* **K1, positivity form.** Resolved. C rev 5 adopts ``scale()``
-  (``C.rst`` at ``2d6aef4d``, section 4 "Ordering", item 4, and its R3).
-  My rev 1 statement that C rev 5 was unpushed was stale.
-* **K2, weights.** Resolved with one owner: ``begin_stage(stage, w)`` and
-  the recursion of 3.4. ``reset`` takes no table.
-* **K3, namespace.** Resolved: ``snap``. A rev 2 and C rev 5 use it, and EF
-  follows R.
-* **K4, "post-terrain".** Resolved at the source level. ``terrain`` occurs
-  nowhere in ``src`` at the pin, and A rev 2 reads one tensor at
-  ``:1089-1090``. A's separate check is pending.
-* **K5, cell increments.** Monitor amounts only (X keeps the register
-  face-only).
-* **K6, same-process x1 seams. Flagged.** The pin averages only process
-  seams (``:880-888``). Requirement 5 asks one rule per shared face. R
-  keeps the pin's scope (bitwise). Gate G-R10 measures the same-process
-  difference; Cheng and S decide.
-* **K7, frame of the carry's momentum rows. Flagged.** The carry adds donor
-  velocity times mass (``:1234``, cell ``u/rho``) to post-rotation face
-  rows. **Hypothesis:** the cell and face components agree for x1. On
-  cubed-sphere x2/x3 faces they may not; gate G-R12.
-* **K8, AAM lines counted twice. Flagged.** A rev 2's section 9 counts
-  ``hydro_forward.cpp`` AAM ranges 136 -> 25 and ``hydro.cpp`` 33 -> 15 in
-  A's own budget (``A.rst:766-767``, ``:776`` at ``b6a40897``; booking
-  table ``:181-185``). R's D4 counts 168 of those 169 lines: A's 136
-  includes ``:988``, the (3.A) heading, which is not AAM. R proposes C's
-  convention: R counts the deletion, and A counts only its new code. The
-  25 + 15 lines then sit in R's "after". Under A's convention, R's ceiling
-  is missed (section 9). Request to A, decision for Cheng if A disagrees.
-
+* **K1, positivity form.** Resolved: ``scale()`` (C rev 5).
+* **K2, weights.** Resolved: ``begin_stage(stage, w)``, the recursion of
+  3.4 and ``cell_amount``'s ``stage_weight``.
+* **K3, namespace.** Resolved: ``snap``.
+* **K4, "post-terrain".** Resolved at the source level (post-solid states,
+  ``:1089-1090``). A's separate confirmation is still pending.
+* **K5, cell increments.** Resolved: monitor amounts only.
+* **K6, same-process x1 seams.** Resolved by S rev 1.1 (``mean`` on every
+  x1 seam). G-R10 measures the change.
+* **K7, the carry's momentum frame.** Still flagged: G-R12, and S's K7
+  paragraph.
 
 4.4 Resolution matrix
 ~~~~~~~~~~~~~~~~~~~~~
@@ -541,7 +770,7 @@ the program manager's eight additions, C = lane C rev 5, I = lane I rev 2.
    * - 29
      - P
      - monitor reset/rollback member
-     - ``reset_step``, ``rollback``
+     - ``rollback``; ``begin_step`` (rev 2; ``reset_step`` removed)
    * - 30
      - P
      - one owner for the stage weights
@@ -586,7 +815,7 @@ the program manager's eight additions, C = lane C rev 5, I = lane I rev 2.
    * - 40
      - A rev 2 s9
      - AAM lines in A's and R's tables
-     - K8
+     - V3-1: R's (section 9)
    * - 41
      - C rev 5
      - ``Sweep`` class vs free functions
@@ -602,7 +831,7 @@ the program manager's eight additions, C = lane C rev 5, I = lane I rev 2.
    * - 44
      - A rev 2
      - 169 AAM lines in R's files booked to A
-     - K8 confirmed, with arithmetic in section 9
+     - V3-1: all of D4 is R's
    * - 45
      - S rev 1
      - panel seam row 16r
@@ -614,7 +843,7 @@ the program manager's eight additions, C = lane C rev 5, I = lane I rev 2.
    * - 47
      - S rev 1
      - same-process x1 seams
-     - **open** (K6); not in S's seam table
+     - settled by S rev 1.1 (``mean`` on every x1 seam)
    * - 48
      - S rev 1
      - replaced amount as a monitor name
@@ -639,12 +868,162 @@ the program manager's eight additions, C = lane C rev 5, I = lane I rev 2.
    * - 53
      - S rev 1 s9
      - ``hydro.cpp:344-377`` to S's transport
-     - D7, conditional
+     - D7, accepted by S at ``d03e4888``
    * - 54
      - X (Xinyue)
      - notes whose text I never had
      - **open**: 3 of her 6 agree notes and 2 of her 9 requests; I have
        only the topics of the other 13
+   * - 55
+     - Cheng V3-1
+     - deletions by file owner; D4 all R's; ``:988`` stays
+     - section 9; K8 removed
+   * - 56
+     - program manager
+     - header freeze, change list since ``543ff84f``
+     - revision 2 table above
+   * - 57
+     - I R-4
+     - ``c_s`` on ``cell_amount``
+     - ``stage_weight`` argument; recursion (3.4)
+   * - 58
+     - I
+     - post-and-keep order
+     - 4.2 I: adds, keep, amounts, status
+   * - 59
+     - I R-2
+     - scheme-9 top value vs ``boundary.prescribed``
+     - momentum rows unmasked; ``.top`` posted in ``implicit``
+   * - 60
+     - O R-O1
+     - ``row_names()``; E+PE, AAM, scalar rows
+     - ``row_names``, ``derived_total``, ``derived_amount``
+   * - 61
+     - O R-O2
+     - ``counter_names()``; counter dtype
+     - int64 counters; FP64 ``minima()``
+   * - 62
+     - O R-O3
+     - flux correction vs cell source
+     - ``AmountKind``
+   * - 63
+     - O
+     - ``boundary(dim)`` area-integrated?
+     - yes; outward, FP64
+   * - 64
+     - EF Q-R-a
+     - counter and retry write call
+     - ``count``, ``record_min``, ``flag_retry``
+   * - 65
+     - EF Q-R-b
+     - scalar register instance
+     - one per Scalar module
+   * - 66
+     - EF Q-R-c
+     - phase of the scalars' hydro total
+     - ``mass.dry.limited@d`` at the end of ``limit``
+   * - 67
+     - EF Q-R-d
+     - theta sync phase
+     - an exchange inside ``limit``
+   * - 68
+     - EF Q-R-e
+     - ``cell_amount`` after the combine
+     - weight 1.0; field or ``(nrows,)``
+   * - 69
+     - EF Q-R-f
+     - local floors as ``Fixer``
+     - no: ``AmountKind::floor``
+   * - 70
+     - EF Q-R-g, h
+     - factor shape; post names
+     - 4.2 EF
+   * - 71
+     - EF Q-R-i
+     - carry at internal seams
+     - **open**; G-R2 extended
+   * - 72
+     - X, A
+     - step-start hook for ``post_split``
+     - ``begin_step()``
+   * - 73
+     - X, A
+     - ``after_combine`` hook
+     - phase and ``HydroStage::after_combine``
+   * - 74
+     - X, A
+     - ``w2`` to ``Fixer::apply``
+     - ``stage_weight`` = combined stage's ``w2``
+   * - 75
+     - S
+     - prescribed mask row dimension
+     - ``[nvar, faces...]``
+   * - 76
+     - S (Xi note 11)
+     - transposed panel edges
+     - ``peer`` mapped by S; G-R13; request ``peer_dim``, ``normal_sign``
+   * - 77
+     - C R-C1
+     - covariance face states
+     - post-solid, unrotated; needs S2
+   * - 78
+     - C R-C2
+     - 50 lines at ``hydro.cpp:727-776``
+     - once, in R's D1
+   * - 79
+     - C R-C3
+     - ``pressure_base1`` poster
+     - ``part_slot(1, "pressure_base1")`` by C
+   * - 80
+     - K
+     - chemistry phase and weighting
+     - ``after_combine``, ``V du``, ``cell_source``
+
+
+4.5 retry_flags (lane I's proposal (c))
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``retry_flags()`` is int32, one 0/1 slot per cause named in
+``RegisterRequest::retry``, set on device by ``flag_retry(cause, any)``
+(an OR). It is read once in X's stacked step-end read
+(``meshblock.cpp:1058-1061``, ``:1565-1566``). X's ``decide_retry`` redoes
+the step if any slot is set, as today.
+
+Causes: ``implicit.column`` (I), ``eos.limiter_mark`` (EF; today
+``meshblock.cpp:1052-1056``), and EF's vapor-repair cause (today slots 6
+and 7, ``meshblock.cpp:1571-1577``; EF names it).
+
+Written on lane I's proposal (c), which is still open with Cheng (``I.rst``
+section 10(c) at ``8c2ba226``). The FP32 solve fails per column. Only the
+failed columns are retried in FP64, inside the stage. ``implicit.column``
+is set only if a column also fails in FP64.
+
+.. list-table:: What changes
+   :header-rows: 1
+   :widths: 25 37 38
+
+   * - item
+     - pin
+     - rev 2 on proposal (c)
+   * - FP32 solve failure
+     - the whole block re-solves in FP64 (``I.rst`` 10(c))
+     - only the failed columns re-solve; the other columns keep FP32. That
+       is a result change beyond round-off in steps with a failing column
+       (``I.rst`` 10(c); size a **hypothesis**)
+   * - redo trigger
+     - ``picorr->solve_failed_tensor`` in the stacked read
+       (``meshblock.cpp:1053-1054``)
+     - ``flag_retry("implicit.column", ...)``, same meaning: the FP64
+       solve also failed
+   * - host reads
+     - one step-end read
+     - one step-end read (unchanged)
+   * - ``fp64_fallbacks`` meter
+     - counts blocks
+     - ``count("implicit.fp64_columns", n)`` counts columns
+   * - if Cheng rejects (c)
+     -
+     - only row 1 reverts. The cause name and the call stay.
 
 
 5. Invariants and gates
@@ -664,7 +1043,8 @@ None of these has run. Each says how it would be checked.
      - debug compare against a main build, decks in ``tests/``
      - bitwise (EF settling part excepted)
    * - G-R2
-     - shared faces single-valued after ``reconcile``
+     - shared faces single-valued after ``reconcile`` (and, for EF's
+       Q-R-i, after ``limit``)
      - own vs peer, process x1 seams and x2/x3 panel seams
        (``test_sedimentation_cubed_seam.cpp``)
      - 0 (x1); round-off (x2/x3, **hypothesis**)
@@ -710,6 +1090,16 @@ None of these has run. Each says how it would be checked.
      - compare the carry's rows against the pin on a cubed-sphere deck with
        the limiter on
      - bitwise
+   * - G-R13
+     - transposed panel edges: after ``owner_copy`` both sides hold equal
+       non-momentum rows with the mapped sign
+     - a cubed-sphere deck whose seams include an x2/x3 transposed edge
+     - bitwise (non-momentum); S's 1e-14 (momentum)
+   * - G-R14
+     - amounts recursion equals ``sum_s c_s a_s`` plus the direct and
+       ``after_combine`` entries
+     - host FP64 recompute, rk3, with a radial ``post_split`` and a fixer
+     - 1e-15 relative
 
 
 6. FP32 contract
@@ -759,14 +1149,18 @@ None of these has run. Each says how it would be checked.
   2. C's and EF's posts;
   3. the seam ``replace`` and ``boundary.prescribed`` with S (G-R2, G-R9);
   4. I's ``vic.*`` and gravity work, with I-7's deletions (D3);
-  5. A's phases and ``Fixer`` (D4, after K8);
+  5. A's phases and ``Fixer`` (D4);
   6. O's consumers (G-R4).
 
 
 9. Line budget
 --------------
 
-Every range was read at the pin. No line is in two groups.
+Every range was read at the pin. No line is in two groups. Cheng's ruling
+V3-1 (kickoff thread): a deletion is counted by the lane that owns the
+file. All of D4 is therefore R's; A counts only its new code, and A's
+remaining 25 + 15 lines in R's files stay in R's "after". ``:988``, the
+(3.A) heading, stays.
 
 .. list-table:: Deletions from R's files
    :header-rows: 1
@@ -801,7 +1195,7 @@ Every range was read at the pin. No line is in two groups.
    * - D6, flux buffers
      - ``hydro.cpp:248-271`` (24)
      - **24**
-   * - D7, x1 ghost-row relay to S (conditional)
+   * - D7, x1 ghost-row relay to S (accepted, S rev 1.1)
      - ``hydro.cpp:344-377`` (34)
      - **34**
    * - **total**
@@ -836,56 +1230,77 @@ that move to I's ``GravityWork``.
   could not see their ranges.
 * 112 and 236: no ranges were available.
 
-**AAM.** 15 (Linfeng: ``hydro_options.cpp:68-79`` + ``hydro.cpp:67-69``)
-and 47 (Jiachen: ``hydro.hpp:53-55, 89, 106-133, 224``;
-``hydro_options.cpp:56, 68-79, 176``) share 12 lines, so their union is
-50. All 50 are inside D4 (254).
+**AAM (D4) by file, after V3-1.**
 
-**After (estimate, not code), under R's convention for K8.**
+.. list-table::
+   :header-rows: 1
+
+   * - file
+     - D4 ranges
+     - lines
+     - A's booking at ``b6a40897`` (before V3-1)
+   * - ``hydro_forward.cpp``
+     - ``:989-1003``, ``:1108``, ``:1141``, ``:1288-1298``,
+       ``:1316-1363``, ``:1390-1391``, ``:1624-1680``
+     - 15 + 1 + 1 + 11 + 48 + 2 + 57 = 135
+     - 136 = 135 + ``:988``, which stays
+   * - ``hydro.cpp``
+     - ``:27-37``, ``:55-76``
+     - 11 + 22 = 33
+     - 33
+   * - ``hydro.hpp``
+     - ``:53-55``, ``:89-133``, ``:219-236``, ``:462-466``
+     - 3 + 45 + 18 + 5 = 71
+     - not booked by A
+   * - ``hydro_options.cpp``
+     - ``:56``, ``:68-79``, ``:175-176``
+     - 1 + 12 + 2 = 15
+     - not booked by A
+   * - **total**
+     -
+     - **254**
+     - A's 169 contain R's 168; A counts none of them after V3-1
+
+A's "after" for these files (``A.rst:766-767``, ``:776`` at ``b6a40897``:
+25 in ``hydro_forward.cpp``, 15 in ``hydro.cpp``) is R's +40 below.
+Linfeng's 15 AAM option lines and Jiachen's 47 share 12; their union of 50
+lies inside D4.
+
+**S/R overlap.** S's 149 hydro lines (S.rst section 9 at ``d03e4888``) are
+R's D7 (34) + D5's ``:882-946`` (65) + D1's ``hydro.cpp:727-776`` (50) =
+149. S counts none of them as its deletions. C counts no deletion either
+(R-C2), so each line is counted once, in R. D5 is ``:868-946`` (79): the 65
+plus ``:868-881`` (14, the seam block's comment and gate).
+
+**After (estimate, not code).**
 
 .. list-table::
    :header-rows: 1
 
    * - item
-     - with D7
-     - without D7
+     - lines
    * - baseline
      - 3,493
-     - 3,493
-   * - deletions
+   * - deletions D1-D7
      - -1,303
-     - -1,269
    * - kept
      - 2,190
-     - 2,224
    * - register and monitor (header 118, ``.cpp`` about 282)
-     - +400
      - +400
    * - stage driver: C 40, EF 15, seam 12, gravity 30, implicit 10,
        prescribed 4, ``after_combine`` 4, covariance 5, x1 relay call 3
      - +123
-     - +120
-   * - A's lines left in R's files (``A.rst:766-767``: 25 + 15)
-     - +40
+   * - A's lines left in R's files (``A.rst:766-767``, ``:776``: 25 + 15)
      - +40
    * - AAM mode key (off/transport/exact)
      - +8
-     - +8
    * - **after (estimate)**
      - **2,761: 33 under 2,794**
-     - **2,792: 2 under**
 
-**Under A's convention for K8** (A books its 169 lines):
-
-* R's baseline drops to 3,493 - 169 = 3,324, and its ceiling to 2,659
-  (3,324 x 0.8 = 2,659.2).
-* Deletions drop by 168: 1,135 with D7, 1,101 without.
-* Kept: 2,189 with D7, 2,223 without.
-* Additions lose A's 40: 531 with D7, 528 without.
-* After: 2,720 (61 over) with D7, 2,751 (92 over) without.
-
-So the ceiling holds only under R's convention. It is a decision for Cheng
-if A disagrees.
+3,493 - 1,303 = 2,190; 2,190 + 400 + 123 + 40 + 8 = 2,761; 2,794 - 2,761 =
+33. Rev 2's header is still 118 lines, so the register estimate is
+unchanged. ``begin_step``, the K chemistry post and the derived-row posts
+are called from X's, K's, I's and A's files, not R's.
 
 **Margin candidate, not counted.** The seven 6-line verbose timing blocks
 (``:505-510``, ``:850-855``, ``:1112-1117``, ``:1145-1150``,
@@ -904,7 +1319,7 @@ if A disagrees.
 4. **R-4**: seam ``replace`` with S, then ``boundary.prescribed``
    (G-R2, G-R9, G-R10).
 5. **R-5**: I's ``vic.*``; gravity work reads the register; D3 with I-7.
-6. **R-6**: A's phases, ``Fixer``; D4 (after K8); m1 from ``A_f total(1)``
+6. **R-6**: A's phases, ``Fixer``; D4; m1 from ``A_f total(1)``
    (G-R11).
 7. **R-7**: O's consumers (G-R4).
 
@@ -914,19 +1329,25 @@ Each step is one PR and keeps every existing test.
 11. Open questions to other lanes
 ---------------------------------
 
-* **A:** K8 (book the 169 lines to R, or take it to Cheng). Drop ``:988``
-  from the AAM ranges.
-* **S:** K6 (a rule for same-process x1 seams); rename ``bc.solid_face`` to
-  ``boundary.prescribed`` called by R; whether tangential momentum is zeroed
-  (with EF); K7 on panel seams; confirm D7.
-* **X:** name the ``after_combine`` hook in the schedule; per-op time in
-  ``report()`` (margin); who counts the 124 meshblock fixer lines.
-* **C:** drop ``riemann.mass@1``; call covariance R's in ``C.rst:776``.
-* **I:** gate G-R7; confirm the 133 ranges at the new head ``8c2ba226``.
-* **EF:** the names of the 12 counters; the tangential-momentum question.
+* **A:** K4 (confirm the post-solid reading). Confirm the
+  ``"<row>.boundary.<dim>"`` convention for ``aam``. Whether
+  ``vic.momentum_t.top`` enters the axial torque.
+* **I:** confirm ``vic.mass_clamped`` as ``flux_correction``. Confirm the
+  ``e+pe`` derived row. Gate G-R7.
+* **O:** confirm ``AmountKind`` and the budget formula of 4.2 against
+  ``c12f78bb``.
+* **EF:** Q-R-i (the carry at seams); name the vapor-repair retry cause;
+  the tangential-momentum option (with S).
+* **S:** add ``peer_dim`` and ``normal_sign`` to ``SeamEntry`` (G-R13);
+  in-kernel rotation (S2) for R-C1; relabel "C's 50" as R's D1; K7 (with X
+  and EF).
+* **X:** name the ``after_combine`` and step-start (``begin_step``) hooks in
+  the schedule; per-op time in ``report()`` (margin); who counts the
+  meshblock fixer lines.
+* **K:** the chemistry phase and its ``cell_amount`` (4.2 K); K has no
+  published design.
 * **Xinyue:** the five notes whose text I never had (row 54).
-* **Cheng:** I's ruling (c), which decides what ``retry_flags`` carries;
-  K8 if A disagrees.
+* **Cheng:** I's ruling (c), which decides row 1 of the 4.5 table.
 
 
 12. Skeleton index
@@ -940,11 +1361,11 @@ Each step is one PR and keeps every existing test.
      - declares
    * - ``docs/v3/skeleton/R/flux_register.hpp``
      - 118
-     - ``RegisterPhase``, ``SeamRule``, ``RegisterRequest``,
+     - ``RegisterPhase``, ``SeamRule``, ``AmountKind``, ``RegisterRequest``,
        ``FluxRegister``, ``RegisterMonitor``, ``Fixer``
    * - ``docs/v3/skeleton/R/hydro_stage.hpp``
-     - 78
+     - 82
      - ``StageInputs``, ``HydroStage``
    * - **total**
-     - **196**
+     - **200**
      - under 300
