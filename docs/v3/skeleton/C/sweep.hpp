@@ -21,8 +21,8 @@ struct FaceDir {
 FaceStates reconstruct_faces(HydroImpl& hydro, FaceDir const& dir,
                              torch::Tensor const& w, Variables const& other);
 //! sweep: FaceFloor -> solid -> before_solve(faces, d) -> rotate -> Riemann
-//! into slot(d, "riemann"), post_slot, part slots. before_solve is C's
-//! proposal for R-C1, open with S (R.rst:743); else one face copy per x2/x3
+//! into slot(d, "riemann"), post_slot, parts. V3-3: the hook builds only
+//! (no register); R posts covariance after the riemann slot (pin :1109-1110)
 using FaceHook = std::function<void(FaceStates const&, int)>;
 void solve_faces(HydroImpl& hydro, FaceDir const& dir, FaceStates& faces,
                  FluxRegister& reg, FaceHook const& before_solve = {});

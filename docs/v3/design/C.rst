@@ -3,7 +3,7 @@
 V3 lane C: reconstruction, Riemann solvers, well-balanced reference, conversion order
 =====================================================================================
 
-Revision 6.1, 2026-11-17. Owner: Tianhao Le (alternate: Xinyue). Design only:
+Revision 6.2, 2026-11-17. Owner: Tianhao Le (alternate: Xinyue). Design only:
 no implementation change. Declarations are in ``docs/v3/skeleton/C/`` (not
 built); the file-by-file line table is ``docs/v3/design/C_lines.csv``,
 produced by ``docs/v3/design/C_lines.py``.
@@ -12,6 +12,42 @@ Every ``path:line`` is at chengcli/snapy
 ``9e5de2d4ce497d0b2d4da3295fc1fe969fe7e410`` unless another commit is named.
 "Measured" means produced by a command named in the text; "estimate" means a
 design target.
+
+Changes in revision 6.2 (from ``559dd0b7``), after Cheng's seven items on
+6.1 and Jiachen's notes C1-C18 on it. C1-C6, C11 and C13 agree. Lane C
+owns and answers C7, C8, C10, C12 and C14-C16 here. C9 is lane A's (A2),
+C17 is lane R's (closed in R 2.3 as R-C4) and C18 is lane O's (section 11);
+lane C edits none of those lanes:
+
+* the hook builds only and gets no register; R posts the covariance after
+  lane C's ``riemann`` slot, as the pin adds ``dcov`` after the solve (C12);
+* the 6 and 6.1 entries that call the hook a proposal are marked superseded
+  (C10);
+* the option rows stay in lane C's headers until lane C switches them to
+  O's generator after O's PR O4 (C14);
+* "every YAML key of the pin stays" now names the AAM closure key and
+  ``full`` to ``exact`` as Cheng's exceptions outside lane C (C15);
+* the ``reset()`` refusal of upwind and plume-roe for ``central`` is a
+  proposal; the check is lane A's (A2, C9);
+
+* lane R revision 2.3 (``2b4c5775``) is reconciled. It closes R-C1 under
+  RULING V3-3: ``solve_faces`` calls ``before_solve`` after ``FaceFloor``
+  and the solid step, before the rotation and the solve; R's
+  ``build_covariance`` runs there and ``post_covariance`` after the solve
+  (``hydro_stage.hpp:47-48`` at ``2b4c5775``). It also closes R-C4: a face
+  floor posts counts only. Both move to "settled" in section 11;
+* ``riemann.central``'s readers are named by R phase. There is no forcing
+  phase: lane A reads it in ``divergence`` and ``pre_implicit`` and
+  registers Coriolis in ``pre_implicit`` and ``post_implicit``
+  (``A.rst:336-337``, ``:442-445`` at ``4e0827b8``);
+* lane A is cited at revision 4, ``4e0827b8`` (it was ``2c9589c6``);
+* the five option rows in the skeleton are rows of lane O's generated
+  table (``O.rst:2329-2333`` at ``5a7b46fa``; section 3.8);
+* ``full`` becomes ``exact`` and the closure key is removed
+  (``A.rst:145-147``). Neither touches lane C's files (``A.rst:1173-1189``);
+* question I-C1 no longer names an x1 Riemann-only row;
+* the parity test is cited at PR #369's head, where it is line 583; the
+  pin's file has 578 lines.
 
 Changes in revision 6.1 (from ``5caf684c``), after Cheng's read of 5.1:
 
@@ -23,7 +59,8 @@ Changes in revision 6.1 (from ``5caf684c``), after Cheng's read of 5.1:
   ``RegisterMonitor::rollback()`` (``:92``). The 5.1 history entry and R4
   in section 11 now say so;
 * R-C1 is stated as ``R.rst:743-758`` states it: open, with lane S. Lane C's
-  ``before_solve`` hook is a proposal, not a settled contract.
+  ``before_solve`` hook is a proposal, not a settled contract. Superseded
+  in 6.2: RULING V3-3 settles it.
 
 Changes in revision 6 (from ``ab14e5a7``), aligned with lane R revision 2.2, header rev 4.2
 (happysky19/snapy ``v3-design/R`` ``4c59162ae37080d0ab307b2823742b44f46da7c3``), the head frozen at R's
@@ -42,7 +79,8 @@ amend it):
   R-C1 because lane S keeps in-place rotation (``R.rst:743-758``); it stays
   open, with lane S. Lane C proposes R's preferred option: ``solve_faces``
   calls a ``before_solve`` hook after the floors and the solid step, where R
-  would build its covariance with no extra copy (``sweep.hpp``);
+  would build its covariance with no extra copy (``sweep.hpp``).
+  Superseded in 6.2: RULING V3-3 settles that order;
 * ``riemann.mass@1`` stays dropped (``R.rst:168``, ``:741``);
 * ``riemann.central`` is formed from the post-immersed-solid states
   (``hydro_forward.cpp:1089-1090``, ``:1123-1124``; ``R.rst:809``, K4);
@@ -67,7 +105,8 @@ home thread that every solver and scheme stays:
 * **The ``riemann`` increment and its ``central`` and ``dissipative``
   parts are defined for each of the six solvers** (section 3.6). Section 4
   states what lane A reads as ``riemann.central``. The names follow lane
-  A's ``A.rst`` (JiachenLiu-Atmos/snapy ``v3-design/A`` ``2c9589c6``). They
+  A's ``A.rst`` (JiachenLiu-Atmos/snapy ``v3-design/A`` ``2c9589c6``;
+  revision 6.2 re-cites revision 4, ``4e0827b8``). They
   stay provisional until lane R's header exists.
 * **"What changes" table** (section 3.8). The single default, the
   ``shock`` default, the shock-path floors, MPS through host copies, the
@@ -192,10 +231,22 @@ pyharp or commux source is read or changed (section 8).
   ``77c65d5aac1f96ff6c34a45ef48faeb996c2128e``, fetched read-only; it
   descends from the pin): ``X.rst`` sections 3, 4, 6, 7, 8 and 11 and the
   skeletons ``precision_policy.hpp`` and ``stage_executor.hpp``;
-* lane A (JiachenLiu-Atmos/snapy ``v3-design/A``
-  ``2c9589c68c633796cfa5f749d003af7a2b57f38a``, fetched read-only):
-  ``A.rst`` A-r2, sections 6.1 and 6.2, and question R-1/C-1, for what lane
-  A reads as ``riemann.central``.
+* lane A revision 4 (JiachenLiu-Atmos/snapy ``v3-design/A``
+  ``4e0827b89be960e93968cca8f147301e7d501e77``, read through the GitHub API; the
+  pin is an ancestor): ``A.rst`` 1.4-1.5, 3.1-3.2, 3.4, 3.6-3.7, 5.3,
+  6.1-6.2, 7.2, 10.2 and 11.1-11.2, for what lane A reads as
+  ``riemann.central``, in which R phases, and the ``full`` to ``exact``
+  decision. Revisions before 6.2 read lane A at ``2c9589c6``;
+* lane R revision 2.3 (happysky19/snapy ``v3-design/R``
+  ``2b4c5775f6d1582850ad1a0bb15d6e826ce2e448``, parent ``7a0fa7a2``; the
+  pin is an ancestor), read through the GitHub API. It edits header comments
+  in place, so every ``flux_register.hpp`` and ``hydro_stage.hpp`` line
+  citation still holds (``R.rst:26-28`` at ``2b4c5775``). Lane C's R
+  citations stay at ``4c59162a``; a citation to revision 2.3 names
+  ``2b4c5775``;
+* lane O (JiachenLiu-Atmos/snapy ``v3-design/O``
+  ``5a7b46fa3c35724478956a9544f294e9347e554c``, read through the GitHub API):
+  ``O.rst`` 3.3 and 9.3, for the generated options table.
 
 **Lane R material.** Lane R revision 2.2, header rev 4.2, happysky19/snapy ``v3-design/R``
 ``4c59162ae37080d0ab307b2823742b44f46da7c3`` (parent ``6df93fda``; the pin is an ancestor), the head frozen
@@ -606,9 +657,11 @@ parent. It adds ``dynamics/wb-wall-reference`` (``auto``, ``upward``,
 
 It rewrites most of lane C's moved ranges in ``hydro_forward.cpp``
 (``git diff --stat 9e5de2d4...pr/369``: +438/-166 in that file). It also
-uses ``hydro_ref_x1_mps`` as a CPU-callable parity port (#369 at ``c382f0da``,
-``tests/test_hydro_ref_x1.cpp:583``,
-``mps_port_matches_the_kernel_on_the_upward_rows``).
+uses ``hydro_ref_x1_mps`` as a CPU-callable parity port: the test
+``mps_port_matches_the_kernel_on_the_upward_rows`` is at line 583 of
+``tests/test_hydro_ref_x1.cpp`` in PR #369's head (UCzhangxi/snapy
+``solid-onepath-pr`` ``c382f0da7b84dbc14219053758054f874669cc84``), which adds
+66 lines to that file. The pin's copy has 578 lines and no such test.
 
 Lane C stays on the pin. If #369 merges first:
 
@@ -655,7 +708,7 @@ section 4. Its parts are:
 
 For hydro, ``central`` is stored as **one summed mass row**: IDN (dry) plus
 the sum of the ICY.. species rows. It is stored only when a consumer asks for
-it (lane A's ``conserve-axial-momentum`` modes). The only consumer at the
+it (lane A's ``exact`` mode, ``A.rst:96-97``). The only consumer at the
 pin sums those rows itself (``gnomonic_equiangle.cpp:690-694``, the
 ``mass`` lambda of ``axial_coriolis_rate``), so per-species rows carry
 nothing it uses. For the other rows only the total is posted.
@@ -711,8 +764,10 @@ nothing it uses. For the other rows only the total is posted.
 
 So hllc, lmars, roe and shallow-roe give lane A its mass rows. Upwind and
 plume-roe have no hydro mass rows. With them, ``riemann.central`` is
-undefined for lane A, and an option that needs it refuses at ``reset()``
-with a message naming the solver.
+undefined for lane A. Lane C proposes that an option that needs it refuse
+at ``reset()`` with a message naming the solver. That check is lane A's
+(A2; Jiachen's C9): A's ``check()`` does not test the solver kind
+(``axial_momentum.hpp:39-42`` at ``4e0827b8``).
 
 **Retained, with proposed contract fixes** (``FOR CHENG``, section 3.8):
 
@@ -763,7 +818,9 @@ separate value without a second solve. So they register counts, not flux
 3.8 What changes
 ~~~~~~~~~~~~~~~~
 
-Every option of the pin stays (Cheng's decision). This table lists what
+Every lane C option of the pin stays (Cheng's decision). Outside lane C,
+Cheng removes the AAM closure key and ``full`` becomes ``exact``
+(``A.rst:145-147``). This table lists what
 the design proposes to change in behaviour or interface. "Decks" is the
 in-tree census of section 2.3.
 
@@ -806,12 +863,29 @@ in-tree census of section 2.3.
      - FOR CHENG (new in revision 4)
    * - in-kernel ``riemann.central`` in place of two extra solves per
        x2/x3 direction (C5)
-     - none (no deck runs ``conserve-axial-momentum: full``); round-off
-       change expected
-     - proposal; lane A gate H1 (1e-14 relative)
+     - none (no deck runs ``conserve-axial-momentum: full``, which becomes
+       ``exact``, ``A.rst:145``); round-off change expected
+     - proposal; lane A gate G2 (hypothesis H1, ``A.rst:823-825``)
    * - key-4 weight rows from ``x1_rows`` (C6)
      - none (no deck runs key 4); round-off change expected
      - proposal
+
+**Option rows.** The skeleton's five option rows,
+``ReconstructOptionsImpl::type``, ``scale`` and ``shock`` (skeleton
+``reconstruct.hpp``, lines 10-12) and ``RiemannSolverOptionsImpl::type``
+and ``dir`` (skeleton ``riemann.hpp``, lines 13-14), are rows of lane O's
+one generated options
+table (``O.rst:2329-2333`` at ``5a7b46fa``). Lane O owns the table and the
+generator, which emits the struct members, ``from_yaml`` with
+``check_keys``, the bindings and the ``.pyi`` stubs (``O.rst:444-454``).
+Lane C owns what the keys mean and proposes the defaults above (FOR CHENG).
+The ``ADD_ARG`` lines show the generated members; lane C writes no option
+parser. Timing, as O states it: the ``ADD_ARG`` blocks belong to the lane
+that owns the header (``O.rst:479-482``), and lane C switches its two
+headers to the generator after O's PR O4 (``O.rst:1303-1304``).
+Lane C's line estimate still counts those 5 lines in
+``reconstruct.hpp`` and ``riemann.hpp``; generated files are not checked in
+(``O.rst:643``), so that is an overcount, left as is.
 
 4. Flux-register contract
 -------------------------
@@ -898,7 +972,7 @@ lane R revision 2.2, header rev 4.2 (``flux_register.hpp`` at ``4c59162a``).
        ``hydro_forward.cpp:786-787``, ``:804-805``). The HLLC p* clamp and
        Roe's LLF fallback are counted from ``FaceFlux::events`` with
        ``count()``. They post no ``cell_amount(..., AmountKind::floor)``:
-       a face-state floor has no cell increment (R-C4). Positivity is EF's
+       a face-state floor has no cell increment (R-C4, closed in R 2.3). Positivity is EF's
        ``scale()``, whose amount R books (``flux_register.hpp:59-61``).
      - section 3.7; this section, "Floors"
    * - Req. 8: Stated dtype under FP32; fixed storage a CUDA graph can capture
@@ -947,19 +1021,21 @@ lane R revision 2.2, header rev 4.2 (``flux_register.hpp`` at ``4c59162a``).
   ``apply_prescribed`` are ``reconcile`` (``:16``). ``scale()`` is
   ``limit`` (``:17``). None of them is lane C's.
 * R's #289 covariance (``hydro_stage.hpp:45-48``) needs the post-solid,
-  unrotated face states. How R gets them is R-C1, open with lane S
-  (``R.rst:743-758``). Lane C proposes that ``solve_faces`` call a
+  unrotated face states. RULING V3-3 settles R-C1: ``solve_faces`` calls a
   ``before_solve`` hook after ``FaceFloor`` and the solid step, before the
-  rotation and the solve, where R would build the covariance and post it
-  after the solve. The other option is one face-state copy per x2/x3
-  direction.
+  rotation and the solve. R's ``build_covariance(faces, dim)`` runs in the
+  hook and builds only: the hook gets no register. ``post_covariance(dim,
+  reg)`` runs after the solve, so the covariance follows lane C's
+  ``riemann`` slot, as ``add_cov`` (``hydro_forward.cpp:1110``) follows the
+  solve (``:1109``) at the pin (``hydro_stage.hpp:47-48`` and
+  ``R.rst:805-817`` at ``2b4c5775``). There is no face-state copy.
 * Counters post with ``count(name, n)`` (``flux_register.hpp:76``), are
   listed in ``RegisterRequest::counters`` (``:36``), and are read through
   ``RegisterMonitor::counter_names()`` and ``counters()`` (int64,
   ``:99-100``). ``begin_step()`` zeroes them (``:48``; ``R.rst:464``).
 
-The R contracts that stay open for lane C are in section 11 (R-C1, open
-with lane S; R-C4). Lane C's own computation (what the solve
+No R contract stays open for lane C (section 11); lane X's hook placement
+does. Lane C's own computation (what the solve
 produces, its frame, area weighting and compute dtype) does not depend on
 them.
 
@@ -1026,13 +1102,15 @@ them.
     the row is the same in the face and global frames.
   * Defined for hllc, lmars, roe and shallow-roe. Upwind and plume-roe have
     no hydro mass rows (section 3.6), and a mode that needs ``central``
-    refuses them at ``reset()``.
+    should refuse them at ``reset()``; that check is lane A's (A2).
   * Stored only on request (``"riemann.central@2"``, ``"@3"``), on x2 and x3
     (``hydro_forward.cpp:1356-1361``).
-  * **Lifetime.** ``solve_faces`` writes it in the sweep. It stays valid
-    through the forcing phase (today ``:1356`` and the Coriolis call in the
-    loop at ``:1378``) and lane A's ``post_implicit`` phase
-    (``:1618-1680``). The next stage's ``solve_faces`` overwrites it;
+  * **Lifetime.** ``solve_faces`` writes it in ``RegisterPhase::sweep``.
+    It stays valid through ``divergence`` and ``pre_implicit``, where lane
+    A reads it (A-r2, ``A.rst:336-338``; today ``:1356`` and the Coriolis
+    call in the loop at ``:1378``), and through ``post_implicit``
+    (``flux_register.hpp:14-22``; today ``:1618-1680``), until the next
+    ``begin_stage`` (R 2.3: ``R.rst:45-46`` at ``2b4c5775``). The next stage's ``solve_faces`` overwrites it;
     ``begin_stage`` resets nothing (``R.rst`` revision 2 changes), and
     ``FluxRegister::rollback()`` clears it with the register
     (``flux_register.hpp:86``). Today's ``_aam_mass_flux`` is cleared after the first Coriolis
@@ -1063,9 +1141,15 @@ them.
 ``Quantity::kFlux``, the same as the increment: FP64 in an FP64 run, FP32 in
 a CUDA FP32 run (``A.rst`` 6.1; ``R.rst:452``: "``T_d`` and parts:
 ``kFlux``"). A consumer that needs FP64 casts it on read. Lane C
-posts no FP64 copy. At the pin the AAM full mode refuses FP32
-(``hydro_forward.cpp:993-995``). Lane A plans to lift that after its gate
-G10 (``A.rst`` 6.2), so lane C does not assume FP64.
+posts no FP64 copy. At the pin the AAM ``full`` mode refuses FP32
+(``hydro_forward.cpp:993-995``). Cheng settled that ``full`` becomes
+``exact``, that the closure key (``conserve-axial-momentum-closure``,
+``hydro_options.cpp:56``) is removed, and that the closure is a registered
+fixer inside ``exact`` (``A.rst:145-147``). ``exact`` refuses FP32 and
+perturbation-flux at reset until lane A's gate G10 passes
+(``A.rst:923-933``), so lane C does not assume FP64. Neither change touches
+lane C's files: lane A's site list for the decision names R, X, S, A and
+lane I lines only (``A.rst:1173-1189``).
 
 **Memory of riemann.central (req. 9).** Size: ``nc3 x nc2 x nc1 x b``
 bytes per stored direction (one row), with ``b`` = 8 (FP64) or 4 (FP32).
@@ -1077,8 +1161,9 @@ It is fixed storage allocated at ``reset()`` only when requested.
 * Today the same option holds ``cen`` and ``_flux - cen``: 2 x nvar rows
   (nvar = 14 there), or 69.2 MB per direction (by reading
   ``hydro_forward.cpp:997-1003``, ``:1356-1361``; not profiled). Lane A's
-  count (``A.rst``, table at line 694) is "2 (5+ny)" rows today; one
-  summed row is below its "2 (1+ny)".
+  count (``A.rst:977-981``, section 7.2) is ``cen2``, ``cen3`` 2(5+ny) rows
+  today, 4(5+ny) transient and 2(5+ny) stored ``F - F_c``, against 2 face
+  rows in V3, one ``riemann.central`` row per direction, as here.
 * It also removes four Riemann solves per stage.
 
 **Gravity work's x1 mass row (lane I reads).** Gravity work reads the
@@ -1117,11 +1202,13 @@ segment, X section 4: post before pack):
    positivity sees single-valued seam faces (comment at ``:1158-1159``).
 3. x2/x3: lane C's ``riemann`` with ``riemann.central`` (``:1088-1152``),
    then lane R's own #289 covariance, ``add(d, "covariance", ...)``. Its code
-   is ``hydro_forward.cpp:41-289``. R builds it from the post-solid,
-   unrotated states, as the pin does at ``:1099``, and posts it after the
-   solve (``hydro_stage.hpp:45-48``). Where R reads those states, lane C's
-   proposed ``before_solve`` hook or a face-state copy, is R-C1, open with
-   lane S (``R.rst:743-758``).
+   is ``hydro_forward.cpp:41-289``. R builds it in ``solve_faces``'s
+   ``before_solve`` hook, from the post-solid, unrotated states, as the pin
+   does at ``:1099``. The hook builds only. R posts it after the solve and
+   after lane C's ``riemann`` slot, as the pin adds ``dcov`` (``:1110``)
+   after the solve (``:1109``) (``build_covariance`` and
+   ``post_covariance``, ``hydro_stage.hpp:47-48`` at ``2b4c5775``; RULING
+   V3-3).
 4. Positivity (4.C, ``:1154-1252``), in ``RegisterPhase::limit``. Its theta
    exchange is at ``:1227``. It multiplies the species rows of all three
    directions in place, ``f.mul_(theta)`` (``flux_positivity.cpp:99-121``).
@@ -1135,11 +1222,15 @@ segment, X section 4: post before pack):
    scaled, as ``cen2`` is not today. The carry (``flux_positivity_carry_``)
    is EF's ``add()``, in call order before ``scale()``, never pre-summed
    (``R.rst:366``).
-5. Divergence (``:1254``), then the forcing phase (``:1306-1552``). That
-   phase includes Coriolis, which reads ``riemann.central``, and diffusion.
-   Diffusion (lane A, ``A.rst`` phase 3) is its own increment after
-   positivity. It carries no mass flux, so ``riemann.central`` and ``F_d``
-   are unchanged by it.
+5. Divergence (``:1254``, ``RegisterPhase::divergence``), where lane A's
+   flux form reads ``total(d)`` and ``riemann.central`` (A-r1, A-r2,
+   ``A.rst:333-338``). Today's forcing block (``:1306-1552``) is not a
+   register phase. Lane A registers Coriolis in ``pre_implicit`` and
+   ``post_implicit`` (``A.rst:442-445``), and user stage forcings stay in
+   lane X's block segment (``A.rst:504-508``). Diffusion posts
+   ``diffusion`` with ``add()`` from lane A's phase 3 (``A.rst:513``). It
+   carries no mass flux, so ``riemann.central`` and ``F_d`` are unchanged
+   by it.
 6. Gravity work (``:1412-1535``, ``pre_implicit``), then the implicit solve
    (``:1554-1616``, ``implicit``) and the post-implicit phase
    (``:1618-1680``, ``post_implicit``), then ``end_stage``. This is the order
@@ -1160,8 +1251,8 @@ p* clamp is reported in ``FaceFlux::events``. Both post with R's
 ``face_floor.species``, ``riemann.pstar_clamp`` and ``riemann.llf``.
 Lane C posts no ``cell_amount(..., AmountKind::floor)``: a face-state floor
 changes face states and has no cell increment to book. R's
-``AmountKind::floor`` comment lists "EF, C" (``flux_register.hpp:28``);
-that is R-C4.
+``AmountKind::floor`` comment listed "EF, C" at ``4c59162a``; R revision 2.3
+names EF only (``flux_register.hpp:28`` at ``2b4c5775``), which closes R-C4.
 
 **Restart (req. 10):** nothing of lane C is written. ``X1RowsCache`` and the
 reference are rebuilt.
@@ -1293,8 +1384,8 @@ place of ``fp32()``.
      - ``hydro.cpp:248``
    * - ``riemann.central`` (provisional; one summed row)
      - ``kFlux`` (flux dtype); FP64 readers cast on read
-     - FP32 (refused at the pin, ``hydro_forward.cpp:993-995``; lane A
-       plans to lift it)
+     - FP32 (``exact`` refuses FP32 until gate G10, ``A.rst:933``; refused
+       at the pin, ``hydro_forward.cpp:993-995``)
      - FP64
      - ``A.rst`` 6.1
    * - register step accumulator
@@ -1717,8 +1808,8 @@ File by file:
        in-kernel ``riemann.central``; plume-roe writes its slot;
        upwind/plume-roe refused at ``reset()`` where they cannot solve
        (FOR CHENG)
-     - bitwise except AAM full (round-off, expected; no deck; lane A gate
-       H1)
+     - bitwise except AAM ``exact`` (today ``full``; round-off, expected;
+       no deck; lane A gate G2)
    * - C6
      - ``x1_rows``, ``Conversion`` shared with ``balance_column``
      - key 2 bitwise; key 4 to round-off (expected; weights rebuilt in
@@ -1737,9 +1828,13 @@ File by file:
      - the ``shock`` default and shock-path floors, if Cheng accepts them
      - deck results change where floors fire
 
-**Options removed: none.** Every ``riemann-solver`` type, every
-``reconstruct`` type and every YAML key of the pin stays. The removals are
-code paths and unread fields:
+**Lane C options removed: none.** Every ``riemann-solver`` type, every
+``reconstruct`` type and every lane C YAML key of the pin stays. Not every
+key of the pin stays: Cheng removes the closure key
+(``conserve-axial-momentum-closure``, ``hydro_options.cpp:56``), and
+``full`` becomes ``exact`` (``A.rst:145-147``). Those are lane A's sites
+(``A.rst:1173-1189``), not lane C's. Lane C's removals are code paths and
+unread fields:
 
 * the MPS rewrites (replaced by ``OnHost``, FOR CHENG) and
   ``hydro_pressure_scan_x1_tensor``;
@@ -1786,40 +1881,32 @@ Settled by R's header and ``R.rst`` 2.2:
   (``hydro_forward.cpp:372``).
 * The sweep is C's two free functions, called by ``HydroStage::sweep``
   (``hydro_stage.hpp:14-15``, ``:42-44``). No ``Sweep`` class.
-* The #289 covariance is R's (``hydro_stage.hpp:45-48``).
+* The #289 covariance is R's: ``build_covariance`` in lane C's hook and
+  ``post_covariance`` after the solve (``hydro_stage.hpp:47-48`` at
+  ``2b4c5775``).
 * R-C2, the 50 lines at ``hydro.cpp:727-776``: counted once, in R's D1
   (``R.rst:759``). Lane C counts no deletion of them; R asks S to relabel.
 * R-C3, ``pressure_base1``: ``part_slot(1, "pressure_base1")``, written by
   lane C's ``WellBalancedX1``, requested as ``"pressure_base1@1"`` on the
   split path only (``R.rst:763``; ``hydro_stage.hpp:36-40``).
+* R-C1, the covariance face states: settled by RULING V3-3 (Cheng).
+  ``solve_faces`` calls ``before_solve(faces, d)`` after ``FaceFloor`` and
+  the solid step, before the rotation and the solve. R builds the
+  covariance there from the post-solid, unrotated states, as the pin does at
+  ``hydro_forward.cpp:1099``, and posts it after the solve. There is no
+  face-state copy, and R's register header is unchanged. R revision 2.3
+  records it closed (``R.rst:805-817`` at ``2b4c5775``) and splits the
+  covariance into ``build_covariance(FaceStates const&, int)``, run in the
+  hook, and ``post_covariance(int, FluxRegister&)``, run after the solve
+  (``hydro_stage.hpp:47-48`` at ``2b4c5775``). The build takes
+  ``FaceHook``'s arguments (``sweep.hpp``).
+* R-C4, ``AmountKind::floor``: closed in R revision 2.3. The comment names
+  EF only and says lane C's face floors post ``count()`` only
+  (``flux_register.hpp:28`` at ``2b4c5775``; ``R.rst:834-837`` there).
+  Lane C posts no ``cell_amount``.
 
 Still open:
 
-* R-C1, the covariance face states. **Open (R rev 2.1), with lane S**, as
-  ``R.rst:743-758`` states it. R needs the post-solid, unrotated face
-  states. The pin reads ``wlr2`` after ``pib->forward`` and before the
-  solver rotates them in place (``hydro_forward.cpp:1089-1097``). Lane C
-  proposed that ``solve_faces`` leave ``faces`` unrotated, which needs an
-  in-kernel rotation. S rev 1.1 keeps ``prim2local_``/``flux2global_`` as
-  today's in-place tensor rotations, "unchanged in V3"
-  (``coord_rotation.hpp:37-40`` at S ``d03e4888``, cited by R, not read
-  here). So either:
-
-  * C keeps one face-state copy per x2/x3 direction (requirement 9 cost);
-    or
-  * C gives R a call between the solid step and the solve, where R builds
-    ``dcov`` as the pin does (``:1099``) and posts it after the solve.
-    That adds no copy beyond the pin's.
-
-  R prefers the second. C and S decide. Lane C proposes the second:
-  ``sweep.hpp`` declares ``solve_faces(..., before_solve)``, called after
-  ``FaceFloor`` and the solid step, before the rotation and the solve. S
-  has not answered, so the copy stays the fallback and R-C1 stays open.
-* R-C4 (new). ``AmountKind::floor``'s comment reads "local floor or repair
-  (EF, C)" (``flux_register.hpp:28``). Lane C's face-state floors change
-  face states, not cells, and post counts only (``face_floor.*``). Lane C
-  asks R to drop "C" from that comment, or to say what cell amount a face
-  floor would book. Lane C posts no ``cell_amount`` until then.
 * X: the ``begin_step`` and ``after_combine`` hooks are X's to name in its
   schedule. They do not change lane C's posts.
 
@@ -1841,31 +1928,48 @@ Still open:
   the exchanged face states (section 4). Will S add a panel-seam flux
   reconciliation? If so, it covers ``riemann.central`` too.
 
-**Lane A (from ``A.rst`` at ``2c9589c6``):**
+**Lane A (from ``A.rst`` revision 4 at ``4e0827b8``):**
 
 * Lane C provides ``riemann.central`` as one summed mass row (dry plus
-  species), x2/x3, formed from the solver's face states, in ``kFlux``, valid
-  through the stage's ``post_implicit`` phase (section 4). ``F_d`` is the total registered flux
-  minus it. A1: confirm that one summed row is enough; the pin's consumer
-  sums the rows (``gnomonic_equiangle.cpp:690-694``).
-* Under perturbation-flux the face densities are totals (section 3.6).
-* Lane A's C-1 asks who posts the implicit x1 mass transfer and the
-  tangential momentum correction (``hydro_forward.cpp:1645-1646``,
-  ``:1668-1669``). Not lane C: lane C posts only ``riemann`` and its parts.
-  These are lane I's (implicit) and the register's (R).
-* A2: upwind and plume-roe give no ``riemann.central`` for hydro mass
-  rows. Is a ``reset()`` refusal of AAM modes with those solvers right?
+  species), x2/x3, formed from the solver's post-solid face states, in
+  ``kFlux`` (section 4). ``F_d`` is the total registered flux minus it. A1
+  is answered: lane A reads one summed mass row on x2/x3
+  (``A.rst:101-104``, ``:1261-1266``), and it confirms the post-solid
+  states (``A.rst:1299-1311``, K4).
+* Under perturbation-flux the face densities are totals (section 3.6;
+  ``A.rst:1265-1266``).
+* Lane A's earlier C-1 (who posts the implicit x1 mass transfer and the
+  tangential momentum correction, ``hydro_forward.cpp:1645-1646``,
+  ``:1668-1669``) is not in revision 4. Lane C's answer stands: not lane
+  C. Revision 4 reads them through ``total(1)`` and the kept
+  ``vic.momentum_t`` (A-r3, A-r5, ``A.rst:339-343``).
+* A2: upwind and plume-roe give no ``riemann.central`` for hydro mass rows.
+  Is a ``reset()`` refusal of ``exact`` with those solvers right? Revision
+  4 does not answer it. Jiachen's C9 assigns it to lane A: ``check()``
+  tests FP32, perturbation flux, ``nu_iso`` and the interpolation order,
+  not the solver kind (``axial_momentum.hpp:39-42`` at ``4e0827b8``).
 
-**Lane O (Jiachen):** the display of the floor counts and solver events.
+**Lane O (Jiachen):**
+
+* The display of the floor counts and solver events. O's 11.3 asks who owns
+  the face-floor event counters: lane C posts them with ``count()``, and R's
+  monitor holds them (``flux_register.hpp:76``, ``:99-100``; ``R.rst:767``).
+* Jiachen's C18, lane O's: O's rows 8 and 9 still cite lane C at
+  ``a7155840`` and name ``face_floor_count`` and ``pstar_clamp_count``
+  (``O.rst:2764-2785`` at ``5a7b46fa``). R adopted lane C's five names
+  (``R.rst:767``). Lane C does not edit O's text.
+* O's 11.4 asks owners of option headers when to switch to the generator
+  (``O.rst:2679``). O's own order answers it for lane C: after O4
+  (``O.rst:1303-1304``; section 3.8).
 
 **Lane I (Xinyue):**
 
 * ``src/implicit`` reads no lane C output at the pin (no ``grep`` match for
   the face pressure, the reference or the solver). Does V3 keep it that way?
-* I-C1: gravity work reads the total and the Riemann-only summed x1 mass
-  rows from the register, in ``kFlux``, and casts them to FP64 on read
-  (section 4). Is cast-on-read enough, or does lane I want a stored FP64
-  row?
+* I-C1: gravity work reads only the limited x1 total, ``total(1)``, in
+  ``kFlux``, and casts it to FP64 on read (section 4). There is no
+  Riemann-only x1 row (``R.rst:168``, ``:741``). Is cast-on-read enough, or
+  does lane I want a stored FP64 row?
 
 **Lane X (Xi):**
 
@@ -1921,7 +2025,7 @@ clang-format hook reads it.
        ``RiemannSolverImpl``, ``riemann_face``, ``riemann_fn``
    * - ``sweep.hpp``
      - 30
-     - ``FaceDir``, ``reconstruct_faces``, ``solve_faces``
+     - ``FaceDir``, ``FaceHook``, ``reconstruct_faces``, ``solve_faces``
 
 Measurements in this revision (on the lane's build host, at the pin):
 

@@ -9,7 +9,7 @@ namespace snap {
 
 enum class RiemannKind : int { hllc, lmars, roe, shallow_roe, upwind, plume_roe };
 
-struct RiemannSolverOptionsImpl {
+struct RiemannSolverOptionsImpl {  // rows of O's generated options table
   ADD_ARG(std::string, type) = "hllc";  // proposed single default (FOR CHENG)
   ADD_ARG(std::string, dir) = "omni";   // shallow-roe only
 };
