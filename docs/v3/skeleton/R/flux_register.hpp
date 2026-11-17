@@ -1,5 +1,5 @@
 #pragma once
-// V3 lane R skeleton: declarations only, in no build. Rev 4.1 (R.rst 2.1).
+// V3 lane R skeleton: declarations only, in no build. Rev 4.2 (R.rst 2.2).
 // Pin chengcli/snapy 9e5de2d4ce497d0b2d4da3295fc1fe969fe7e410; :N is
 // hydro_forward.cpp:N. Contract: R.rst s4. Posts: flux density per unit face
 // area and time at X's step dt, before weights, coord's flux2global<d>_ frame.
@@ -8,10 +8,9 @@
 #include <string>
 #include <vector>
 #include <torch/torch.h>
+namespace harp { struct IntegratorWeight; }  // pyharp integrator.hpp:20-29
 namespace snap {
 class CoordinateImpl; class PrecisionPolicy; class RegisterMonitor;
-//! from X: Shu-Osher {w1_s, w2_s, w2_s}; ARK {1, bex_i, bim_i / gamma_i}
-struct RegisterWeights { double carry, explicit_w, implicit_w; };
 enum class RegisterPhase : uint8_t {
   sweep,          // C's riemann + part slots; sedimentation; R's covariance
   reconcile,      // replace() on shared faces, then apply_prescribed(d)
@@ -20,7 +19,7 @@ enum class RegisterPhase : uint8_t {
   pre_implicit,   // A's sources; gravity work reads the limited x1 total
   implicit,       // I: add() posts, then keep(), then cell_amount()
   post_implicit,  // apply_prescribed(1); A's m1; I's G remainder, tracers
-  after_combine,  // after X's RK combine: fixers, EF floors, K's chemistry
+  after_combine,  // after each stage's combine: EF floors; last: K, fixers
 };
 enum class SeamRule : uint8_t { mean, owner_copy };  // S rows 9 and 16r
 enum class AmountKind : uint8_t {  // O's R-O3: how the budget treats it
@@ -47,8 +46,8 @@ class FluxRegister {  // one for hydro, one per Scalar module (R owns class)
   void set_prescribed(int dim, torch::Tensor const& mask,
                       torch::Tensor const& value);
   void begin_step();  // X, step start: zero step sums, monitor, counters
-  void begin_stage(int stage, RegisterWeights const& w);  // X only
-  RegisterWeights const& weights() const;  // for cell_amount's stage_weight
+  void begin_stage(int stage, harp::IntegratorWeight const& w);  // X only
+  harp::IntegratorWeight const& weights() const;  // w2 for stage_weight
   void enter(RegisterPhase phase);
   //! in-place slots: the total (first post) or a requested part
   torch::Tensor slot(int dim, std::string const& name);
@@ -66,7 +65,7 @@ class FluxRegister {  // one for hydro, one per Scalar module (R owns class)
   void apply_prescribed(int dim);  // books "boundary.prescribed"
   void keep(int dim, std::string const& part, torch::Tensor const& value);
   //! [nvar, cells] or (nvar,), times interior cell_volume, 0 on untouched
-  //! rows. stage_weight: explicit_w/implicit_w of du, 1.0 if applied to u
+  //! rows. stage_weight: w2_s for this stage's du, 1.0 if applied to u
   void cell_amount(std::string const& name, torch::Tensor const& vol_du,
                    double stage_weight, AmountKind kind);
   //! amount and step-end total on a derived row ("e+pe", "aam")

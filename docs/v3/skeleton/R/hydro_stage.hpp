@@ -1,6 +1,6 @@
 #pragma once
-// V3 lane R skeleton: declarations only, in no build. Rev 4.1, with R.rst
-// rev 2.1 (section 3). Pin chengcli/snapy 9e5de2d4. What HydroImpl::forward
+// V3 lane R skeleton: declarations only, in no build. Rev 4.2, with R.rst
+// rev 2.2 (section 3). Pin chengcli/snapy 9e5de2d4. What HydroImpl::forward
 // (hydro_forward.cpp:370-1696) becomes: one stage driver that calls the
 // lanes' ops in RegisterPhase order and owns no flux, no fixer and no
 // AAM state. Lines the driver no longer holds are counted in R.rst s9.
@@ -27,7 +27,7 @@ struct StageInputs {
   torch::Tensor solid;  // immersed solid mask or undefined
   double dt;            // X's host dt (step dt, never dt_corr)
   int stage;
-  RegisterWeights const* weight;  // this stage's, from X (both tableaux)
+  harp::IntegratorWeight const* weight;  // this stage's, from X
 };
 
 //! the slimmed Hydro module: options parse, ownership and the stage driver

@@ -3,11 +3,11 @@
 V3 lane R: flux register, monitor and the hydro stage
 =====================================================
 
-Revision 2.1, 2026-11-17: amendment of revision 2 (``175af2fc``) after
-reading the published X, O, K, A and S texts.
+Revision 2.2, 2026-11-17: amendment of revision 2.1 (``6df93fda``) after
+reading X revision 3 (``100bc9b33514ebffd8c92b22c93cf25bc5c382d9``).
 Owner: Tianhao Le (backup owner). Reviewers: Xinyue Wang and Zoey Hu. Design
 only: no implementation change. Declarations are in ``docs/v3/skeleton/R/``
-(not built): ``flux_register.hpp`` (rev 4.1, 118 lines) and
+(not built): ``flux_register.hpp`` (rev 4.2, 117 lines) and
 ``hydro_stage.hpp`` (82 lines), 200 lines in all.
 
 Every ``path:line`` is at chengcli/snapy
@@ -17,6 +17,23 @@ line count read at the pin with ``git show <pin>:<file> | sed -n 'a,bp'``
 and ``b - a + 1``; "estimate" means a design target, not counted code.
 Nothing in this revision was built, compiled, syntax-checked, tested or
 timed. A claim that needs a run is marked **hypothesis**.
+
+**Changes in revision 2.2** (from ``6df93fda``). Matrix rows 97-102.
+
+* ``begin_stage`` returns to ``(int, harp::IntegratorWeight const&)``, and
+  ``weights()`` returns ``harp::IntegratorWeight const&``. ``RegisterWeights``
+  is removed. X rev 3 calls ``begin_stage(int stage,
+  harp::IntegratorWeight const&)`` (``X.rst:141-146`` at ``100bc9b3``) and
+  moves IMEX-ARK out of this round (``X.rst:639-683``, ``StageTableau``
+  removed from ``pyharp_integrator.hpp``). ``RegisterWeights`` existed
+  only for ARK. If Cheng accepts X9, R adds separate explicit and implicit
+  weights then (the rev 2.1 design is kept in 3.4 as a note).
+* X's "``reset_step``" (``X.rst:153-155``, ``:693-694``) is R's
+  ``begin_step()``. Answer to X's open question: yes, the step is zeroed
+  once in X's ``kStepStart``, before the radial ``post_split``, and
+  ``begin_stage(0)`` zeroes nothing (unchanged since rev 2).
+* ``after_combine`` is entered after **each** stage's combine, not only the
+  last. Request to X (4.2 X).
 
 **Changes in revision 2.1** (from ``175af2fc``). Matrix rows 81-96.
 
@@ -82,11 +99,11 @@ names are settled in section 4.2, ``retry_flags`` in 4.5.
      - ``(coord, policy, nvar, RegisterRequest)``
    * - ``begin_stage``
      - ``(int, StageWeights const&)``
-     - ``(int, RegisterWeights const&)``, X only (rev 2 had
-       ``harp::IntegratorWeight``)
-   * - ``RegisterWeights``, ``weights()``
+     - ``(int, harp::IntegratorWeight const&)``, X only (rev 2.1 briefly had
+       ``RegisterWeights``; removed in rev 2.2)
+   * - ``weights()``
      - none
-     - ``{carry, explicit_w, implicit_w}``; ``weights() const``
+     - ``harp::IntegratorWeight const& weights() const``
    * - ``begin_step``
      - none
      - ``()``, X's step start
@@ -369,7 +386,8 @@ a change to ``u_s`` reaches the step's result. The final step sum is
 recursion and the product form differ only in FP64 rounding (gates G-R3,
 G-R14).
 
-**IMEX-ARK (X's proposed X9).** At the step end, ``u = u0 + dt sum_i (bex_i
+**IMEX-ARK (X9), a note only since rev 2.2.** X rev 3 moves ARK out of this
+round and the header declares no ARK weights. Were X9 accepted: at the step end, ``u = u0 + dt sum_i (bex_i
 kex_i + bim_i kim_i)``, with ``kim_i = (u_i - rhs) / (gamma_i dt)``. X fills
 ``RegisterWeights`` as ``{1, bex_i, bim_i / gamma_i}``. Posts keep one unit,
 per area per time at the step ``dt``:
@@ -643,6 +661,36 @@ was profiled.
     phase. Request to X: name it in the schedule.
   * **Retry.** X's ``RetryFlag`` is a 0-d tensor per cause in one dtype.
     R's ``retry_flags()`` slots map one to one onto them.
+* **Checked against X rev 3 at ``100bc9b3``** (rev 2.2):
+
+  * X cites R at ``3490d7e1``. ``begin_stage(int, harp::IntegratorWeight
+    const&)`` (``X.rst:141-146``) now matches R's header again
+    (``flux_register.hpp:49`` at rev 2.2).
+  * Reset: X's ``ResetPhase {kStepStart, kStageZero, kRollback}`` and
+    ``StageExecutor::step_start(dt)`` (``meshblock_parts.hpp``,
+    ``stage_executor.hpp`` at ``100bc9b3``) run the register's step zeroing
+    first in ``kStepStart``, then the radial ``post_split``; ``rollback()``
+    is a ``kRollback`` entry; a retry reruns ``step_start``. That is R's
+    ``begin_step()`` (``flux_register.hpp:48``). Request: rename X's
+    ``reset_step`` to ``begin_step``.
+  * ``Fixer::apply`` gets that stage's ``w2`` (``meshblock_parts.hpp``,
+    ``GlobalCorrection``; ``X.rst:162-167``), as R states
+    (``flux_register.hpp:105-116``).
+  * **after_combine, remaining mismatch.** X's data flow runs
+    "``finish_step``, then ``after_combine``" on the **last** stage only
+    (``X.rst:99``, ``:115-117``; ``stage_executor.hpp`` ``finish_step``).
+    At the pin the conserved limiter runs after **every** stage's combine
+    when hydro has species or scalars (``meshblock.cpp:906-909``), and A's
+    closure every stage (``:983-990``, X's global phase). R's
+    ``after_combine`` is entered after each stage's combine; on the last
+    stage it follows ``finish_step``. Amounts posted there carry
+    ``stage_weight`` 1.0 and are scaled by later ``w1`` (3.4), so the
+    weighting is the same either way. Only the phase label differs.
+    Request to X: enter R's ``after_combine`` after each combine.
+  * Amounts: X sums R's FP64 amounts over blocks and ranks after the
+    accept (``X.rst:104``, ``:160-161``); O says it sums in ``flush``
+    (``O.rst`` at ``c12f78bb``). One of them, not both: X and O to agree.
+
 * **Checked against A rev 3 part 1 at ``9ee83756``** (rev 2.1):
 
   * A cites R at ``543ff84f``. Its R-6 contract is ``stage_weight = w2_s``
@@ -1109,7 +1157,7 @@ the program manager's eight additions, C = lane C rev 5, I = lane I rev 2.
    * - 81
      - X rev 2
      - two tableaux vs R's weights
-     - ``RegisterWeights``; 3.4 ARK
+     - superseded by row 97 (rev 2.2)
    * - 82
      - X rev 2 s11
      - implicit fluxes as their own increment
@@ -1170,6 +1218,30 @@ the program manager's eight additions, C = lane C rev 5, I = lane I rev 2.
      - R
      - rev 2's K section wrong
      - corrected (rev 2.1)
+   * - 97
+     - X rev 3
+     - ``begin_stage`` argument
+     - ``harp::IntegratorWeight`` again; ``RegisterWeights`` removed
+   * - 98
+     - X rev 3
+     - ``reset_step`` from ``kStepStart``
+     - yes; R's name is ``begin_step()``
+   * - 99
+     - X rev 3
+     - ``Fixer::apply`` stage ``w2``
+     - matches
+   * - 100
+     - X rev 3
+     - ``after_combine`` last stage only
+     - **open**: R enters it after each combine
+   * - 101
+     - X rev 3
+     - ARK out of scope
+     - R declares no ARK weights; 3.4 note
+   * - 102
+     - X / O
+     - who sums the amounts over blocks
+     - **open**: X or O, not both
 
 
 4.5 retry_flags (lane I's proposal (c))
@@ -1334,8 +1406,8 @@ None of these has run. Each says how it would be checked.
 8. Cross-repository interface changes and merge order
 -----------------------------------------------------
 
-* pyharp: none. R names no pyharp type since rev 2.1; X maps
-  ``harp::IntegratorWeight`` or ``StageTableau`` to ``RegisterWeights``.
+* pyharp: none. R reads ``harp::IntegratorWeight`` (pyharp
+  ``integrator.hpp:20-29``) through X's ``begin_stage``.
   kintera: K posts through R's calls (4.2 K). commux: none.
 * Merge order (snapy):
 
@@ -1537,9 +1609,8 @@ Each step is one PR and keeps every existing test.
   ``peer_dim``/``normal_sign`` in ``SeamEntry`` (G-R13); R-C1 (in-place
   rotation is kept, so a copy or a hook); relabel "C's 50" as R's D1; K7 (with X
   and EF).
-* **X:** confirm ``RegisterWeights`` (Shu-Osher and ARK); update the R
-  citations from ``543ff84f``; run R's ``StepReset`` before the radial
-  ``post_split``; name the ``after_combine`` hook in the schedule; per-op time in ``report()`` (margin); who counts the
+* **X:** rename ``reset_step`` to ``begin_step``; enter ``after_combine``
+  after each stage's combine; agree with O on who sums the amounts; per-op time in ``report()`` (margin); who counts the
   meshblock fixer lines.
 * **K:** confirm ``element/<name>`` derived rows for ``chem.elements``,
   and the retry slot (X's stack or ``flag_retry``).
@@ -1557,13 +1628,13 @@ Each step is one PR and keeps every existing test.
      - lines
      - declares
    * - ``docs/v3/skeleton/R/flux_register.hpp``
-     - 118
-     - ``RegisterWeights``, ``RegisterPhase``, ``SeamRule``, ``AmountKind``,
+     - 117
+     - ``RegisterPhase``, ``SeamRule``, ``AmountKind``,
        ``RegisterRequest``,
        ``FluxRegister``, ``RegisterMonitor``, ``Fixer``
    * - ``docs/v3/skeleton/R/hydro_stage.hpp``
      - 82
      - ``StageInputs``, ``HydroStage``
    * - **total**
-     - **200**
+     - **199**
      - under 300
