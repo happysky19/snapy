@@ -49,10 +49,10 @@ src/hydro/split_reference_scalar.hpp,74,74,unchanged
 src/hydro/hydro_dispatch.cpp,327,0,"-> x1_reference_dispatch.cpp; MPS :33-54, :101-275 deleted; rows :277-312 -> x1_rows"
 src/hydro/hydro_dispatch.cu,118,0,-> x1_reference_dispatch.cu
 src/hydro/hydro_dispatch.hpp,68,0,-> x1_reference_dispatch.hpp; wall4/conv4 decls -> recon
-src/hydro/hydro_forward.cpp:291-368,78,0,"lane R range, moved in: conv4 weights, wall4 weights/fill, admissibility -> x1_rows, conversion"
-src/hydro/hydro_forward.cpp:417-504,88,0,"lane R range, moved in: conversion-order 4 stage -> conversion.cpp"
-src/hydro/hydro_forward.cpp:668-820,153,0,"lane R range, moved in: well-balanced x1 block -> well_balanced_x1.cpp"
-src/hydro/hydro.cpp:605-872,268,0,"lane R range, moved in: _hydro_ref_x1 -> x1_reference.cpp"
+src/hydro/hydro_forward.cpp:291-368,78,0,"lane R range (R's now, deleted by R; not in lane C's now); its replacement is counted in C's new files: conv4 weights, wall4 weights/fill, admissibility -> x1_rows, conversion"
+src/hydro/hydro_forward.cpp:417-504,88,0,"lane R range (R's now, deleted by R; not in lane C's now); its replacement is counted in C's new files: conversion-order 4 stage -> conversion.cpp"
+src/hydro/hydro_forward.cpp:668-820,153,0,"lane R range (R's now, deleted by R; not in lane C's now); its replacement is counted in C's new files: well-balanced x1 block -> well_balanced_x1.cpp"
+src/hydro/hydro.cpp:605-872,268,0,"lane R range (R's now, deleted by R; not in lane C's now); its replacement is counted in C's new files: _hydro_ref_x1 -> x1_reference.cpp"
 src/recon/recon_point.h,0,125,new lane C file
 src/recon/recon_line.cuh,0,165,new lane C file
 src/recon/x1_rows.hpp,0,45,new lane C file
@@ -73,6 +73,6 @@ src/hydro/x1_reference_dispatch.hpp,0,35,new lane C file
 src/hydro/x1_reference_dispatch.cpp,0,65,new lane C file
 src/hydro/x1_reference_dispatch.cu,0,95,new lane C file
 TOTAL baseline files,5841,1069,
-TOTAL moved in from lane R,587,0,
-TOTAL new files,0,2260,
-TOTAL lane C,6428,3329,-43.0% vs baseline; -48.2% vs baseline+moved
+"R ranges replaced by lane C (counted in R's now, not in C's)",587,0,R deletes them; C counts their replacement in its new files
+TOTAL new files,0,2260,includes the replacement of the R ranges
+TOTAL lane C,5841,3329,-43.0% vs lane C's 5841-line baseline; ceiling 4672

@@ -3,7 +3,8 @@
 V3 lane C: reconstruction, Riemann solvers, well-balanced reference, conversion order
 =====================================================================================
 
-Revision 4, 2026-11-17. Owner: Tianhao Le (alternate: Xinyue). Design only:
+Revision 5 draft (local, not pushed), 2026-11-17. Owner: Tianhao Le
+(alternate: Xinyue). Design only:
 no implementation change. Declarations are in ``docs/v3/skeleton/C/`` (not
 built); the file-by-file line table is ``docs/v3/design/C_lines.csv``,
 produced by ``docs/v3/design/C_lines.py``.
@@ -36,6 +37,16 @@ home thread that every solver and scheme stays:
 * **The 587-line accounting with lane R is provisional** until lane R's
   owner confirms it in lane R's own table (section 9). Revision 3 called it
   confirmed; that was premature.
+
+Revision 5 draft (on ``a7155840``):
+
+* a table of the ten register requirements, one row each, with lane C's
+  part or "not this lane" (section 4, Xinyue's C-N7);
+* the 587-line split stated once: lane R counts the deletion, lane C counts
+  the replacement in its new files. Lane C's "now" is 5,841, not 6,428
+  (section 9, ``C_lines.py``, ``C_lines.csv``);
+* the register names are still provisional. The published revision 5
+  will use lane R's header names (section 11).
 
 Revision 4.1 (on ``87333f5e``) reconciles the two round-2 reviews of
 revision 3 (Xinyue's and Jiachen's). The changes:
@@ -512,7 +523,7 @@ parent. It adds ``dynamics/wb-wall-reference`` (``auto``, ``upward``,
 
 It rewrites most of lane C's moved ranges in ``hydro_forward.cpp``
 (``git diff --stat 9e5de2d4...pr/369``: +438/-166 in that file). It also
-uses ``hydro_ref_x1_mps`` as a CPU-callable parity port (#369
+uses ``hydro_ref_x1_mps`` as a CPU-callable parity port (#369 at ``c382f0da``,
 ``tests/test_hydro_ref_x1.cpp:583``,
 ``mps_port_matches_the_kernel_on_the_upward_rows``).
 
@@ -520,7 +531,8 @@ Lane C stays on the pin. If #369 merges first:
 
 * ``X1ReferenceConfig`` gains the reference mode and the depth index, and
   ``six_face_rows`` gains ``upward``;
-* the budget's moved-in ranges are re-measured on the new base;
+* the four lane R ranges and their replacement are re-measured on the new
+  base;
 * C2 must either keep the tensor port (+175 lines, section 9) or turn
   #369's parity test into a comparison of ``OnHost`` against the kernel.
   That choice is the PR author's and Cheng's (question to #369, section
@@ -728,6 +740,87 @@ register slots or views of them. The executor side of the register
 integrator weights, reset at stage 0 and on rollback, the monitor read with
 the retry flags) is lane X's, ``X.rst`` section 4. Lane C takes it as stated
 there.
+
+**The ten register requirements.** One row per requirement, with lane C's
+part or "not this lane". Pin lines are at ``9e5de2d4``. Register names stay
+provisional until lane R's header (section 11).
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22, 50, 28
+
+   * - requirement
+     - lane C's part
+     - where
+   * - Req. 1: One owner of every conservative face flux; one documented frame and
+       area weighting
+     - Lane R owns the register. Lane C posts the ``riemann`` increment of
+       every solver that runs in hydro: hllc, lmars, roe and shallow-roe.
+       Upwind and plume-roe post none in hydro (section 3.6). Frame: global
+       components, after coord's ``to_global_frame_``. Area: per unit face
+       area; the divergence applies ``face_area<d>``. Lane C keeps no face-flux
+       buffer; today's ``_flux1/2/3`` (``hydro.cpp:248-271``) become register
+       slots.
+     - this section, "What lane C posts"; section 3.6
+   * - Req. 2: Named increments in a declared order; total and parts reportable
+     - Lane C posts ``riemann`` first in each direction, with the part
+       ``riemann.central`` (one summed mass row) and the derived
+       ``riemann.dissipative``. Lane C declares its place in the stage order.
+       Sedimentation, covariance and positivity are other lanes' increments.
+     - this section, "Parts" and "Ordering constraints"
+   * - Req. 3: Stage fluxes accumulated with the integrator's stage weights into the
+       step transfer
+     - Not this lane. Lane R accumulates, with X's ``begin_stage`` weights
+       (``X.rst`` section 4). Lane C posts per stage only.
+     - lane R; ``X.rst`` section 4
+   * - Req. 4: Flux divergence and every flux-derived term read the register;
+       never rebuild a flux
+     - Lane C reads nothing from the register and rebuilds no flux. The
+       in-kernel ``riemann.central`` removes today's rebuild by two extra
+       Riemann solves per x2/x3 direction (``hydro_forward.cpp:997-1003``,
+       ``:1108``, ``:1141``). The divergence is lane R's.
+     - this section; section 3.6
+   * - Req. 5: A shared face has two entries and one reconciliation rule;
+       single-valuedness is a gate; rotation is one function owned by coord
+     - The reconciliation rule is lane R/S's. That is the x1 seam average,
+       ``hydro_forward.cpp:882-946``, which covers ``riemann``, ``p*`` and the
+       split background. Lane C calls coord's one rotation (lane S) in place
+       of ``riemann_solver.cpp:12-47`` and the three covariance copies.
+       ``riemann.central`` is single-valued at panel seams through the
+       exchanged states (``:1005-1048``). Gate: ``test_x1_seam_split``.
+     - this section, "x2/x3 panel seams"; section 5; S4
+   * - Req. 6: One device-side monitor (mass, species, E+PE, AAM, scalars); no host
+       reads inside a segment
+     - Not this lane for the monitor, which is lane R's and read by X.
+       Lane C feeds it two device counters: ``FaceFloor`` (``int64``) and
+       ``FaceFlux::events`` (``uint8``). Lane C's per-stage path has no host
+       read (section 7).
+     - section 3.7; section 7
+   * - Req. 7: Every fixer and floor registers what it added
+     - Lane C has no fixer. Face-state floors cannot register a flux: the
+       flux they cause has no separate value without a second solve. So they
+       register counts (``FaceFloor``, including the WB fallbacks
+       ``hydro_forward.cpp:786-787``, ``:804-805``). The HLLC p* clamp and
+       Roe's LLF fallback register through ``FaceFlux::events``.
+     - section 3.7; this section, "Floors"
+   * - Req. 8: Stated dtype under FP32; fixed storage a CUDA graph can capture
+     - ``riemann`` and ``riemann.central`` are ``kFlux``; ``p*`` is
+       ``kGauge`` (FP64); X's rows. Register slots are lane R's fixed storage.
+       Lane C's cross-segment tensors are fixed storage, allocated at
+       ``reset()`` (section 7). The accumulation dtype is lane R's (R2).
+     - section 6; section 7
+   * - Req. 9: No added full-field copy per stage; memory and cost stated
+     - Lane C adds none. ``riemann.central`` is one row, stored on request:
+       2.47 MB per direction in FP64 at ``jupiter_gcm`` size. It replaces
+       today's 2 x nvar rows per direction (``cen2/3``, ``_aam_mass_flux``)
+       and four Riemann solves per stage. Per-call temporaries stay in X's
+       graph pool. The cost is not measured (design estimate).
+     - this section, "Memory"; section 7
+   * - Req. 10: The register is rebuilt, not written to restart
+     - Not this lane for the register. Lane C writes nothing to restart;
+       ``X1RowsCache`` and the reference are rebuilt.
+     - this section, "Restart"
+
 
 **Provisional until lane R answers** (questions R1-R4, section 11). Lane R
 has no published design yet, so these lane C items are proposals, not
@@ -1240,16 +1333,18 @@ range, its length. "After" is an estimate. The table is
    * - the 50 lane C baseline files
      - 5,841
      - 1,069 (11 files kept)
-   * - lane R ranges moved in (``hydro_forward.cpp:291-368``, ``:417-504``,
-       ``:668-820``; ``hydro.cpp:605-872``)
-     - 587
-     - 0 (code now in new lane C files)
-   * - 19 new lane C files
+   * - 19 new lane C files (they include the replacement of the four
+       lane R ranges below)
      - 0
      - 2,260
    * - **lane C**
-     - **6,428**
+     - **5,841**
      - **3,329**
+   * - for reference, not in lane C's totals: the four lane R ranges that
+       lane C's new files replace (``hydro_forward.cpp:291-368``,
+       ``:417-504``, ``:668-820``; ``hydro.cpp:605-872``)
+     - 587 (lane R's "now")
+     - 0 (lane R deletes them)
 
 Every solver and scheme of the pin is in these numbers (Cheng's decision).
 The reduction comes only from structure:
@@ -1267,13 +1362,14 @@ The reduction comes only from structure:
   (``X1Reference``).
 
 By group, now to after: recon 2,233 to 1,275; riemann 2,089 to 980; the 10
-reference files plus their new files 1,519 to 1,074. The moved-in lines'
-new home is inside those "after" numbers.
+reference files plus their new files 1,519 to 1,074. The replacement of
+the 587 lane R lines is inside those "after" numbers.
 
 **Against the ceiling.** The lane ceiling is 4,672 (20% below 5,841). The
 estimate is 3,329: 1,343 lines under the ceiling, -43.0% against the 5,841
-baseline, -48.2% against baseline plus moved-in lines (6,428). Two variants
-were checked against it:
+baseline. The replacement of the 587 lane R lines is already inside the
+3,329; the 587 lines themselves are not in lane C's 5,841. Three variants
+were checked against the ceiling:
 
 * if MPS keeps on-device torch formulas instead of host copies (``FOR
   CHENG``, section 3.8), one tensor-scalar instantiation of the same point
@@ -1282,22 +1378,49 @@ were checked against it:
 * if PR #369 merges and its CPU parity test keeps the tensor MPS reference
   (section 3.5), add 175: 3,504.
 
-All three stay under 4,672. If #369 merges first, its rewrite of the moved
-ranges changes their measured lengths. ``C_lines.py`` then needs the new
+All three stay under 4,672. If #369 merges first, its rewrite of the four
+lane R ranges changes their measured lengths. ``C_lines.py`` then needs the new
 base and ranges, and the numbers here are re-measured.
 
-**Split with lane R: provisional until lane R's owner confirms it.** The
-proposal is that the 587 moved lines count once:
+**Split with lane R (the same statement goes in ``R.rst``).** The four
+pinned ranges are lane R's code:
 
-* in lane R's table as deletions from ``hydro.cpp`` and
-  ``hydro_forward.cpp``, with "after" 0 for those ranges;
-* in lane C's table only in the "after" of the new files (as here).
+.. list-table::
+   :header-rows: 1
 
-A message in the home thread accepted this split and said lane R's deleted
-ranges would be compared with ``C_lines.csv`` once lane R's table exists.
-No lane R table or design is published (section 1), so the R side is not
-verified and stays provisional (question R6). The call sites left in lane
-R's files are lane R's lines.
+   * - pinned range
+     - lines (measured)
+     - lane C file that replaces it
+   * - ``hydro_forward.cpp:291-368`` (conversion and wall weights,
+       ``wall4_fill``, ``conv4_admissible``)
+     - 78
+     - ``x1_rows.cpp``, ``conversion.cpp``
+   * - ``hydro_forward.cpp:417-504`` (conversion-order 4 stage)
+     - 88
+     - ``conversion.cpp``
+   * - ``hydro_forward.cpp:668-820`` (well-balanced x1 block)
+     - 153
+     - ``well_balanced_x1.cpp``
+   * - ``hydro.cpp:605-872`` (``HydroImpl::_hydro_ref_x1``)
+     - 268
+     - ``x1_reference.cpp``
+   * - total
+     - 587
+     -
+
+Each line is counted once in a roll-up of the two lanes:
+
+* **lane R counts the deletion.** The 587 lines are in lane R's "now", and
+  lane R's "after" for those ranges is 0;
+* **lane C counts the replacement.** The new code is in lane C's "after",
+  in the new files above. The 587 lines are not in lane C's "now" (5,841).
+* The call sites that stay in ``hydro.cpp`` and ``hydro_forward.cpp`` are
+  lane R's lines, in lane R's "after".
+
+``C_lines.csv`` lists the four ranges with their measured lengths for
+checking, outside lane C's totals. Tianhao is also lane R's backup owner and
+states the same split in ``R.rst``. ``R.rst`` is not published yet (section
+1), so the match is checked only once it is (question R6).
 
 File by file:
 
@@ -1355,10 +1478,10 @@ File by file:
    "src/hydro/hydro_dispatch.cpp", 327, 0, "-> x1_reference_dispatch.cpp; MPS :33-54, :101-275 deleted; rows :277-312 -> x1_rows"
    "src/hydro/hydro_dispatch.cu", 118, 0, "-> x1_reference_dispatch.cu"
    "src/hydro/hydro_dispatch.hpp", 68, 0, "-> x1_reference_dispatch.hpp; wall4/conv4 decls -> recon"
-   "src/hydro/hydro_forward.cpp:291-368", 78, 0, "lane R range, moved in: conv4 weights, wall4 weights/fill, admissibility -> x1_rows, conversion"
-   "src/hydro/hydro_forward.cpp:417-504", 88, 0, "lane R range, moved in: conversion-order 4 stage -> conversion.cpp"
-   "src/hydro/hydro_forward.cpp:668-820", 153, 0, "lane R range, moved in: well-balanced x1 block -> well_balanced_x1.cpp"
-   "src/hydro/hydro.cpp:605-872", 268, 0, "lane R range, moved in: _hydro_ref_x1 -> x1_reference.cpp"
+   "src/hydro/hydro_forward.cpp:291-368", 78, 0, "lane R range (R's now, deleted by R; not in lane C's now); its replacement is counted in C's new files: conv4 weights, wall4 weights/fill, admissibility -> x1_rows, conversion"
+   "src/hydro/hydro_forward.cpp:417-504", 88, 0, "lane R range (R's now, deleted by R; not in lane C's now); its replacement is counted in C's new files: conversion-order 4 stage -> conversion.cpp"
+   "src/hydro/hydro_forward.cpp:668-820", 153, 0, "lane R range (R's now, deleted by R; not in lane C's now); its replacement is counted in C's new files: well-balanced x1 block -> well_balanced_x1.cpp"
+   "src/hydro/hydro.cpp:605-872", 268, 0, "lane R range (R's now, deleted by R; not in lane C's now); its replacement is counted in C's new files: _hydro_ref_x1 -> x1_reference.cpp"
    "src/recon/recon_point.h", 0, 125, "new lane C file"
    "src/recon/recon_line.cuh", 0, 165, "new lane C file"
    "src/recon/x1_rows.hpp", 0, 45, "new lane C file"
@@ -1379,9 +1502,9 @@ File by file:
    "src/hydro/x1_reference_dispatch.cpp", 0, 65, "new lane C file"
    "src/hydro/x1_reference_dispatch.cu", 0, 95, "new lane C file"
    "TOTAL baseline files", 5841, 1069, ""
-   "TOTAL moved in from lane R", 587, 0, ""
-   "TOTAL new files", 0, 2260, ""
-   "TOTAL lane C", 6428, 3329, "-43.0% vs baseline; -48.2% vs baseline+moved"
+   "R ranges replaced by lane C (counted in R's now, not in C's)", 587, 0, "R deletes them; C counts their replacement in its new files"
+   "TOTAL new files", 0, 2260, "includes the replacement of the R ranges"
+   "TOTAL lane C", 5841, 3329, "-43.0% vs lane C's 5841-line baseline; ceiling 4672"
 
 10. Migration
 -------------
@@ -1466,9 +1589,10 @@ provisional (section 4):
   ``FaceFlux::events``, and who resets them on a redo? X section 4 resets
   registers at stage 0 and on rollback.
 * R5: who owns the x1 seam reconciliation?
-* R6: the 587-line split of section 9. It was accepted in the home thread
-  but is provisional until lane R's own table shows the same ranges as
-  deletions.
+* R6: the 587-line split of section 9: lane R counts the deletion, and
+  lane C counts the replacement in its new files. It is decided, and
+  ``R.rst`` states it the same way. The check that lane R's table lists the
+  same four ranges waits for ``R.rst``.
 * R7: lane R's header and numbered review notes on lane C were not
   available to this revision. Lane C will align names and dtypes to them
   only once they are published.

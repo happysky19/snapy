@@ -1,4 +1,7 @@
-"""Lane C file-by-file line budget, revision 4: every solver and scheme kept. 'now' is measured (git show <pin>:<file> | wc -l);
+"""Lane C file-by-file line budget, revision 5: every solver and scheme kept.
+The four lane R ranges are R's "now" (R deletes them); lane C counts only
+their replacement, inside its new files. Each line is counted once in a
+roll-up of the two lanes. 'now' is measured (git show <pin>:<file> | wc -l);
 'after' is a design estimate. Run from the snapy clone."""
 import subprocess, csv, sys
 PIN = "9e5de2d4ce497d0b2d4da3295fc1fe969fe7e410"
@@ -85,12 +88,16 @@ for f,a,fate in SPEC:
     n=now(f); tn+=n; ta+=a; rows.append((f,n,a,fate))
 mv=0
 for f,lo,hi,fate in MOVED:
-    n=now(f,lo,hi); mv+=n; rows.append((f"{f}:{lo}-{hi}",n,0,"lane R range, moved in: "+fate))
+    n=now(f,lo,hi); mv+=n
+    rows.append((f"{f}:{lo}-{hi}",n,0,"lane R range (R's now, deleted by R; not in lane C's now); "
+                 "its replacement is counted in C's new files: "+fate))
 nw=0
 for f,a in NEW:
     nw+=a; rows.append((f,0,a,"new lane C file"))
 w=csv.writer(sys.stdout); w.writerow(["file","lines_now_measured","lines_after_estimate","fate"])
 for r in rows: w.writerow(r)
 after=ta+nw
-w.writerow(["TOTAL baseline files",tn,ta,""]); w.writerow(["TOTAL moved in from lane R",mv,0,""]); w.writerow(["TOTAL new files",0,nw,""])
-w.writerow(["TOTAL lane C",tn+mv,after,f"{(after-tn)/tn*100:.1f}% vs baseline; {(after-tn-mv)/(tn+mv)*100:.1f}% vs baseline+moved"])
+w.writerow(["TOTAL baseline files",tn,ta,""])
+w.writerow(["R ranges replaced by lane C (counted in R's now, not in C's)",mv,0,"R deletes them; C counts their replacement in its new files"])
+w.writerow(["TOTAL new files",0,nw,"includes the replacement of the R ranges"])
+w.writerow(["TOTAL lane C",tn,after,f"{(after-tn)/tn*100:.1f}% vs lane C's {tn}-line baseline; ceiling {int(tn*0.8)}"])
