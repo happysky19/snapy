@@ -74,6 +74,25 @@ The snapy heads except I and EF have the pin as merge base. The four live
 moves above happened after the snapshot; this part cites the snapshot.
 
 
+1.1 Decisions recorded
+~~~~~~~~~~~~~~~~~~~~~~
+
+* **Per-column FP64 retry accepted** (Cheng, 22:20 EST 2026-11-17, relayed
+  by the PM in the lane R thread). After a failed FP32 implicit solve, only
+  the failed columns are retried in FP64, through X's predicated second
+  launch; the other columns keep their FP32 solution. This settles lane I's
+  proposal (c) (live ``I.rst:703-712``, ``:1212-1232`` at ``2d8685c8``) and
+  row 1 of R's 4.5 table (``R.rst:1380-1398``). R's ``flag_retry`` cause
+  ``implicit.column`` stays as written, per column; no ``flux_register.hpp``
+  declaration changes. What changes in results is lane I's (c): bitwise
+  when no column fails; failed columns bitwise to today's retry
+  (hypothesis); the other columns of a failing block keep FP32, beyond
+  round-off (``I.rst:1215-1225``). At the live heads, lane I (``:15``,
+  ``:66``, ``:691``, ``:703-712``, ``:1212-1213``) and lane X
+  (``X.rst:296``, ``:853`` at ``7bed6980``) still say "if Cheng agrees";
+  their next revisions carry the ruling.
+
+
 2. Line budget, each line counted once (RULING V3-1)
 ----------------------------------------------------
 
@@ -408,8 +427,10 @@ each other unless the dependency column says so.
    * - 2
      - R-5 with I-4, I-5, I-6, I-7 (and R's and X's I-7 parts)
      - snapy
-     - R-1; I-6 waits on Cheng's ruling (c)
-     - I-4, I-5 rounding (hypothesis)
+     - R-1; I-6 with X's predicated second launch (1.1)
+     - I-4, I-5 rounding (hypothesis); I-6 per-column FP64 retry
+       (accepted, 1.1): bitwise when no column fails, beyond round-off
+       for the unfailed columns of a failing block
      - ``R.rst:1556``, ``:1730``; ``I.rst:980-991``
    * - 2
      - X4 global phase; X5; X6; X7
@@ -486,9 +507,9 @@ each other unless the dependency column says so.
      - ``K.rst:667``, ``:790``
 
 Open in the plan: no lane gives a dependency for P2 or for S's phase 2;
-both are placed where they block nothing. I-6 waits on Cheng's ruling (c)
-(``I.rst`` 10(c)). C2, C10, S phase 2's corner correction and the
-FOR CHENG items of each lane stay with Cheng.
+both are placed where they block nothing. I-6 is no longer blocked: the
+per-column retry is accepted (1.1). C2, C10, S phase 2's corner correction
+and the FOR CHENG items of each lane stay with Cheng.
 
 
 4. Gates by name, owner and kind
