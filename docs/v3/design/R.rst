@@ -3,12 +3,14 @@
 V3 lane R: flux register, monitor and the hydro stage
 =====================================================
 
-Revision 2.3, 2026-11-17: comments and text only, on revision 2.2
-(``4c59162ae37080d0ab307b2823742b44f46da7c3``), and RULING V3-3, which
-closes R-C1. ``flux_register.hpp`` is unchanged in declarations and line
-numbers, so the freeze stands and no client re-cites. The one declaration
-change is in ``hydro_stage.hpp`` (item 10), which no client calls. Revision
-2.2 amended revision 2.1 (``6df93fda``) after reading X revision 3
+Revision 2.4, 2026-11-17: ``R.rst`` text only, on skeleton rev 4.3
+(``97c62312490c3e290d597a2d188785252773bd21``). ``flux_register.hpp`` is
+unchanged since ``4c59162ae37080d0ab307b2823742b44f46da7c3`` in declarations
+and line numbers, so the freeze stands and no client re-cites. Revision 2.3
+was comments and text on revision 2.2 (``4c59162a``), and RULING V3-3,
+which closes R-C1; its one declaration change is in ``hydro_stage.hpp``
+(item 10), which no client calls. Revision 2.2 amended revision 2.1
+(``6df93fda``) after reading X revision 3
 (``100bc9b33514ebffd8c92b22c93cf25bc5c382d9``).
 Owner: Tianhao Le (backup owner). Reviewers: Xinyue Wang and Zoey Hu. Design
 only: no implementation change. Declarations are in ``docs/v3/skeleton/R/``
@@ -23,6 +25,25 @@ and ``b - a + 1``; "estimate" means a design target, not counted code.
 Nothing in this revision was built, compiled, syntax-checked, tested or
 timed. A claim that needs a run is marked **hypothesis**.
 
+**Changes in revision 2.4** (from ``97c62312``; ``R.rst`` only). Matrix
+rows 73, 103 and 104.
+
+1. ``after_combine`` has one runner, X's ``StageExecutor::after_combine(int
+   stage, double dt)`` (``stage_executor.hpp:80-81``, ``X.rst:1285-1293``
+   at ``00dee910``). Skeleton rev 4.3 (``97c62312``) removed
+   ``HydroStage::after_combine(u, reg)``, which had no stage or ``dt``; the
+   pin's ops need both (``meshblock.cpp:907-908, 950-951, 989``).
+   The rev 2.2 mismatch and request to X (4.2 "X and A") are closed, and
+   the stage driver's four ``after_combine`` lines leave section 9:
+   3,493 -> 2,757 (was 2,761), 37 under 2,794.
+2. L-3 (S and O): ``boundary(dim)`` sums the fluid domain's boundary faces,
+   S's ``FaceKind`` ``wall``, ``outflow`` and ``custom``, plus every
+   immersed-solid face with fluid on one side, all rows (4.2 O). No
+   declaration changes; ``flux_register.hpp:97`` ("outward") stays.
+3. Recorded from skeleton rev 4.3: ``hydro_stage.hpp:61-62`` puts I's
+   gravity-work remainder before A's m1, the pin's order (``I.rst:299-303``
+   at ``7604ada0``).
+
 **Changes in revision 2.3** (from ``4c59162a``; Cheng's batch of nine and
 Zoey's requests 5, 6, 12 and 13). Header comments are edited in place, so
 every ``flux_register.hpp:N`` and ``hydro_stage.hpp:N`` citation still holds.
@@ -31,7 +52,7 @@ Client heads read: C ``559dd0b7``, X ``0fe47c6f``, O ``dfa8ecd0``, A
 
 1. ``derived`` (``:34``) is not hydro only: K's ``element/<name>`` rows
    (4.2 K) are derived rows of the hydro register too.
-2. ``after_combine`` (``:22``; ``hydro_stage.hpp:67-69``): A's closure runs
+2. ``after_combine`` (``:22``; ``hydro_stage.hpp:67-70``): A's closure runs
    every stage (``meshblock.cpp:983-990``; several blocks:
    ``mesh.cpp:370-383``). The order at the pin is in 4.2 "X and A".
 3. Retry causes are EF's four names (4.5). ``minima()`` and the other FP64
@@ -385,7 +406,7 @@ instance. Per active direction ``d`` it holds:
   (``riemann.pstar``, ``pressure_base1``, ``kGauge``);
 * on request, the step field ``S_d`` (``kRegister``);
 * the boundary sums: per row, FP64, area-weighted, the outward step
-  transfer through physical boundary faces;
+  transfer through the fluid domain's boundary faces (4.2 O, ``boundary(dim)``);
 * the prescribed mask and values from lane S.
 
 **3.2 Phases.** ``sweep`` < ``reconcile`` < ``limit`` < ``divergence`` <
@@ -608,11 +629,42 @@ was profiled.
   ``floor`` and ``fixer`` are added. The budget is ``delta domain_total +
   sum_d boundary(d) - sum(amounts of kind cell_source, floor, fixer) =
   residual``.
-* **``boundary(dim)``.** Area-integrated: the sum over the block's physical
-  boundary faces of ``A_f S_d``, outward positive, FP64 (FP32 on MPS), in
-  units of the row's conserved quantity. ``S_d`` already carries ``dt`` and
-  the stage weights. It includes ``boundary.prescribed`` and ``post_split``
-  entries.
+* **``boundary(dim)``.** Area-integrated: the sum over the fluid domain's
+  boundary faces of ``A_f S_d``, outward from the fluid positive, FP64 (FP32
+  on MPS), in units of the row's conserved quantity. ``S_d`` already carries
+  ``dt`` and the stage weights. It includes ``boundary.prescribed`` and
+  ``post_split`` entries. **The face set (L-3, rev 2.4; S's and O's proposal,
+  agreed):**
+
+  * a block face whose S ``FaceKind`` (``exchange.hpp:17-25`` at
+    ``d03e4888``) is ``wall``, ``outflow`` or ``custom``, when its interior
+    cell is fluid. Never ``interior``, ``seam_x1``, ``panel`` or
+    ``periodic``: those are shared faces whose two entries cancel over the
+    blocks (``replace``). The pin's ``is_physical_boundary`` is true for
+    any face with a bc function, the slab x1 periodic copy included
+    (``meshblock_options.cpp:235-240``; ``S.rst:135-142``), so R reads S's
+    ``FaceKind``, not that predicate;
+  * every immersed-solid face with exactly one solid neighbour, outward
+    from the fluid cell; a face between two solid cells is not counted;
+  * all rows. On a wall or solid face the mass, species, energy and scalar
+    rows are prescribed to zero (3.5), and the normal momentum keeps the
+    mirror flux: the pin reflects only the normal velocity
+    (``bc/internal_boundary.cpp:78-91``), and S's mask leaves the momentum
+    rows unset (``seam_register.hpp:52-57`` at ``d03e4888``). That flux is
+    the wall's pressure force. ``domain_total`` sums fluid cells only
+    (3.5), so without the solid faces O's momentum identity
+    (``O.rst:808``, ``:970`` at ``4afdbf37``) would not close on solid
+    decks.
+
+  R takes the block-face kinds through coord (``reset``,
+  ``flux_register.hpp:43-44``; at the pin coord reaches its block's faces,
+  ``coordinate.cpp:555-558``) and the solid
+  side from the solid field its stage already gets
+  (``StageInputs::solid``, ``hydro_stage.hpp:27``). The ``set_prescribed``
+  mask marks a face when either neighbour is solid, so it cannot give the
+  side. Both are inside R's own classes, so no ``flux_register.hpp``
+  declaration changes; ``flux_register.hpp:97`` ("area-integrated,
+  outward") stays.
 * ``observe`` runs after accept and before the next ``begin_step()``.
 * **Checked against O's text at ``c12f78bb``** (rev 2.1):
 
@@ -720,7 +772,8 @@ was profiled.
   * **After combine.** X has no named hook. R reads it as R's op
     ``"hydro.after_combine"`` scheduled after X's ``"rk.combine"`` op in the
     same compute segment, with the fixers in X's ``GlobalCorrection``
-    phase. Request to X: name it in the schedule.
+    phase. Request to X: name it in the schedule. (Superseded: X's runner,
+    rev 2.4.)
   * **Retry.** X's ``RetryFlag`` is a 0-d tensor per cause in one dtype.
     R's ``retry_flags()`` slots map one to one onto them.
 * **Checked against X rev 3 at ``100bc9b3``** (rev 2.2):
@@ -738,17 +791,14 @@ was profiled.
   * ``Fixer::apply`` gets that stage's ``w2`` (``meshblock_parts.hpp``,
     ``GlobalCorrection``; ``X.rst:162-167``), as R states
     (``flux_register.hpp:105-116``).
-  * **after_combine, remaining mismatch.** X's data flow runs
-    "``finish_step``, then ``after_combine``" on the **last** stage only
-    (``X.rst:99``, ``:115-117``; ``stage_executor.hpp`` ``finish_step``).
-    At the pin the conserved limiter runs after **every** stage's combine
-    when hydro has species or scalars (``meshblock.cpp:906-909``), and A's
-    closure every stage (``:983-990``, X's global phase). R's
-    ``after_combine`` is entered after each stage's combine; on the last
-    stage it follows ``finish_step``. Amounts posted there carry
-    ``stage_weight`` 1.0 and are scaled by later ``w1`` (3.4), so the
-    weighting is the same either way. Only the phase label differs.
-    Request to X: enter R's ``after_combine`` after each combine.
+  * **after_combine, closed (rev 2.4).** X rev 3.9 (``00dee910``) enters
+    ``RegisterPhase::after_combine`` after **every** stage's combine, after
+    ``finish_step`` on the last, with one runner,
+    ``StageExecutor::after_combine(int stage, double dt)``
+    (``stage_executor.hpp:80-81``, ``X.rst:1285-1293``), in the order above.
+    R has no ``after_combine`` op: ``HydroStage::after_combine(u, reg)`` is
+    removed at skeleton rev 4.3 (``97c62312``). Amounts posted there carry
+    their ``stage_weight`` and are scaled by later ``w1`` (3.4).
   * Amounts: X sums R's FP64 amounts over blocks and ranks after the
     accept (``X.rst:104``, ``:160-161``); O says it sums in ``flush``
     (``O.rst`` at ``c12f78bb``). One of them, not both: X and O to agree.
@@ -1199,7 +1249,8 @@ the program manager's eight additions, C = lane C rev 5, I = lane I rev 2.
    * - 73
      - X, A
      - ``after_combine`` hook
-     - phase and ``HydroStage::after_combine``
+     - phase; X's ``StageExecutor::after_combine(stage, dt)`` runs it
+       (``HydroStage::after_combine`` removed, rev 2.4)
    * - 74
      - X, A
      - ``w2`` to ``Fixer::apply``
@@ -1316,6 +1367,14 @@ the program manager's eight additions, C = lane C rev 5, I = lane I rev 2.
      - X / O
      - who sums the amounts over blocks
      - **open**: X or O, not both
+   * - 103
+     - X rev 3.9
+     - ``after_combine`` caller, stage argument
+     - X's runner; R's op removed (rev 2.4)
+   * - 104
+     - S / O L-3
+     - faces in ``boundary(dim)``
+     - ``wall``, ``outflow``, ``custom``, fluid-side solid faces; all rows
 
 
 4.5 retry_flags (lane I's proposal (c))
@@ -1637,19 +1696,20 @@ plus ``:868-881`` (14, the seam block's comment and gate).
    * - register and monitor (header 118, ``.cpp`` about 282)
      - +400
    * - stage driver: C 40, EF 15, seam 12, gravity 30, implicit 10,
-       prescribed 4, ``after_combine`` 4, covariance 5, x1 relay call 3
-     - +123
+       prescribed 4, covariance 5, x1 relay call 3 (``after_combine`` is
+       X's runner, rev 2.4)
+     - +119
    * - A's lines left in R's files (``A.rst:766-767``, ``:776``: 25 + 15)
      - +40
    * - AAM mode key (off/transport/exact)
      - +8
    * - **after (estimate)**
-     - **2,761: 33 under 2,794**
+     - **2,757: 37 under 2,794**
 
-3,493 - 1,303 = 2,190; 2,190 + 400 + 123 + 40 + 8 = 2,761; 2,794 - 2,761 =
-33. Rev 2's header is still 118 lines, so the register estimate is
-unchanged. ``begin_step``, the K chemistry post and the derived-row posts
-are called from X's, K's, I's and A's files, not R's.
+3,493 - 1,303 = 2,190; 2,190 + 400 + 119 + 40 + 8 = 2,757; 2,794 - 2,757 =
+37. Rev 2's header is still 118 lines, so the register estimate is
+unchanged. ``begin_step``, the K chemistry post, the derived-row posts and
+the ``after_combine`` runner are in X's, K's, I's and A's files, not R's.
 
 **Margin candidate, not counted.** The seven 6-line verbose timing blocks
 (``:505-510``, ``:850-855``, ``:1112-1117``, ``:1145-1150``,
