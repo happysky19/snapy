@@ -3,7 +3,8 @@
 V3 lane R: flux register, monitor and the hydro stage
 =====================================================
 
-Revision 2.4, 2026-11-17: ``R.rst`` text only, on skeleton rev 4.3
+Revision 2.5, 2026-11-17: section 11 only, answered items closed with
+cites. Revision 2.4: ``R.rst`` text only, on skeleton rev 4.3
 (``97c62312490c3e290d597a2d188785252773bd21``). ``flux_register.hpp`` is
 unchanged since ``4c59162ae37080d0ab307b2823742b44f46da7c3`` in declarations
 and line numbers, so the freeze stands and no client re-cites. Revision 2.3
@@ -1738,11 +1739,19 @@ Each step is one PR and keeps every existing test.
 11. Open questions to other lanes
 ---------------------------------
 
+Checked at rev 2.5 against: X ``36d4986fcf17da330f8678946401a7f39ee9db81``
+(UCzhangxi/snapy), S ``4b96f4ea9a63fd6152e319a70930559cdfda0871``
+(jihenghu/snapy, rev 2.1), I ``fa3ad5e6ef4ab51f40b6a53889d9f3b7ec62cadb``
+(zoeyzyhu/snapy) and C ``bcac27c97a9efc1de2cb2041e6b709f07eedcefe``.
+
 * **A:** answered at ``2b0ac426`` (``A.rst`` 11.2): K4 confirmed,
   ``aam.boundary.1``, and ``vic.momentum_t.top`` does not enter the torque.
   The lifetime of ``riemann.central`` is in 4.1 item 4. Nothing open.
-* **I:** confirm ``vic.mass_clamped`` as ``flux_correction``. Confirm the
-  ``e+pe`` derived row. Gate G-R7.
+* **I:** closed. ``vic.mass_clamped`` is ``flux_correction`` with
+  ``stage_weight = w2_s``, and lane I confirms R's classification
+  (``I.rst:396-400``). The ``e+pe`` derived row is confirmed
+  (``I.rst:1271-1275``) and gate G-R7 is confirmed, specified and not run
+  (``I.rst:1276-1278``). G-R7 stays a gate.
 * **O:** agreed at ``dfa8ecd0`` (``O.rst`` 11.7); its request on 4.1 item
   6 is made. Nothing open.
 * **EF:** answered at ``5e30b31b`` (rev 3.6): the cause names (4.5) and
@@ -1750,25 +1759,33 @@ Each step is one PR and keeps every existing test.
   and K wording is fixed in rev 3.6: S's solid fill every stage when a
   solid field exists (``EF.rst:516``, ``:556-558``; pin
   ``meshblock.cpp:936-938``), K at ``:954-972`` (``EF.rst:520``).
-* **S:** the per-row edge map of Xi's note 11 in S rev 2, and
-  ``peer_dim``/``normal_sign`` in ``SeamEntry`` (G-R13); relabel "C's 50"
-  as R's D1; K7 (with X and EF). R-C1 is closed by V3-3 and needs nothing
-  from S.
-* **X:** done in rev 3.1-3.3 (``begin_step``, ``after_combine`` every
-  stage, O sums, X counts the mesh fixer lines). Open: map EF's four cause
-  names to bits (``X.rst:200-206`` still names ``eos.limiter_mark``); name
-  who calls ``StateStore::register_storage`` and the ``GraphKey`` trigger
-  for ``set_prescribed`` (R.rst 7). Wording for X rev 3.4 (Cheng, V3-1):
-  ``X.rst:959-962`` at ``0fe47c6f`` says R's count books 98 + 6 + 20 mesh
-  fixer lines; R books none (section 9), and ``X.rst:1040-1044`` already
-  books them in X.
-* **C:** C's next revision states R-C1 closed (``C.rst:25-26``, ``:42-44``,
-  ``:950-952``, ``:1798-1817`` and ``sweep.hpp:24-25`` at ``559dd0b7`` still
-  say open) and calls ``build_covariance`` in ``before_solve``.
+* **S:** closed at rev 2.1. The per-row edge map is ``PanelEdge``
+  (``peer_dim``, ``reversed``, ``normal_sign``) in ``SeamEntry``
+  (``seam_register.hpp:37-49``; ``S.rst:109-112``, 4.1 at ``:1096-1165``),
+  anchored by gate G-S13 (``S.rst:1412``), which feeds G-R13. "C's 50" is
+  R's D1 (``S.rst:125-126``). K7 is gate G-S-K7 (``S.rst:119-122``,
+  ``:1426``), a gate, not a contract change. R-C1 needed nothing from S
+  (V3-3).
+* **X:** closed at ``36d4986f``. EF's four causes map to bits: the
+  ``ef.floor_patch``, ``ef.vapor_fail`` and ``ef.heat_capacity`` causes to
+  bit 2, ``ef.nan`` to bit 3, and ``implicit.column`` to bit 5
+  (``X.rst:224-232``; names at ``:1249-1250``). X's ``BlockInit`` calls
+  ``StateStore::register_storage`` on R's tensors after ``reset()``
+  (``X.rst:192-196``, ``:1226-1227``). ``set_prescribed`` copies into the
+  buffers allocated at ``reset()``, and only
+  ``StageExecutor::bump_config_generation()`` changes the
+  ``config_generation`` key (``X.rst:196-201``). X books the mesh fixer
+  lines and R books none (``X.rst:686``, ``:1113``, ``:1295``). X's
+  ``after_combine`` runner is in 4.2 "X and A" (rev 2.4).
+* **C:** closed at ``bcac27c9``. R-C1 is settled by V3-3, and
+  ``build_covariance(faces, dim)`` runs in C's ``before_solve`` hook
+  (``C.rst:1023-1031``, ``:1892-1896``). Older change-list wording in
+  ``C.rst`` is marked superseded in C rev 6.3.
 * **K:** answered at ``fc619eec``: slot 4 of X's stack and the two solve
   counters (4.2 K).
-* **Xinyue:** the five notes whose text I never had (row 54).
-* **Cheng:** I's ruling (c), which decides row 1 of the 4.5 table.
+* **Still open:** Xinyue's five notes whose text I never had (row 54);
+  Cheng's ruling on I's (c), the per-column FP64 retry, which decides row 1
+  of the 4.5 table (``I.rst`` section 10(c) at ``fa3ad5e6``).
 
 
 12. Skeleton index
