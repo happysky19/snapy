@@ -1,6 +1,6 @@
 #pragma once
-// V3 lane R skeleton: declarations only, in no build. Rev 4.2, with R.rst
-// rev 2.2 (section 3). Pin chengcli/snapy 9e5de2d4. What HydroImpl::forward
+// V3 lane R skeleton: declarations only, in no build. Rev 4.3, with R.rst
+// rev 2.3 (section 3). Pin chengcli/snapy 9e5de2d4. What HydroImpl::forward
 // (hydro_forward.cpp:370-1696) becomes: one stage driver that calls the
 // lanes' ops in RegisterPhase order and owns no flux, no fixer and no
 // AAM state. Lines the driver no longer holds are counted in R.rst s9.
@@ -58,16 +58,16 @@ class HydroStage {
   //! implicit: I's solve with dt_corr = w2_s dt for 3+ stages (:1568-1583);
   //! posts divide by A_f dt with the step dt
   void implicit(StageInputs const& in, torch::Tensor du, FluxRegister& reg);
-  //! post_implicit: apply_prescribed(1); A's m1 from A_f total(1) (today
-  //! Phi, :1641, :1646); I's G remainder; tracer transfer from vic.mass_dry
+  //! post_implicit: apply_prescribed(1); I's G remainder; A's m1 from A_f
+  //! total(1) (today Phi, :1641, :1646); tracer transfer from vic.mass_dry
   void post_implicit(StageInputs const& in, torch::Tensor du,
                      FluxRegister& reg);
   //! the whole stage in that order, then reg.end_stage(dt); returns du
   torch::Tensor forward(StageInputs const& in, FluxRegister& reg);
-  //! X's after_combine hook, every stage (after meshblock.cpp:901): EF's F1
-  //! (:907-909), S's solid fill (:936-938), A's closure (:983-990); last
-  //! stage: finish_step first (:903-905), F1b (:952), K (:954-972) before A
-  void after_combine(torch::Tensor u, FluxRegister& reg);
+  //! after_combine: no HydroStage op; X's StageExecutor::after_combine(stage,
+  //! dt) is its one runner, after finish_step on the last stage. meshblock.cpp
+  //! order: EF's F1 :907-909, X's scalars :920-923, S's solid :936-938; last
+  //! stage with reactions F1b :952, K :954-972; then A's closure :983-990
 
  private:
   std::shared_ptr<PositivityLimiter> limiter_;
