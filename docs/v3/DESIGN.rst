@@ -95,6 +95,12 @@ relayed in the threads and not yet written in a lane document say so.
   the floors and the solid step, before rotation and solve; R builds the
   #289 covariance there and posts it after the solve (``R.rst:81-85``;
   ``C.rst:1028-1035``). It closes R-C1.
+* **RULING V3-4** (lane S thread, 23:10 EST 2026-11-17): synthesized
+  corners are filled in the unpack of the last round of each field set:
+  in row 0, round 1 for ``hydro_u`` and round 3 for ``scalar_s``, counting
+  rounds from 0, as at the pin. S rev 2.3 says the row's last round
+  (``S.rst:1565-1568`` at ``bee1b276``); S rev 2.4 carries the wording. No
+  declaration changes.
 * **Per-column FP64 retry accepted** (Cheng, 22:20 EST 2026-11-17). After a
   failed FP32 implicit solve only the failed columns are retried in FP64,
   through X's predicated second launch; the other columns keep their FP32
@@ -126,8 +132,14 @@ relayed in the threads and not yet written in a lane document say so.
   positivity failure keeps the pin's abort (``A.rst:1393-1395``).
 * **Lane EF:** F6, ``src/turbulence`` deleted; F1, ANEOS stays; F2
   withdrawn (``EF.rst:1603-1608``).
-* **Lane O:** pnetcdf stays; the hdf5/fits stubs, ``mppnccombine.cpp`` and
-  the FP32 storage emulation are removed (``O.rst:755-756``).
+* **Lane O:** pnetcdf stays; the hdf5/fits stubs and the FP32 storage
+  emulation are removed (``O.rst:755-756``). ``mppnccombine.cpp`` is
+  replaced by ``combine_parts``, a small snapy-specific combiner of about
+  200 lines (estimate). In-model combining stays and ``combine`` keeps its
+  default ``true``, so users see one merged file per output frame as today.
+  Gate G-2, parity against ``mppnccombine`` on the same parts, passes
+  before the deletion: O6a adds the combiner and the test, O6b deletes
+  ``mppnccombine.cpp`` (``O.rst:2711-2727``, ``:2681-2691``).
 * **Lane I:** ``gravity-work: cell`` is refused and the global
   gravity-work fixer is removed (``I.rst:1031-1032``, ``:1070-1071``).
 * **Lane C:** every Riemann solver and reconstruction of the pin stays
@@ -1138,8 +1150,10 @@ Lane I's (c) is decided (section 2).
 * **R:** Xinyue's five notes, whose text R never had (``R.rst:1804``).
 * **EF on S:** EF's notes 3-5 on S are not verified against S
   (``EF.rst:2058-2061``).
-* **S rev 2.3** (``bee1b276``) answers the S rev 2.2 conflict; its review
-  verdict is not recorded in a lane document.
+* **S, RULING V3-4** (section 2): corners are filled in the unpack of the
+  last round of each field set. S rev 2.3 (``bee1b276``,
+  ``S.rst:1565-1568``) still says the row's last round; S rev 2.4 carries
+  the wording, with no declaration change.
 * **The FOR CHENG items** of section 9.
 * **Estimates:** every "after" figure of section 6 and the 34,141 target
   margin rest on design estimates (section 6.4).
