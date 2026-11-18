@@ -6,9 +6,11 @@
 # sha_a defaults to C1 (54aa6ccb), sha_b to C2 (674bfdbc). The script fetches
 # both from happysky19/snapy, builds each on CPU, and checks:
 #   1. ctest: serial C++ entries, same verdict per test on A and B
-#   2. decks: 5 example decks, 20 steps, every restart file byte-identical,
-#      every netCDF variable byte-equal, every cycle line identical, and the
-#      same exit code on A and B
+#   2. decks: 4 counted example decks, 20 steps: exit code 0 on A and B, every
+#      restart file byte-identical, every netCDF variable byte-equal, every
+#      cycle line identical. examples/shock.yaml, which aborts on main
+#      730b3500 too, runs as a diagnostic: reported on DIAG lines, never
+#      counted as a pass
 #   3. probe: each kernel C2 registers for MPS, run through OnHost on CUDA
 #      tensors, equals the same CPU kernel on CPU tensors (B only; needs a
 #      CUDA GPU visible to torch, else skipped)
@@ -77,11 +79,14 @@ for T in A B; do
   CUDA_VISIBLE_DEVICES="" OMP_NUM_THREADS=4 bash "$here/run_decks.sh" \
     "$W/tree-$T" "$W/decks" "$W/runs/$T" "$SP" | tee -a "$L/summary.txt"
 done
-if $PY "$here/compare_runs.py" "$W/runs/A" "$W/runs/B" > "$L/compare.txt" 2>&1; then
+if $PY "$here/compare_runs.py" "$W/runs/A" "$W/runs/B" --diagnostic shock \
+     > "$L/compare.txt" 2>&1; then
   say "PASS decks: $(tail -1 "$L/compare.txt")"
 else
   say "FAIL decks: $(tail -1 "$L/compare.txt")"; fail=1
 fi
+grep -E '^(ok|FAIL|DIFF) ' "$L/compare.txt" | tee -a "$L/summary.txt"
+grep '^DIAG' "$L/compare.txt" | tee -a "$L/summary.txt"
 
 # ---- 3. OnHost probe (B) ---------------------------------------------------
 if $PY -c 'import torch,sys;sys.exit(0 if torch.cuda.is_available() else 1)'; then

@@ -39,29 +39,34 @@ with `CPATH` and `LIBRARY_PATH` pointing at pyharp's `include` and `lib`.
    -E '_python$|cuda|gpu'` on both builds. Pass: every test passes on B and
    each test has the same verdict on A and B. Serial on purpose: with `-j` the
    torchrun tests race for port 29500.
-2. **Decks.** `make_decks.py` writes five decks from A's `examples/`:
+2. **Decks.** `make_decks.py` writes five decks from A's `examples/`, four
+   counted and one diagnostic:
 
-   | deck | executable | covers |
-   |---|---|---|
-   | `straka_single.yaml` | `straka` | dry, lmars, weno5, gravity, reflecting x1 walls |
-   | `shock.yaml` | `shock` | hllc, weno5 shock path, outflow |
-   | `bryan.yaml` | `bryan` | moist, lmars |
-   | `shallow_xy_single.yaml` | `shallow_xy` | shallow-roe |
-   | `jupiter_evap_precip_1d.yaml` | `jupiter_evap_precip_1d` (`-i`) | moist 1-D, hllc |
+   | deck | executable | role | covers |
+   |---|---|---|---|
+   | `straka_single.yaml` | `straka` | counted | dry, lmars, weno5, gravity, reflecting x1 walls |
+   | `bryan.yaml` | `bryan` | counted | moist, lmars |
+   | `shallow_xy_single.yaml` | `shallow_xy` | counted | shallow-roe |
+   | `jupiter_evap_precip_1d.yaml` | `jupiter_evap_precip_1d` (`-i`) | counted | moist 1-D, hllc, weno5 shock path |
+   | `shock.yaml` | `shock` | diagnostic | hllc, weno5 shock path, outflow (aborts on main) |
 
    Changed keys only: `integration.nlim = 20`, `integration.ncycle_out = 1`,
    every netCDF output `dt = 1e-9` (a file each cycle), and the restart output
    replaced by one with `dt = 1e-9` (the FP64 state each cycle). Each deck runs
    on CPU (`CUDA_VISIBLE_DEVICES=`, `OMP_NUM_THREADS=4`) in its own folder,
    with kintera's `data/*` and `build/tests/*.dat` copied beside it.
-   `compare_runs.py` passes when, for every deck, A and B have the same exit
-   code, the same restart and netCDF files, every restart file is
-   byte-identical, every netCDF variable has the same dtype, shape and bytes,
-   and the `cycle=` lines of the log are identical. No tolerance.
+   `compare_runs.py --diagnostic shock` passes when, for every counted deck,
+   the exit code is 0 on A and on B, A and B wrote the same restart and
+   netCDF files, every restart file is byte-identical, every netCDF variable
+   has the same dtype, shape and bytes, and the `cycle=` lines of the log are
+   identical. No tolerance. A counted deck that exits nonzero fails the gate
+   even when both heads fail the same way.
 
-   `shock.yaml` aborts on main 730b3500 as well, during cycle 4, with
-   `outflow: nonfinite hydro input`; the rule compares what it wrote before
-   the abort and its exit code (134 on both).
+   `shock.yaml` is not counted: it aborts on main 730b3500 as well, during
+   cycle 4, with `outflow: nonfinite hydro input` (exit 134). It still runs,
+   and its exit codes and the files it wrote before the abort are compared
+   and printed on `DIAG` lines, so a change in how it fails stays visible;
+   it can neither pass nor fail the gate.
 3. **OnHost probe (B only).** `build_probe.sh` compiles `onhost_probe.cpp`
    with B's own test flags against B's `libsnap`. For every kernel C2
    registers for MPS (`call_poly_cpu<3,5>`, `call_weno3_cpu`,

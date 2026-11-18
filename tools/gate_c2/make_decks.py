@@ -15,10 +15,13 @@ import yaml
 # deck -> example executable (build/bin/<exe>.release)
 DECKS = {
     "straka_single": "straka",  # dry, lmars, weno5, gravity, reflecting x1
-    "shock": "shock",  # hllc, weno5 shock, outflow
     "bryan": "bryan",  # moist, lmars
     "shallow_xy_single": "shallow_xy",  # shallow-roe
-    "jupiter_evap_precip_1d": "jupiter_evap_precip_1d",  # moist 1-D, hllc
+    "jupiter_evap_precip_1d": "jupiter_evap_precip_1d",  # moist 1-D, hllc,
+                                                         # weno5 shock path
+    # diagnostic only: aborts on main 730b3500 during cycle 4 (outflow:
+    # nonfinite hydro input); compare_runs.py never counts it
+    "shock": "shock",
 }
 
 src, out = sys.argv[1], sys.argv[2]
