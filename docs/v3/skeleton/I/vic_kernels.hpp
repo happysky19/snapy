@@ -13,7 +13,7 @@ namespace snap {
 
 //! scalar arguments of every stage; no flag bits in dir (I.rst s3)
 struct VicParams {
-  double const* dt = nullptr;  //!< device FP64 scalar, written before replay
+  double dt = 0.;    //!< host double, keyed in X's GraphKey (X.rst:1017)
   double grav = 0.;   //!< grav1, the full gravity (implicit_hydro.cpp:326)
   int dir = 0;        //!< 0: x1
   int ny = 0;         //!< species rows

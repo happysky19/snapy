@@ -3,7 +3,9 @@ V3 lane I: vertical implicit solver and gravity work
 
 :Lane: I (vertical implicit solver and gravity work)
 :Owner: Xinyue Wang (alternate: Tianhao Le)
-:Revision: 2.2 (Tianhao's two rev 2.1 findings: the gravity-work remainder
+:Revision: 2.3 (section 11 brought up to date: every question to lanes A, C,
+           S and X answered and closed; lane R's confirmation and rev 2.4
+           recorded; X's answers applied to sections 6, 7 and the skeleton). Revision 2.2: Tianhao's two rev 2.1 findings: the gravity-work remainder
            moves to ``post_implicit``; ``vic.momentum_t@1`` is the third kept
            part). Revision 2.1: re-cite to lane R's frozen header; backup owner Zoey Hu from
            18:00 EST 2026-11-17, while Xinyue is rate limited). Revision 2:
@@ -242,7 +244,14 @@ every shipped deck runs ``face``.
      the physical wall cells, unchanged (**hypothesis**: bitwise).
 
    The assembly flags, ``k0``/``k1`` and the per-depth ``GravityWork`` rows
-   all read ``ColumnSegments``.
+   all read ``ColumnSegments``. **Ownership (rev 2.3, agreed with lane
+   S):** ``ColumnSegments`` is lane I's type. It owns the surface rows and
+   ``k0``/``k1``. Lane S keeps the face set, ``PrescribedFaces``
+   (``seam_register.hpp:69-86`` at jihenghu/snapy ``v3-design/S``
+   ``c505fb879a841a9a5a17736b3f4d2826d6081ecf``). Both are built from the
+   same solid mask and mask version. S rev 2 defines none of
+   ``ColumnSegments``, ``X1Wall``, ``k0`` or ``k1`` (checked by grep);
+   ``X1Wall`` is #369's and not at the pin.
 #. **No reference row** in the operator. A contract test replaces it
    (section 5).
 #. **One kernel definition.** The plumbing that is duplicated across 9
@@ -631,9 +640,11 @@ Every gate here is **specified, not run**: this round is design only.
   fold (``vic_assemble_partial_impl.h:38-41``) and ``rx_tri(rx_mass0)``
   (``implicit_hydro.cpp:421-424``). So a rest column's correction is of the
   size of its explicit residual. It is exactly zero only where that
-  residual is exactly zero. Lane C's rest gate is a tolerance
-  (``|v|/c <= 1e-12``, C.rst §5), not zero, so the bound comes from lane C
-  (C-N5).
+  residual is exactly zero. Lane C's rest gate is a tolerance, not zero:
+  ``max |v|/c <= 1e-12`` (``C.rst:1284-1287`` at happysky19/snapy
+  ``v3-design/C`` ``bcac27c97a9efc1de2cb2041e6b709f07eedcefe``). Lane C
+  gives no ``du`` bound per reference mode (C-N5, answered). So I4's gate
+  is that rest-velocity gate, and I4 stays a **hypothesis**.
 - I5 no reference row (rewritten, Tianhao's note 5). The operator is a
   first-order Roe linearisation of the **full, unsplit** flux on the cell
   states. It is built from ``CopyPrimitives`` on cell ``w``
@@ -641,8 +652,11 @@ Every gate here is **specified, not run**: this round is design only.
   (``flux_decomposition_impl.h:38-130``), with the full gravity whatever
   ``non-hydrostatic`` is (``implicit_hydro.cpp:326-329``). It
   differentiates neither the reconstruction nor the reference. The default
-  reference is rebuilt from each stage's ``w`` (``hydro.cpp:605-607``),
-  before the solve, so within the solve it is a constant of the RHS. A
+  reference is rebuilt from each stage's ``w`` by ``_hydro_ref_x1``
+  (``hydro.cpp:606-608``), called at ``hydro_forward.cpp:682``, before the
+  solve (``hydro_forward.cpp:1607``, into ``hydro.cpp:526``). So within the
+  solve it is a constant of the RHS. Lane C agrees: no reference row
+  (rev 2.3). A
   reference row would differentiate a term the operator never models, so
   none is added. The well-balance is a property of the RHS (lane C); the
   operator only has to map it as I4 says.
@@ -652,14 +666,17 @@ Every gate here is **specified, not run**: this round is design only.
 - the #348 harness: 16 implicit decks x CPU/CUDA, ``hydro_u`` bytes;
 - ``test_conservation_budget`` (E+P rows);
 - the large-Courant tall column (#345);
-- #369's "floor == wall" and rest-with-terrain rows;
+- #369's "floor == wall" and rest-with-terrain rows, re-run and unchanged
+  on each PR. They are not a gate by themselves (lane S); the bitwise gate
+  of I-1 and I-2 is the #348 harness, pin against PR (section 10);
 - ``test_fp32_implicit.py`` and ``test_fp32_jupiter.py`` (fallback counts).
 
 **Gates, new** (specified):
 
 - I1 as two unit tests (W and K) that go RED if one side is edited alone;
 - I2 on a tall column, schemes 1 and 9;
-- I4 on each of lane C's reference modes, with lane C's rest bound;
+- I4 on each of lane C's reference modes, with lane C's rest gate
+  ``max |v|/c <= 1e-12`` (``C.rst:1284-1287``; **hypothesis**);
 - a sync-counter test: no host read between assemble and the last post;
 - a per-column status test: one NaN column is retried in FP64 and the
   others keep FP32 (section 10(c)).
@@ -684,8 +701,11 @@ Every gate here is **specified, not run**: this round is design only.
   The result change is in section 10(c).
 - **Map to lane X's rows** (Tianhao's note 13). The row names are those of
   lane X's ``PrecisionPolicy`` as lane C cites them (``kPrimitive``,
-  ``kReference``, ``kGauge``, ``kFlux``, ``kRegister``). Lane X has no row
-  for the implicit solve, so ``kImplicit`` below is a proposal for X:
+  ``kReference``, ``kGauge``, ``kFlux``, ``kRegister``). ``kImplicit`` is
+  lane X's row for the solve (``precision_policy.hpp:21`` at UCzhangxi/snapy
+  ``v3-design/X`` ``89415a6c3a97d0f54016db6e843cdd08d4eaf359``). The FP64
+  retry is that row forced to FP64, and the posts stay ``kFlux``, whose
+  dtype a retry must not change (``X.rst:1014-1016``):
 
   .. list-table::
      :header-rows: 1
@@ -699,7 +719,7 @@ Every gate here is **specified, not run**: this round is design only.
        - FP64
        - FP64
      * - solve inputs ``w``, ``gamma`` (cast), blocks a, b, c, delta, z0, z1
-       - ``kImplicit`` (proposed; follows ``implicit-precision``)
+       - ``kImplicit`` (X's row; follows ``implicit-precision``)
        - FP32 (Cartesian ideal-moist only)
        - FP64
      * - the FP64 retry stage
@@ -749,20 +769,21 @@ Every gate here is **specified, not run**: this round is design only.
   clear is retried, and every other column returns. The block status is an
   OR-reduction of ``col_status`` after the retry, written with
   ``flag_retry("implicit.column", any)`` (``R.hpp:78``) into lane R's
-  ``retry_flags()`` (``R.hpp:102``) and X's one step-end read, which already
-  reads the latch (``meshblock.cpp:1549-1551``). The failure log
+  ``retry_flags()`` (``R.hpp:102``). It reaches X's one stacked step-end
+  read (``meshblock.cpp:1566``) as cause bit 5. Lane I makes no read of its
+  own (``X.rst:1019-1022``). The failure log
   (``implicit_hydro.cpp:219-239``) reads ``col_status`` on a redo only.
-- **dt on the device** (Tianhao's note 12). The skeleton implements this
-  choice: ``VicParams`` carries a device pointer to a 0-d FP64 ``dt``,
-  written before replay, and no host ``double``. Kernels read ``*dt``; the
-  host-side corrected-PE band scaling (``implicit_hydro.cpp:413-419``,
-  ``rx / dt``) becomes a tensor operation with that scalar. Putting ``dt``
-  in the graph key would recapture every step under a CFL-varying ``dt``.
-  The stage weight in the operator's dt (``hydro_forward.cpp:1568-1583``)
-  is a per-stage constant, so it is part of the key, as ``c_s`` is for lane
-  R (``R.hpp:49``: ``begin_stage(int, harp::IntegratorWeight const&)``).
-- **Fixed storage.** a, b, c, delta, z0, z1, du0, ``col_status`` and the
-  ``dt`` scalar are allocated once per
+- **dt is a host double, keyed in X's ``GraphKey``** (rev 2.3, lane X's
+  answer 3, ``X.rst:1017-1018`` and ``:489``; replaces revision 2's device
+  scalar, Tianhao's note 12). ``VicParams`` carries ``dt`` by value; a
+  changed ``dt`` recaptures, and a device ``dt`` is refused in V3. The
+  stage weight in the operator's dt (``hydro_forward.cpp:1568-1583``) is a
+  per-stage constant in the same key.
+- **FP64 retry: a predicated second FP64 launch, always run** (lane X's
+  answer 1, ``X.rst:1011-1013``). There are no CUDA conditional nodes, so
+  the launch count is fixed and eager runs the same ops as the replay.
+- **Fixed storage.** a, b, c, delta, z0, z1, du0 and ``col_status`` are
+  allocated once per
   (shape, dtype, device) and never ``set_data``-replaced.
   ``ColumnSegments`` and the ``GravityWork`` rows change only when the mask
   version or the grid key changes, which ends a captured segment.
@@ -770,8 +791,10 @@ Every gate here is **specified, not run**: this round is design only.
   place of the ~12 small host launches at ``implicit_hydro.cpp:446-472``),
   redistribute, the predicated FP64 stage, the remainder. The count does
   not depend on the data.
-- **Segment boundaries** are for lane X to choose (section 11). The lane
-  needs none inside the solve.
+- **No segment boundary** for the solve (lane X's answer 5,
+  ``X.rst:1023-1028``). It runs in the hydro forward's compute segment,
+  which starts after the stage's unpack and ends at the next exchange. A
+  mask or grid change bumps ``config_generation`` and recaptures.
 
 
 8. Cross-repository interface changes and merge order
@@ -937,18 +960,23 @@ lane I's -788. The remaining rewrite of that block around
 round-off; and why.
 
 #. **I-1 one assembly, ``VicMatrix``.** Bitwise (**hypothesis**): each entry
-   of the partial blocks is the same scalar expression as before. Gate: the
-   #348 harness.
+   of the partial blocks is the same scalar expression as before. Gate:
+   pin against PR in the #348 harness, with #369's "floor == wall" re-run
+   and unchanged.
 #. **I-2 one kernel definition (``vic_stage<Launch>``, 2 stubs).** Bitwise
    (**hypothesis**): it changes the plumbing only, and the per-column bodies
-   are untouched.
+   are untouched. Gate: as I-1.
 #. **I-3 ``GravityWork``: one cache, one W formula, rows from the
    coefficients, one remainder call.** Rounding (**hypothesis**). Three
    things move round-off: the Cartesian 0.25 branch becomes the general
    weights (equal values, other operation order); the curved explicit W
    becomes difference-first; and the remainder is computed in another order.
    It should reduce the large-origin cancellation #288 measured (3e-12 at
-   r = 7e7 m).
+   r = 7e7 m). Gate: a tolerance against the pin on the #348 decks. Lane
+   I's own analysis gives no derived bound, so the tolerance is a **target
+   that lane I owns**: the per-step relative difference of the energy row
+   of ``hydro_u`` at most 1e-11, about 3x #288's 3e-12. It is to be set
+   from the first measurement before I-3 merges.
 #. **I-4 posting to the register** (after lane R). Rounding
    (**hypothesis**): the posts are divided by :math:`A_f\,\Delta t` and
    readers multiply back, where today ``hydro_forward.cpp:1646`` adds
@@ -1196,6 +1224,25 @@ section 4.2 (``R.rst:472-523``) settles lane I's R-1 to R-4:
 - R-4, **settled**: ``cell_amount`` takes ``stage_weight``. Lane I passes
   ``w2_s`` for ``vic.cell`` and ``vic.mass_clamped`` (``R.rst:488-494``).
 
+**Rev 2.3: lane R confirmation.** Tianhao confirmed (lane R thread) that
+both of his lane I conflicts are closed at rev 2.2 ``7604ada0``: the
+gravity-work remainder follows ``apply_prescribed(1)`` and precedes lane A's
+m1, and ``vic.momentum_t@1`` is the third kept part. Lane R's head is now
+``97c62312490c3e290d597a2d188785252773bd21``. Against R rev 2.3
+``2b4c5775`` it changes only ``hydro_stage.hpp``: its ``post_implicit``
+comment puts I's remainder before A's m1, and ``HydroStage::after_combine``
+is removed because X's executor runs it. Against the frozen ``4c59162a``,
+``flux_register.hpp`` differs in comments only (lines 22, 28, 34-36, 96-98
+and 101). No signature changed and no line moved. Lane I keeps citing R at
+``4c59162a``. No lane I citation or skeleton line refers to
+``hydro_stage.hpp`` lines or to ``HydroStage::after_combine``. R is now at
+rev 2.4 ``a15af81660f75b53f3e905b7ee15aa935ada855c``, which changes
+``R.rst`` only: ``flux_register.hpp`` is unchanged against ``97c62312``,
+so there is no re-cite. R agreed the ``boundary(dim)`` face set
+(``R.rst:39-42, 632-645`` at ``a15af816``): S's ``wall``, ``outflow`` and
+``custom`` faces with a fluid interior, plus every immersed-solid face
+with fluid on one side, all rows, outward from the fluid.
+
 **Rev 2.2 round notes, answering Tianhao's two findings on rev 2.1**
 (``a379fe39``; the PM upheld both):
 
@@ -1232,10 +1279,16 @@ section 4.2 (``R.rst:472-523``) settles lane I's R-1 to R-4:
 
 **Lane C (Tianhao).**
 
-- The rest-state residual bound of ``du`` per reference mode (C-N5), for
-  I4's gate.
-- No reference row: I5 now rests on the operator, not on the split
-  (Tianhao's note 5). Do you agree?
+- **Closed (rev 2.3).** C-N5: hypothesis, gate specified. Lane C's
+  rest-velocity gate is ``max |v|/c <= 1e-12`` (``C.rst:1284-1287`` at
+  ``bcac27c9``), with no ``du`` bound per reference mode. I4's gate cites
+  it and stays a hypothesis (section 5).
+- **Closed (rev 2.3).** I5: agreed, there is no reference row. The
+  reference is built from the stage ``w`` before the solve
+  (``hydro_forward.cpp:682``, ``_hydro_ref_x1`` at ``hydro.cpp:606-608``;
+  solve at ``hydro_forward.cpp:1607``). **Cite note:** the PM's
+  ``hydro.cpp:605-607`` is the function's signature, not the call before
+  the solve.
 
 **Lane A (Jiachen): does lane I migrate ``ConstGravity`` to the
 ``SourceTerm`` interface?** ``A.rst`` (``JiachenLiu-Atmos/snapy``
@@ -1263,25 +1316,46 @@ lane I ("migration owner: K-1", section 3.6, line 492; K-1, lines
 
 **Lane A (Jiachen), earlier.** Answered in the lane I thread (I-1). m1 reads
 ``total(1)`` mass rows in ``post_implicit``, and the axial source reads
-``vic.momentum_t`` under both matrices. Open: whether
-``vic.momentum_t.top`` should enter the axial torque as today.
+``vic.momentum_t`` under both matrices. **Closed (rev 2.3):** does
+``vic.momentum_t.top`` enter the axial torque? **No.** Lane A's x1 source
+reads the kept per-face ``kept(1, "vic.momentum_t")``; its top face enters
+only as the top cell's ``P_hi``, as the pin's prefix sum does. Lane A never
+reads the ``diagnostic`` amount ``vic.momentum_t.top`` (``A.rst:1411-1420``
+at JiachenLiu-Atmos/snapy ``v3-design/A``
+``c3ac77f3069e05cc785afe4d2941693c7ea1dc65``).
 
-**Lane S (Xinyue, backup owner): wall and solid rows against #369.**
+**Lane S (Jiheng, jihenghu/snapy ``v3-design/S`` rev 2 ``c505fb87``): wall and solid rows against #369.**
 
-- Is ``ColumnSegments``, built from ``X1Wall`` depth, the right owner of the
-  surface rows and of ``k0``/``k1``?
-- Is "floor == wall" the bitwise gate for I-1 to I-3?
+- **Closed (rev 2.3), accepted.** ``ColumnSegments`` is lane I's type and
+  owns the surface rows and ``k0``/``k1``. S keeps the face set
+  (``PrescribedFaces``, ``seam_register.hpp:69-86`` at ``c505fb87``). Both
+  are built from the same solid mask and version (section 3). Jiheng's
+  proposal as the PM carried it; S rev 2 defines none of ``ColumnSegments``,
+  ``X1Wall``, ``k0``, ``k1``.
+- **Closed (rev 2.3).** "floor == wall" is not the gate by itself. For I-1
+  and I-2 the bitwise gate is pin against PR in the #348 harness, with
+  "floor == wall" re-run and unchanged on each PR. I-3 is a rounding
+  change, gated by a tolerance that lane I owns (section 10). This is
+  Jiheng's answer as the PM carried it; that wording is not in S.rst at
+  ``c505fb87``.
 
 **Lane X (Xi): FP64 fallback, device status, graph segments.**
 
-- A predicated second FP64 launch, or CUDA conditional nodes?
-- Will you add a ``kImplicit`` precision row (section 6), or should the solve
-  map onto ``kFlux``?
-- ``dt`` as a 0-d device FP64 scalar written before replay (section 7): does
-  that fit your ``GraphKey``?
-- Is one ``int32`` read per step in ``check_redo`` the G3 target?
-- Where do the graph segments start and end around the solve?
-- Should the FP32 restriction to Cartesian ideal-moist stay?
+All six are **closed (rev 2.3)** by ``X.rst:1009-1030`` at ``89415a6c``
+and applied in sections 6 and 7 and the skeleton:
+
+1. A predicated second FP64 launch, always run. There are no CUDA
+   conditional nodes.
+2. ``kImplicit`` is X's row (``precision_policy.hpp:21``). The retry is
+   that row forced to FP64, and the posts stay ``kFlux``.
+3. No: ``dt`` stays a host double keyed in ``GraphKey``, and a change
+   recaptures. Lane I's device ``dt`` is withdrawn.
+4. Yes: the OR of ``col_status`` goes through R's ``retry_flags()`` into
+   X's one step-end read as cause bit 5. Lane I makes no read of its own.
+5. The solve needs no segment boundary. It sits in the hydro compute
+   segment.
+6. Yes in V3: FP32 stays restricted to Cartesian ideal-moist (pin
+   ``hydro.cpp:502-507``).
 
 **Cheng:** (c) of section 10. (a) and (b) were ruled on 2026-11-17.
 
@@ -1331,13 +1405,13 @@ lane I ("migration owner: K-1", section 3.6, line 492; K-1, lines
      - ``rho_grav`` is lane R's (``hydro_forward.cpp:825-838, 961-983, 1539-1545``). Lane I reads it only in the cell work it subtracts when ``non-hydrostatic < 1`` (``:1500-1504``), so p* reaches gravity work only through ``rho_grav`` on the ``SNAP_X1_CENTROID_EXACT`` path.
    * - 12
      - request, done
-     - ``dt`` is on the device: a 0-d FP64 scalar, read through ``VicParams``. The per-stage weight is part of the graph key (section 7). The skeleton implements this.
+     - Superseded in rev 2.3 by lane X's answer 3: ``dt`` is a host double keyed in X's ``GraphKey``, and a change recaptures (section 7). The skeleton follows.
    * - 13
      - request, done
      - Section 6 maps every lane I quantity to lane X's rows and proposes ``kImplicit`` for the solve (question to X).
    * - 14
      - request, done
-     - Posts are :math:`M_f/(A_f\,\Delta t)` with the step ``dt``, before stage weights, per lane R's header (``R.hpp:5-8``); ``end_stage`` applies :math:`c_s\,\Delta t` (section 4).
+     - Posts are :math:`M_f/(A_f\,\Delta t)` with the step ``dt``, before stage weights, per lane R's header (``R.hpp:4-5``); ``end_stage`` applies :math:`c_s\,\Delta t` (section 4).
    * - 15
      - request, done
      - ``ColumnSegments`` covers any mask (fluid runs per column). The single-segment fast path is taken when each column has one run reaching the top (no solid, or #369's floor). Other shapes keep the pin's per-cell K masking (section 3).

@@ -44,13 +44,14 @@ using VerticalImplicitOptions = std::shared_ptr<VerticalImplicitOptionsImpl>;
 //! mask's version changes. Any mask: up to `nrun` runs per column, as the
 //! pin's redistribution walks them. `single`: every column has one run that
 //! reaches the top (no solid, or #369's floor); only then are the corrected-PE
-//! wall rows the per-column Woodbury rows at k0 (first fluid cell), k1.
+//! wall rows the Woodbury rows k0 (first fluid), k1. Lane I's type; lane S
+//! keeps PrescribedFaces; both from one solid mask and version (I.rst s3).
 struct ColumnSegments {
   torch::Tensor lo, hi;      //!< [nc3, nc2, nrun] int: run [lo, hi), -1 unused
   torch::Tensor k0, k1;      //!< [nc3, nc2] int: Woodbury wall rows (single)
   int nrun = 1;
   bool single = true;
-  int64_t mask_version = -1;
+  int64_t mask_version = -1;  //!< the same version PrescribedFaces is built from
   static ColumnSegments whole(int nx1, torch::TensorOptions const& opts);
   //! from the solid mask and, for a floor, #369's X1Wall depth
   static ColumnSegments from_solid(torch::Tensor const& solid,
@@ -85,12 +86,12 @@ class VerticalImplicitImpl
                                 torch::nn::Module* p = nullptr);
   void reset() override;
   //! Phase `implicit` of one stage. du: the explicit increment, G[M_exp]
-  //! already in its energy row. dt_dev: 0-d FP64 device scalar of the
-  //! stage-weighted operator dt (hydro_forward.cpp:1568-1583; I.rst s7, note
-  //! 12). Posts VicIncrement to reg (adds, keep, cell_amount). No host
+  //! already in its energy row. dt: host double, the stage-weighted operator
+  //! dt (hydro_forward.cpp:1568-1583), keyed in X's GraphKey (I.rst s7).
+  //! Posts VicIncrement to reg (adds, keep, cell_amount). No host
   //! read: failures set col_status() bits only.
   void forward(torch::Tensor du, torch::Tensor w, torch::Tensor gamma,
-               torch::Tensor const& dt_dev, GravityWork const& gw,
+               double dt, GravityWork const& gw,
                FluxRegister& reg, torch::Tensor const& solid = {});
   //! Phase post_implicit, after apply_prescribed(1), before A's m1 (I.rst s4):
   //! books G[kept vic.mass_total] - R dq into du's energy row (dq from du0).
@@ -111,7 +112,6 @@ class VerticalImplicitImpl
   //! scratch a, b, c, delta, z0, z1, du0, col_status: unregistered, allocated
   //! once per (shape, dtype, device): stable addresses for captured graphs
   void ensure_scratch(torch::Tensor const& w);
-
   VicIncrement _inc;
   ColumnSegments _seg;
   torch::Tensor _a, _b, _c, _delta, _z0, _z1, _du0, _col_status, _meters[3];
