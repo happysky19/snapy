@@ -3,14 +3,15 @@
 V3 design: the merged document
 ==============================
 
-Full document, 2026-11-18, Tianhao Le, after ``CONVERGED`` (posted 22:40
-EST 2026-11-17 in the kickoff thread). Design text and declarations only:
-nothing here was built, compiled or run, and no implementation starts before
-Cheng approves this document. It merges the nine lane designs at their
-converged heads (table 1): the decisions, the frozen register header, the
-lane contracts, the FP32 and CUDA-graph contracts, the line budget (counted
-once under RULING V3-1), one PR order with the provider repositories first,
-the gates by name, owner and kind, and the open FOR CHENG items.
+Full document, 2026-11-18, Tianhao Le, after ``CONVERGED`` (posted 22:40 EST
+2026-11-17 in the kickoff thread). Design text and declarations only: nothing
+here was built, compiled or run, and no implementation starts before this
+document is approved (Xi, to whom Cheng handed the approval). It merges the nine
+lane designs at their converged heads (table 1): the decisions, the frozen
+register header, the lane contracts, the FP32 and CUDA-graph contracts, the line
+budget (counted once under RULING V3-1), one PR order with the provider
+repositories first, the gates by name, owner and kind, and the open FOR CHENG
+items.
 
 Conventions. ``L.rst:N`` is line N of lane L's design
 (``docs/v3/design/L.rst``) at the head in table 1; ``L:N`` without
@@ -86,8 +87,10 @@ The snapy heads except I and EF have the pin as merge base.
 Each item names the decision and the lane text that records it. Rulings
 relayed in the threads and not yet written in a lane document say so.
 
-* **RULING V3-1:** a deletion is counted by the lane that owns the file
-  (``R.rst:130-131``). Section 6 counts each line once by it.
+* **RULING V3-1:** a deletion is counted by the lane that owns the file,
+  and the lane that writes the replacement counts only its new code
+  (``R.rst:1581-1583``; ``O.rst:1540-1546``). Section 6 counts each line
+  once by it.
 * **RULING V3-2:** from R's PR R-1 the monitor's census counts accepted
   steps only; before R-1 the existing meters stay as at the pin, with no
   interim hook (``R.rst:75-78``).
@@ -96,10 +99,11 @@ relayed in the threads and not yet written in a lane document say so.
   #289 covariance there and posts it after the solve (``R.rst:81-85``;
   ``C.rst:1028-1035``). It closes R-C1.
 * **RULING V3-4** (lane S thread, 23:10 EST 2026-11-17): synthesized
-  corners are filled in the unpack of the last round of each field set:
-  in row 0, round 1 for ``hydro_u`` and round 3 for ``scalar_s``, counting
-  rounds from 0, as at the pin (``S.rst:1565-1571``; the comment at
-  ``exchange.hpp:79-80`` in S's skeleton). No declaration changes.
+  corners are filled in the unpack of the last round of each field set,
+  on that field set only: in row 0, round 1 for ``hydro_u`` and round 3 for
+  ``scalar_s``; rows 1-3 in round 1; rounds counted from 0, as at the pin
+  (``S.rst:1565-1571``; the comment at ``exchange.hpp:79-80`` in S's
+  skeleton). No declaration changes.
 * **Per-column FP64 retry accepted** (Cheng, 22:20 EST 2026-11-17). After a
   failed FP32 implicit solve only the failed columns are retried in FP64,
   through X's predicated second launch; the other columns keep their FP32
@@ -110,14 +114,22 @@ relayed in the threads and not yet written in a lane document say so.
   columns bitwise to today's retry (hypothesis); the unfailed columns of a
   failing block keep FP32, beyond round-off (``I.rst:1225-1235``). Lane I
   records (c) as decided (``I.rst:1219-1223``).
+* **#369 is not part of V3** (Xi, on this document, 2026-11-18): V3 builds
+  on main with #370, which is also the reference for A's gates
+  (``A.rst:1220``). Lane text that depends on #369 is out of V3: I's merge
+  order step "#369" (``I.rst:866``) and C's #369 notes and question
+  (``C.rst:651-678``, ``:1917-1921``; section 9).
 * **IMEX-ARK, a split implicit operator and a Newton option are not in
   V3** (Cheng, 20:35 EST): stages stay Shu-Osher with pyharp's weights and
   SSP positivity stays (``X.rst:872``, ``:913-915``).
 * **The 159 ``src/mesh`` lines** (``meshblock.cpp:1623-1653``,
   ``:1226-1339`` less ``1336-1337``, ``cycle_diagnostics.hpp``) are X's
   deletion; O's ``restart.cpp`` and ``budget.cpp`` count new lines only
-  (``X.rst:658-661``; ``O.rst:1528-1548``).
-* **L-3, the face set of ``boundary(dim)``:** S's ``wall``, ``outflow`` and
+  (``X.rst:658-661``; ``O.rst:1528-1548``). They leave ``src/mesh`` only
+  when O7 and O8 hold them (``X.rst:760-762``; ``O.rst:2692-2704``), not
+  with X5 (section 7).
+* **L-3, the face set of ``boundary(dim)``** (lane agreement of S, O and R,
+  not a ruling): S's ``wall``, ``outflow`` and
   ``custom`` block faces with a fluid interior cell, plus every
   immersed-solid face with exactly one solid neighbour, all rows, outward
   from the fluid (``R.rst:637-672``). A's ``step_field {1, 2, 3}`` on
@@ -127,17 +139,22 @@ relayed in the threads and not yet written in a lane document say so.
   ``:1388-1392``).
 * **Lane A:** ``conserve-axial-momentum-closure`` removed, ``exact``
   includes the closure (``A.rst:1372-1373``); the radial-conduction
-  positivity failure keeps the pin's abort (``A.rst:1393-1395``).
-* **Lane EF:** F6, ``src/turbulence`` deleted; F1, ANEOS stays; F2
-  withdrawn (``EF.rst:1603-1608``).
-* **Lane O:** pnetcdf stays; the hdf5/fits stubs and the FP32 storage
-  emulation are removed (``O.rst:755-756``). ``mppnccombine.cpp`` is
-  replaced by ``combine_parts``, a small snapy-specific combiner of about
-  200 lines (estimate). In-model combining stays and ``combine`` keeps its
-  default ``true``, so users see one merged file per output frame as today.
-  Gate G-2, parity against ``mppnccombine`` on the same parts, passes
-  before the deletion: O6a adds the combiner and the test, O6b deletes
-  ``mppnccombine.cpp`` (``O.rst:2711-2727``, ``:2681-2691``).
+  positivity failure keeps the pin's abort (``A.rst:1393-1395``). Its
+  retry cause ``diffusion.radial`` is cause bit 6 (value 64), reserved:
+  named, mapped and zeroed in ``kStepStart``, written by nobody in V3
+  (Cheng's decision; ``X.rst:174-177``).
+* **Lane EF:** F6, ``src/turbulence`` deleted, and F1, ANEOS stays
+  (Cheng); F2 withdrawn by lane EF, a lane agreement and not a ruling
+  (``EF.rst:1603-1608``).
+* **Lane O:** pnetcdf stays; the hdf5/fits stubs and the FP32 storage emulation
+  are removed (``O.rst:755-756``). The combiner plan is a lane agreement,
+  which O records as approved by Cheng (``O.rst:2711-2713``):
+  ``mppnccombine.cpp`` is replaced by ``combine_parts``, a small snapy-specific
+  combiner of about 200 lines (estimate). In-model combining stays and
+  ``combine`` keeps its default ``true``, so users see one merged file per
+  output frame as today. Gate G-2, parity against ``mppnccombine`` on the same
+  parts, passes before the deletion: O6a adds the combiner and the test, O6b
+  deletes ``mppnccombine.cpp`` (``O.rst:2711-2727``, ``:2681-2691``).
 * **Lane I:** ``gravity-work: cell`` is refused and the global
   gravity-work fixer is removed (``I.rst:1038-1039``, ``:1077-1078``).
 * **Lane C:** every Riemann solver and reconstruction of the pin stays
@@ -393,9 +410,10 @@ ceilings.
      - 4,274
      - 2,392
      - ``X.rst:591-616``: cut 1,882 (44.0 %), with the 159 ``src/mesh``
-       lines of table 3 as X's deletion (o3, o4; ``X.rst:658-661``). Needs
-       O5, else a cut of 986, and 827 without o3-o4 (``X.rst:760-762``;
-       ``O.rst:1520-1523``)
+       lines of table 3 as X's deletion (o3, o4; ``X.rst:658-661``). The
+       cut needs O5 for F1-F2 and O7 and O8 for o3-o4: without O5 it is
+       986, and 827 without o3-o4 as well (``X.rst:760-762``;
+       ``O.rst:1520-1523``, ``:2692-2704``)
    * - top level
      - ``src/snap.h``, ``src/add_arg.h``
      - 105
@@ -527,12 +545,6 @@ each other unless the dependency column says so.
      - bitwise (K3: hypothesis near ``ftol``)
      - ``K.rst:782-785``, ``:644-646``
    * - 1
-     - #369 (open upstream PR)
-     - snapy
-     - none; V3 rebases on it
-     - n/a
-     - ``I.rst:866``
-   * - 1
      - O1, O2, O2b, O3, O4
      - snapy
      - none (``O.rst:1452``)
@@ -557,11 +569,12 @@ each other unless the dependency column says so.
      - X1 bitwise; X2 bitwise (hypothesis); X3 eager bitwise
      - ``X.rst:818-820``
    * - 1
-     - S merge steps (1)-(3), phase 1 transport
+     - S step (3): ``Exchange`` with the x1 relays moved out of hydro,
+       phase 1 (transport only)
      - snapy
      - none
-     - bitwise (phase 1); T1 round-off
-     - ``S.rst:1633-1635``, ``:1949-1954``
+     - bitwise (phase 1)
+     - ``S.rst:1634-1635``, ``:1949-1954``
    * - 1
      - R-1 register, no reader
      - snapy
@@ -571,7 +584,7 @@ each other unless the dependency column says so.
    * - 1
      - I-1, I-2, I-3 (need no register)
      - snapy
-     - #369
+     - none (I's "#369" step is out of V3, section 2)
      - I-1, I-2 bitwise (hypothesis); I-3 rounding (target 1e-11)
      - ``I.rst:868-869``, ``:994-1011``
    * - 2
@@ -581,9 +594,16 @@ each other unless the dependency column says so.
      - G1 bitwise
      - ``A.rst:1321-1323``
    * - 2
+     - S steps (1)-(2), phase 2: ``PanelRotation`` and the Cartesian
+       exchange route (T1); ``FaceKind`` and corners (P, T4)
+     - snapy
+     - none stated by S beyond its merge order
+     - T1 round-off; periodic corners beyond round-off (FOR CHENG)
+     - ``S.rst:1633-1634``, ``:1956-1961``
+   * - 2
      - C3, C4; C4's rotation call after S moves the helper
      - snapy
-     - C1, C2; S (``C.rst:1587``)
+     - C1, C2; S step (1) (``C.rst:1587``)
      - bitwise
      - ``C.rst:1582``, ``:1802-1809``
    * - 2
@@ -613,19 +633,21 @@ each other unless the dependency column says so.
      - snapy
      - R-1; I-6 with X's predicated second launch (section 2)
      - I-4, I-5 rounding (hypothesis); I-6 per-column FP64 retry
-       (accepted, 1.1): bitwise when no column fails, beyond round-off
+       (accepted, section 2): bitwise when no column fails, beyond round-off
        for the unfailed columns of a failing block
      - ``R.rst:1572``, ``:1746``; ``I.rst:1012-1024``
    * - 2
-     - X4 global phase; X5; X6; X7
+     - X4 global phase; X5 without o3, o4; X6; X7
      - snapy
      - X1-X3
-     - X4, X5 bitwise (hypothesis); X6 bitwise plus 5 % wall time
+     - X4, X5 bitwise (hypothesis); X6 bitwise plus 5 % wall time and no
+       nested-launch deadlock
      - ``X.rst:821-824``
    * - 3
      - A phase 2; R-6
      - snapy
-     - R, I-4 (``I.rst:870``), X4, S rotation data, #370 in the reference
+     - R, I-4 (``I.rst:870``), X4, S step (1) (``PanelRotation``, the
+       rotation data and seam rotation), #370 in the reference
      - G2-G7 (tolerance)
      - ``A.rst:1214-1216``, ``:1324-1332``; ``R.rst:1573``, ``:1747-1748``
    * - 3
@@ -641,7 +663,9 @@ each other unless the dependency column says so.
      - S-K1, S-K3 bitwise; S-K2 hypothesis (K-G5); S-K4 with X's gate
      - ``K.rst:650-652``, ``:660-666``, ``:786-789``
    * - 3
-     - O5, then X8 (F1, F2; sv after O4; F3 any time)
+     - O5, then X8 (F1, F2; sv after O4). F3, ``stride_iterator.hpp``, is
+       deleted by O1; X books its 140 lines (``O.rst:2622-2627``;
+       ``X.rst:615``)
      - snapy
      - O5 before X8 (``O.rst:2674-2680``)
      - bitwise files; X8 no numerics
@@ -652,6 +676,12 @@ each other unless the dependency column says so.
      - G-2 passes before O6b
      - bitwise data, exact metadata
      - ``O.rst:2681-2697``
+   * - 4
+     - X's o3, o4: the 159 ``src/mesh`` lines
+     - snapy
+     - O7 and O8 (``X.rst:760-762``)
+     - X's deletion; O's new files hold the replacement
+     - ``X.rst:658-661``; ``O.rst:2692-2704``
    * - 4
      - O8 consumers; R-7
      - snapy
@@ -666,11 +696,11 @@ each other unless the dependency column says so.
      - G8, G9 (tolerance)
      - ``A.rst:1333``; ``S.rst:1973-1975``
    * - 4
-     - S phase 2 (rotation, corners); S step (5) deletions
+     - S step (5): the deletions of S's section 9
      - snapy
-     - S phase 1
-     - round-off (T1); periodic corners beyond round-off (FOR CHENG)
-     - ``S.rst:1956-1961``, ``:1637``
+     - S steps (1)-(4)
+     - per the step that replaces each range
+     - ``S.rst:1637``
    * - 5
      - A phase 4 (FP32, perturbation flux)
      - snapy
@@ -690,10 +720,11 @@ each other unless the dependency column says so.
      - bitwise
      - ``K.rst:667``, ``:790``
 
-Open in the plan: no lane gives a dependency for P2 or for S's phase 2;
-both are placed where they block nothing. I-6 is no longer blocked: the
-per-column retry is accepted (section 2). C2, C10, S phase 2's corner correction
-and the FOR CHENG items of each lane stay with Cheng.
+Open in the plan: no lane gives a dependency for P2 or for S's steps
+(1)-(2); they are placed where they block nothing and before the PRs that
+need them (A phase 2 and C4 wait on S step (1)). I-6 is no longer blocked:
+the per-column retry is accepted (section 2). C2, C10, S phase 2's corner
+correction and the FOR CHENG items of each lane stay with Cheng.
 
 
 8. Gates by name, owner and kind
@@ -702,7 +733,8 @@ and the FOR CHENG items of each lane stay with Cheng.
 Kind is one of: **bitwise** (exact equality, or an exact pass/fail
 identity), **tolerance** (a stated bound), **hypothesis** (the lane marks
 the claim unverified, or the bound is a target to be set by a first
-measurement). Where a lane states two kinds for one gate, both are given.
+measurement), or **kind not stated by the lane (to set)** where the lane
+gives none. Where a lane states two kinds for one gate, both are given.
 Every gate here is specified, not run.
 
 8.1 Named gates
@@ -755,7 +787,8 @@ Every gate here is specified, not run.
    * - G-R8
      - R
      - ``riemann.central`` equals ``cen2``/``cen3``
-     - tolerance 1e-14
+     - tolerance 1e-14 relative on the mass rows (A's H1); A's G2 checks
+       the same identity in e_inf <= 1e-13
      - ``R.rst:1487-1490``
    * - G-R9
      - R
@@ -839,7 +872,8 @@ Every gate here is specified, not run.
    * - G2
      - A
      - kept ``riemann.central`` vs today's central
-     - tolerance 1e-13
+     - tolerance e_inf <= 1e-13, ``max_f |dF_c| / max_f rho(|u_n| + c)``;
+       G-R8 and lane C state 1e-14 relative on the mass rows
      - ``A.rst:978-980``
    * - G3, G3b
      - A
@@ -905,7 +939,9 @@ Every gate here is specified, not run.
    * - K-G1
      - K
      - exact plan equals the pin's ``VU->T``, ``PV->T``
-     - bitwise (FP64 inputs)
+     - bitwise for FP64 inputs; with a NaN cell, its count exact and finite
+       cells within round-off (tolerance); FP32 inputs within a tolerance
+       of the FP64 result (hypothesis)
      - ``K.rst:550``
    * - K-G2
      - K
@@ -993,6 +1029,12 @@ Every gate here is specified, not run.
      - hypothesis (bitwise); the no-source baseline strictly bitwise;
        fallback tolerance measured first
      - ``X.rst:280``
+   * - X
+     - X6 (h1-h2, block jobs on the inter-op pool): CPU multi-block wall
+       time within 5 % and no nested-launch deadlock
+     - tolerance (5 % wall time); bitwise pass/fail (no deadlock); h1
+       itself a hypothesis
+     - ``X.rst:706-708``, ``:823``
    * - C
      - refactor PRs C1-C4, C7, C8 change no result (#349 dump set)
      - bitwise
@@ -1020,7 +1062,8 @@ Every gate here is specified, not run.
      - ``C.rst:1301-1303``
    * - C
      - ``riemann.central`` equals today's central rows (A's G2)
-     - tolerance 1e-14
+     - tolerance 1e-14 relative on the mass rows (A's H1); A's G2 is
+       e_inf <= 1e-13
      - ``C.rst:1304-1315``
    * - C
      - every solver and scheme parses and runs as before; split equals
@@ -1033,16 +1076,12 @@ Every gate here is specified, not run.
      - ``I.rst:642-645``, ``:690``
    * - I
      - I2 booked = G[register M]; I3 mass telescoping
-     - unstated in the invariant line
+     - kind not stated by the lane (to set)
      - ``I.rst:646-650``, ``:691``
    * - I
      - I4 linear in the explicit increment, on C's rest gate
      - hypothesis
      - ``I.rst:651-661``, ``:692-693``
-   * - I
-     - I5 no reference row (operator argument, no run)
-     - none (design argument)
-     - ``I.rst:662-676``
    * - I
      - #348 harness (bitwise gate of I-1, I-2); I-3 energy row
      - bitwise (hypothesis); hypothesis (target 1e-11)
@@ -1061,6 +1100,25 @@ Every gate here is specified, not run.
        (structural); solid faces (= G-R9)
      - bitwise (structural); G-R9's kind
      - ``S.rst:1419-1422``, ``:1431-1434``, ``:1477-1479``
+   * - S
+     - T1: nb = 1 vs 4 bitwise under AVX2, default and CUDA, after the
+       Cartesian route replaces the spherical one (H16)
+     - hypothesis (bitwise)
+     - ``S.rst:1398-1405``
+   * - S
+     - T2: seam arcs bitwise at N = 16, 48, 96 (H6)
+     - bitwise; that H6 now passes is a hypothesis
+     - ``S.rst:1384-1391``
+   * - S
+     - T3: uniform state bitwise through rows 1-3, CPU and CUDA (H12)
+     - bitwise; passing is a hypothesis
+     - ``S.rst:1392-1397``
+   * - S
+     - H18: CPU equals GPU
+     - tolerance ``rtol = 1e-13``, ``atol = 1e-12`` in FP64 in the default
+       build (hypothesis); bitwise in the CI build (``--fmad=false``,
+       ``-ffp-contract=off``, X's flag)
+     - ``S.rst:1406-1415``
 
 8.3 Which PR carries each gate
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1076,16 +1134,17 @@ of its lane's section 10.
   tolerance target (``I.rst:994-1011``).
 * **EF:** EF-2 G-EF-2; EF-4 G-EF-4; EF-6 and EF-7 G-EF-9
   (``EF.rst:1459-1463``, ``:1473-1476``, ``:1484-1495``).
-* **S:** phase 1 the nb = 1, 2 and pz = 1, 2 bitwise runs
-  (``S.rst:1949-1953``); phase 3 G-R10 and the solid-face leak
-  (``S.rst:1963-1973``).
+* **S:** phase 1 (step (3)) the nb = 1, 2 and pz = 1, 2 bitwise runs
+  (``S.rst:1949-1953``); phase 2 (steps (1)-(2)) T1 after the Cartesian
+  route (``S.rst:1398-1405``, ``:1956-1958``); phase 3 G-R10 and the
+  solid-face leak (``S.rst:1963-1973``).
 * **A:** G1 phase 1; G2-G7s phase 2; G8, G9, G9b phase 3; G10 phase 4
   (``A.rst:974-1001``).
 * **O:** G-1 O1-O3, O5, O7; G-2 O6a, before O6b; G-3 O4; G-4 O7; G-5 O8;
   G-6 O2 (``O.rst:1083-1116``).
 * **X:** X2 and X5 the N-step golden; X4 the chemistry-slot gate's
-  no-source baseline, its source run with S-K4; X6 the wall-time gate
-  (``X.rst:819-823``).
+  no-source baseline, its source run with S-K4; X6 the wall-time and
+  no-deadlock gate (``X.rst:819-823``).
 * **K:** K3 K-G1, K-G2; S-K2 K-G5; the release K-G9 (``K.rst:784``,
   ``:787``, ``:644-646``).
 
@@ -1094,8 +1153,10 @@ of its lane's section 10.
 --------------------------
 
 Open items only, each with the lane's text; decided items are in section 2.
-Lanes R and X carry none (X's last two are accepted, ``X.rst:1481-1482``).
-Lane I's (c) is decided (section 2).
+Table 8 is the lanes' FOR CHENG rows; table 9 is the five open items named
+in the kickoff thread. Lane R has none. Lane I's (c) is decided (section 2).
+X's chemistry slot and L-2 are accepted (``X.rst:1481-1482``); X's deck
+names and its ``implicit-fallback-fp64`` capture rule are open (table 9).
 
 .. list-table:: Table 8. Open FOR CHENG items
    :header-rows: 1
@@ -1136,19 +1197,59 @@ Lane I's (c) is decided (section 2).
        form of the T-dependent inversion
      - ``K.rst:798-807``
 
+.. list-table:: Table 9. Open items named in the kickoff thread
+   :header-rows: 1
+   :widths: 6 56 38
+
+   * - lane
+     - item
+     - source
+   * - I
+     - ``ConstGravity`` on lane A's ``SourceTerm``: bitwise when only
+       ``grav1`` is non-zero, every repository deck (**hypothesis**); a
+       rounding change with two or more non-zero components
+     - ``I.rst:1341-1348``
+   * - O, X
+     - the deck names ``integration.execution`` and
+       ``integration.execution-strict``: O's and X's proposal, pending
+       Cheng's naming
+     - ``X.rst:848-852``; ``O.rst:126-127``
+   * - X
+     - ``implicit-fallback-fp64`` under ``cuda-graph`` is read at capture; a
+       change after capture takes effect only through
+       ``bump_config_generation()``, a behaviour change (eager reads it
+       per call, as at the pin)
+     - ``X.rst:296``, ``:838-841``
+   * - C
+     - #369's ``upward`` reference mode: whether it is carried into
+       ``X1ReferenceConfig`` if #369 merges before C2/C7. **Out of V3
+       scope**: #369 is not part of V3 (section 2) and lane C stays on the
+       pin, so the question applies only if #369 later lands on main, as a
+       question for its author and Cheng
+     - ``C.rst:670-678``, ``:1917-1921``
+   * - S
+     - the panel-seam momentum tolerance, 1e-14 relative after rotating
+       back to the owner's basis (**hypothesis** until measured), and the
+       H18 CPU-GPU tolerance ``rtol = 1e-13``, ``atol = 1e-12`` in FP64
+       (**hypothesis**)
+     - ``S.rst:1086-1090``, ``:1406-1415``
+
 
 10. Open items and the approval condition
 -----------------------------------------
 
-* **Cheng's approval of this document** is the condition for any
-  implementation, build or runtime gate. No gate in section 8 has run.
+* **Approval of this document** (Xi, to whom Cheng handed it) is the
+  condition for any implementation, build or runtime gate. No gate in
+  section 8 has run.
 * **R:** Xinyue's five notes, whose text R never had (``R.rst:1804``).
 * **EF on S:** EF's notes 3-5 on S are not verified against S
   (``EF.rst:2058-2061``).
 * **S, RULING V3-4** (section 2).
 * **X wording, for X's next text commit:** ``X.rst:933`` says the corners
   are "filled in the last round's unpack"; under V3-4 that is the last
-  round of each field set.
+  round of each field set. ``X.rst:822`` lists all of section 9's
+  ``src/mesh`` items in X5, o3 and o4 included; under section 7 they leave
+  after O7 and O8, not with X5.
 * **The FOR CHENG items** of section 9.
 * **Estimates:** every "after" figure of section 6 and the 34,141 target
   margin rest on design estimates (section 6.4).
