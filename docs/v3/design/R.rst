@@ -3,8 +3,12 @@
 V3 lane R: flux register, monitor and the hydro stage
 =====================================================
 
-Revision 2.5, 2026-11-17: section 11 only, answered items closed with
-cites. Revision 2.4: ``R.rst`` text only, on skeleton rev 4.3
+Revision 2.6, 2026-11-17: Cheng's 22:20 EST
+ruling accepts the per-column FP64 retry (4.5, section 11); A's
+``step_field {1, 2, 3}`` on immersed-solid decks is agreed (4.2 "X and A").
+Revision 2.5:
+section 11 only, answered items closed with cites. Revision 2.4:
+``R.rst`` text only, on skeleton rev 4.3
 (``97c62312490c3e290d597a2d188785252773bd21``). ``flux_register.hpp`` is
 unchanged since ``4c59162ae37080d0ab307b2823742b44f46da7c3`` in declarations
 and line numbers, so the freeze stands and no client re-cites. Revision 2.3
@@ -755,6 +759,15 @@ was profiled.
 * **``Fixer::apply``** receives ``stage_weight`` = ``w2`` of the stage just
   combined, passed by X. A's closure applies ``-w2 dt R`` with it, and
   posts its change with ``cell_amount(..., 1.0, AmountKind::fixer)``.
+* **A's ``step_field`` request (rev 2.6): agreed.** A requests
+  ``step_field = {1}``, and ``{1, 2, 3}`` on decks with immersed solids,
+  so that ``aam.boundary.<d>`` follows the ``boundary(dim)`` face set of
+  4.2 O (``A.rst:904-914`` at ``c405d491``); ``RegisterRequest::step_field``
+  already takes the dims and ``step_field(dim)`` is a const read
+  (``flux_register.hpp:38``, ``:84``), so no header change, and the added
+  memory, ``nvar`` rows of one ``kRegister`` face field per added
+  direction, allocated at ``reset()`` (3.1, 3.7), is a **hypothesis** until
+  measured.
 * ``begin_stage(stage, w)`` remains the only weight input. ``rollback`` is
   in X's reset list. Accumulation is FP64, FP32 on MPS.
 * **Checked against X rev 2 at ``034ef405``** (rev 2.1):
@@ -1394,9 +1407,10 @@ slots 6 and 7, ``:1571-1577``). Lane X maps each name to a cause bit
 (``X.rst:200-206`` at ``0fe47c6f`` still names ``eos.limiter_mark``). K's
 failures stay slot 4 of X's stack (4.2 K).
 
-Written on lane I's proposal (c), which is still open with Cheng (``I.rst``
-section 10(c) at ``8c2ba226``). The FP32 solve fails per column. Only the
-failed columns are retried in FP64, inside the stage. ``implicit.column``
+Written on lane I's proposal (c), accepted by Cheng at 22:20 EST
+2026-11-17 (``I.rst`` section 10(c) at ``8c2ba226``). The FP32 solve fails
+per column. Only the failed columns are retried in FP64, inside the stage.
+``implicit.column``
 is set only if a column also fails in FP64.
 
 .. list-table:: What changes
@@ -1422,9 +1436,10 @@ is set only if a column also fails in FP64.
    * - ``fp64_fallbacks`` meter
      - counts blocks
      - ``count("implicit.fp64_columns", n)`` counts columns
-   * - if Cheng rejects (c)
+   * - Cheng's ruling
      -
-     - only row 1 reverts. The cause name and the call stay.
+     - (c) accepted, 22:20 EST: row 1 stands. ``flag_retry`` with cause
+       ``implicit.column`` stays as written, per column; no header change.
 
 
 5. Invariants and gates
@@ -1783,9 +1798,10 @@ Checked at rev 2.5 against: X ``36d4986fcf17da330f8678946401a7f39ee9db81``
   ``C.rst`` is marked superseded in C rev 6.3.
 * **K:** answered at ``fc619eec``: slot 4 of X's stack and the two solve
   counters (4.2 K).
-* **Still open:** Xinyue's five notes whose text I never had (row 54);
-  Cheng's ruling on I's (c), the per-column FP64 retry, which decides row 1
-  of the 4.5 table (``I.rst`` section 10(c) at ``fa3ad5e6``).
+* **Cheng (closed, rev 2.6):** lane I's (c), the per-column FP64 retry, is
+  accepted (22:20 EST). Row 1 of the 4.5 table stands; ``implicit.column``
+  stays per column.
+* **Still open:** Xinyue's five notes whose text I never had (row 54).
 
 
 12. Skeleton index
