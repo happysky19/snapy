@@ -77,10 +77,54 @@ moves above happened after the snapshot; this part cites the snapshot.
 2. Line budget, each line counted once (RULING V3-1)
 ----------------------------------------------------
 
-2.1 Per lane, as each lane states it
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Section 2 corrected 2026-11-17 (part 1.1) with the PM's reconciliation
+inputs, each checked below. Lanes O and S moved after the snapshot and
+change the totals, so they are cited at their live heads: O
+JiachenLiu-Atmos/snapy ``f5c8e9e1086ee1c56753e2b21af345ebb6cba28a``, S
+jihenghu/snapy ``7ca6d21c7319a30c5d193e2e79347c3778029553`` (rev 2.2). The
+other lanes' totals were re-read at their live heads and are unchanged: I
+``2d8685c80ca6edda1c1e4e631dce035d8dff75f6`` (``I.rst:961-965``), EF
+``5b3f18d28c2db7305fd3fef8b04f0319b8a326c1`` (``EF.rst:1366-1370``), A
+``c405d49133326bb6db30650df57166d53f507067`` (``A.rst:1272-1275``), X
+``7bed6980dbf572233c09d64e2d40bbf29eed0b7d`` (``X.rst:615``), R
+``c9ecc0ca`` and C ``5dc4d002`` (text-only moves), K unmoved. Their cites
+below stay at the snapshot of table 1. **Every figure in this section is
+provisional** until ``CONVERGED`` and the open row of table 3.
 
-.. list-table:: Table 2. Section 9 totals at the snapshot
+2.1 The baseline: all of ``src/`` at the pin
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The round's baseline is every ``.cpp``, ``.hpp``, ``.h``, ``.cu`` and
+``.cuh`` file under ``src/`` at the pin, counted with ``wc -l``::
+
+  git ls-tree -r --name-only 9e5de2d4 -- src \
+    | grep -E '\.(cpp|hpp|h|cu|cuh)$' \
+    | while read f; do git cat-file -p 9e5de2d4:$f | wc -l; done \
+    | awk '{s+=$1} END{print s}'
+
+It prints **42,677**. Per directory: bc 1,155, coord 4,001, diagnostics
+1,585, eos 2,716, forcing 2,938, hydro 5,608, implicit 2,337, input 2,041,
+interface 1,008, layout 3,316, math 166, mesh 3,266, output 4,487, recon
+2,233, riemann 2,089, scalar 458, sedimentation 1,049, turbulence 402,
+utils 1,717, and two top-level files, ``src/snap.h`` 80 and
+``src/add_arg.h`` 25 (105). The lane baselines partition this set exactly
+(derived here from the per-file counts): R the six hydro files in table 2;
+C recon + riemann + 1,519 lines of hydro reference files; I implicit +
+``gravity_work*.hpp`` (250) + ``const_gravity.cpp`` (68) + math; EF eos +
+scalar + sedimentation + turbulence + ``flux_positivity.*`` (346); S bc +
+coord + layout; A forcing less ``const_gravity.cpp`` (2,938 - 68); O
+output + input + utils + diagnostics; X mesh + interface. ``src/math``
+(166) was in both O's and I's, and the 105 top-level lines are in no lane.
+So 42,738 (the draft's sum) - 166 + 105 = 42,677.
+
+The round target is **34,141**: 80 % of 42,677 (34,141.6), truncated
+(Cheng's 20 % reduction on the whole of ``src/``). It is not a sum of lane
+ceilings.
+
+2.2 Per lane
+~~~~~~~~~~~~
+
+.. list-table:: Table 2. Section 9 totals, ``src/math`` counted once
    :header-rows: 1
    :widths: 6 30 10 10 44
 
@@ -103,61 +147,67 @@ moves above happened after the snapshot; this part cites the snapshot.
      - ``C.rst:1598-1610``; the 587 lane R lines C replaces are not in
        C's 5,841 (``C.rst:1611-1615``, ``:1636-1639``)
    * - I
-     - ``src/implicit`` and gravity work, plus ``src/math`` (166)
+     - ``src/implicit``, ``gravity_work*.hpp``, ``const_gravity.cpp``,
+       plus ``src/math`` (166)
      - 2,821
      - 2,032
      - ``I.rst:844-847``, ``:935-939``
    * - EF
-     - eos, positivity, sedimentation, ``src/turbulence``
+     - eos, scalar, sedimentation, ``src/turbulence``,
+       ``flux_positivity.*``
      - 4,971
      - 3,896
      - ``EF.rst:1126-1132``, ``:1364-1368``; ANEOS kept, F6 decided
        (``EF.rst:1414-1416``)
    * - S
-     - coord, layout, exchange, bc
+     - coord, layout, bc
      - 8,472
-     - 7,445
-     - ``S.rst:1570-1576``, ``:1801-1804``, ``:1807-1811``, ``:1831``; no
-       ceiling (``S.rst:1570-1571``)
+     - 7,460
+     - live ``S.rst:1822-1825``, ``:1828-1833``, ``:1853-1854``: rev 2.1's
+       7,445 plus rev 2.2's +15 (pack/unpack split, estimate); no ceiling
    * - A
-     - ``src/forcing``
+     - ``src/forcing`` less ``const_gravity.cpp``
      - 2,870
      - 2,088
      - ``A.rst:1210-1213``; needs O's options schema first, else 2,399
        (``A.rst:1245-1247``)
    * - O
-     - ``src/output``, ``src/input``, ``src/utils``, ``src/diagnostics``,
-       ``src/math``
-     - 9,996
-     - 4,619
-     - baseline ``O.rst:1464-1474``; settled cut 5,377 (``O.rst:1658-1662``).
-       O states the cut, not the "after"; 4,619 = 9,996 - 5,377 is derived
-       here. Design target 5,807, strict reading 3,833
-       (``O.rst:1663-1674``)
+     - ``src/output``, ``src/input``, ``src/utils``, ``src/diagnostics``
+     - 9,830
+     - 4,473
+     - live ``O.rst:2394-2395``, ``:2397-2414``, ``:2429-2433``: 9,830 -
+       5,357 (settled cut, 54.5 %). O drops the 166 ``src/math`` lines from
+       both columns so they count once, in I (``O.rst:2401``, "Closed").
+       The draft's 4,453 used rev 3's cut 5,377; rev 4's is 5,357 (+20)
    * - X
      - ``src/mesh``, ``src/interface``
      - 4,274
      - 2,551
      - ``X.rst:587-611``; needs O5, else a cut of 827 (``X.rst:751-755``;
        ``O.rst:1456-1459``)
-   * - **snapy, eight lanes**
+   * - top level
+     - ``src/snap.h``, ``src/add_arg.h``
+     - 105
+     - 105
+     - in no lane; counted unchanged (2.1)
+   * - **snapy**
      -
-     - **42,738**
-     - **28,717**
-     - sum of the rows above
+     - **42,677**
+     - **28,691**
+     - sum of the rows above, provisional (2.4)
    * - K
      - kintera touched files
      - 2,678
      - 2,585
      - ``K.rst:679-696``; kintera thermo total 4,801 -> 4,787
        (``K.rst:675-677``) is a wider scope, not added. K counts no snapy
-       line (``K.rst:766-774``)
+       line (``K.rst:766-774``). Not in ``src/`` of snapy
 
 Provider lines in X's table: pyharp and pydisort are listed apart and not in
 X's 4,274 (``X.rst:589-592``; pydisort D1 -51 and D2 -17 at
-``X.rst:740-745``).
+``X.rst:740-745``). They are outside snapy's ``src/`` and the target.
 
-2.2 Cross-lane ranges and who counts them
+2.3 Cross-lane ranges and who counts them
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. list-table:: Table 3. Shared ranges
@@ -197,48 +247,40 @@ X's 4,274 (``X.rst:589-592``; pydisort D1 -51 and D2 -17 at
      - EF, X
      - ``K.rst:766-774``
    * - ``src/math/{lubksb,ludcmp}.h`` (166)
-     - **both baselines**
-     - in O's 9,996 (``O.rst:1472``) and in I's 2,821 (``I.rst:844-846``);
-       O says it "counts in lane I and in neither lane's cut"
-       (``O.rst:1360-1365``). See 2.3.
+     - I
+     - **closed** by O at ``f5c8e9e1``: O's roll-up drops them from both
+       its baseline and its "after" (live ``O.rst:2397-2414``); I keeps
+       them in 2,821 and 2,032 (``I.rst:844-846``, ``:925-934``)
    * - ``meshblock.cpp:1623-1653`` (31), ``:1226-1339`` less ``1336-1337``
-       (112), ``cycle_diagnostics.hpp`` (16)
-     - **open**
-     - X keeps them in its "after" as joint rows (``X.rst:604``,
-       ``:763-767``); O absorbs them into its estimated ``restart.cpp`` and
-       ``budget.cpp`` (``O.rst:1441-1449``). See 2.3.
+       (112), ``cycle_diagnostics.hpp`` (16): 159 lines
+     - **open, provisional**
+     - Both lanes call them moved, counted in neither lane's cut (live
+       ``X.rst:970-985``; live ``O.rst:1475-1484``, ``:2898-2900``). X
+       lists ``meshblock.cpp`` (1,919 -> 1,919) and
+       ``cycle_diagnostics.hpp`` (16 -> 16) as joint rows not counted
+       (live ``X.rst:608``, ``:770-771``), and O absorbs the lines into its
+       estimated ``restart.cpp`` (260) and ``budget.cpp`` (200) (live
+       ``O.rst:1481-1483``). Neither says which "after" column holds them.
+       The PM has asked Xi and Jiachen; no owner is chosen here (2.4)
 
-2.3 Merged total
-~~~~~~~~~~~~~~~~
+2.4 Merged total, provisional
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* As stated by the lanes: **42,738 -> 28,717** for snapy (-14,021,
-  -32.8 %), plus kintera 2,678 -> 2,585.
-* Counting ``src/math`` once, in I (derived here, for O to confirm): O's
-  baseline becomes 9,830 and, since neither lane cuts the 166, O's "after"
-  4,453. Snapy: **42,572 -> 28,551** (-14,021, -32.9 %).
-* **Open:** the 159 ``src/mesh`` lines in the last row of table 3 may sit
-  in both X's "after" (as unchanged joint rows) and O's new-file estimates.
-  Neither document gives the share of O's 260 + 200 estimate that they
-  take, so no correction is made here. X and O to state it.
-
-2.4 The round total 28,676 against 34,141
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-I could not reproduce either number from the nine section 9 tables at the
-snapshot.
-
-* The lanes' stated "after" values sum to 28,717 (table 2), 41 above
-  28,676; with ``src/math`` counted once, 28,551, 125 below.
-* The stated baselines sum to 42,738 (42,572 with ``src/math`` once), not
-  34,141. The lanes' stated ceilings do not sum to it either: R 2,794
-  (``R.rst:1707``), C 4,672 (``C.rst:1636``), I 2,256 (``I.rst:939``), EF
-  3,976 (``EF.rst:1131-1132``), X 3,419 (``X.rst:588``) give 17,117; S has
-  no ceiling (``S.rst:1570-1571``); A states a 20 % target, not a ceiling
-  (``A.rst:1355``), and O a 30 % target (``O.rst:1674``).
-* **Hypothesis**, not checked: the PM's figures use other per-lane inputs
-  (an earlier head, O's design target instead of its settled cut, or X's
-  2,764 with ``signal_handler`` moved in, ``X.rst:773-774``). The PM's
-  per-lane inputs are needed to reconcile; this part keeps table 2.
+* Baseline **42,677**, after **28,691**: cut 13,986 (-32.8 %), 5,450 under
+  the round target 34,141.
+* The PM's arithmetic is reproduced: 42,738 - 166 + 105 = 42,677, and the
+  draft's 28,551 + 105 (top level) + 20 (O, 4,473 not 4,453) + 15 (S rev
+  2.2) = 28,691.
+* **Open, the 159 ``src/mesh`` lines** (last row of table 3). If X's
+  "after" and O's estimates both hold them, the after is 28,532; if one of
+  them does, 28,691; if neither does, 28,850. The after therefore lies in
+  **28,532 to 28,850**, under the target in every case (5,291 to 5,609
+  lines under). The owner is for Xi and Jiachen to state.
+* S rev 2.2 (``7ca6d21c``) has an open design conflict in the lane S thread
+  (S rev 2.3, Jiheng); its +15 is S's estimate and may move with it.
+* The draft's 28,676 and 34,141 question is answered: 34,141 is the round
+  target (2.1), and the PM's inputs reconcile the after to 28,691.
+* Kintera, outside snapy's ``src/``: 2,678 -> 2,585.
 
 
 3. PR plan, one order
@@ -823,9 +865,8 @@ Due Wednesday 08:00 EST, after ``CONVERGED``:
 
 * re-read every head in table 1 at the converged SHAs and update every
   cite;
-* settle with O and X the two open rows of table 3 (``src/math`` and the
-  159 ``src/mesh`` lines), and with the PM the inputs behind 28,676 and
-  34,141;
+* settle with X and O the open row of table 3 (the 159 ``src/mesh``
+  lines) and replace the provisional figures of section 2;
 * add the per-lane contract summaries, the frozen register header
   (``flux_register.hpp``, frozen at ``4c59162a``), the FP32 and CUDA-graph
   contracts, and the FOR CHENG list in one place;
