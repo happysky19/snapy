@@ -25,7 +25,8 @@ of written code.
 -------------------
 
 Every head below was read with ``git ls-remote`` on 2026-11-18 at 03:39 UTC
-and fetched. Each is a descendant of the head that part 1 of this document
+(I and S again at 04:27 UTC, after their rev 2.5 and rev 2.4) and
+fetched. Each is a descendant of the head that part 1 of this document
 (``dac6ca5b``) cited for its lane. Part 1's citations were carried to these
 heads by a line diff, each carried citation's end lines were checked to be
 unchanged text, and the citations whose text changed, and every new one,
@@ -49,17 +50,16 @@ were read at these heads.
      - rev 6.3
    * - I
      - zoeyzyhu/snapy ``v3-design/I``
-     - ``2d8685c80ca6edda1c1e4e631dce035d8dff75f6``
-     - rev 2.4; docs-only mirror, no common history with the pin. Rev 2.5
-       (``1092aef9``) was not on the branch at 03:39 UTC
+     - ``1092aef97e1a55af700b333271204e5a16d75e82``
+     - rev 2.5; docs-only mirror, no common history with the pin
    * - EF
      - zoeyzyhu/snapy ``v3-design/EF``
      - ``5b3f18d28c2db7305fd3fef8b04f0319b8a326c1``
      - rev 3.8; docs-only mirror, no common history with the pin
    * - S
      - jihenghu/snapy ``v3-design/S``
-     - ``bee1b27667601ea0b333c11595fe965d18de0f94``
-     - rev 2.3
+     - ``76204d46c076da2ac55d862a7a31a1fe0ad636eb``
+     - rev 2.4
    * - A
      - JiachenLiu-Atmos/snapy ``v3-design/A``
      - ``c405d49133326bb6db30650df57166d53f507067``
@@ -98,9 +98,8 @@ relayed in the threads and not yet written in a lane document say so.
 * **RULING V3-4** (lane S thread, 23:10 EST 2026-11-17): synthesized
   corners are filled in the unpack of the last round of each field set:
   in row 0, round 1 for ``hydro_u`` and round 3 for ``scalar_s``, counting
-  rounds from 0, as at the pin. S rev 2.3 says the row's last round
-  (``S.rst:1565-1568`` at ``bee1b276``); S rev 2.4 carries the wording. No
-  declaration changes.
+  rounds from 0, as at the pin (``S.rst:1565-1571``; the comment at
+  ``exchange.hpp:79-80`` in S's skeleton). No declaration changes.
 * **Per-column FP64 retry accepted** (Cheng, 22:20 EST 2026-11-17). After a
   failed FP32 implicit solve only the failed columns are retried in FP64,
   through X's predicated second launch; the other columns keep their FP32
@@ -109,9 +108,8 @@ relayed in the threads and not yet written in a lane document say so.
   ``:1439-1442``; ``X.rst:1487-1491``; ``precision_policy.hpp:21`` at X).
   Result change, from lane I's (c): bitwise when no column fails; failed
   columns bitwise to today's retry (hypothesis); the unfailed columns of a
-  failing block keep FP32, beyond round-off (``I.rst:1215-1225``). Lane I's
-  text at ``2d8685c8`` still marks (c) as open (``I.rst:1212-1213``); its
-  rev 2.5 carries the ruling.
+  failing block keep FP32, beyond round-off (``I.rst:1225-1235``). Lane I
+  records (c) as decided (``I.rst:1219-1223``).
 * **IMEX-ARK, a split implicit operator and a Newton option are not in
   V3** (Cheng, 20:35 EST): stages stay Shu-Osher with pyharp's weights and
   SSP positivity stays (``X.rst:872``, ``:913-915``).
@@ -141,7 +139,7 @@ relayed in the threads and not yet written in a lane document say so.
   before the deletion: O6a adds the combiner and the test, O6b deletes
   ``mppnccombine.cpp`` (``O.rst:2711-2727``, ``:2681-2691``).
 * **Lane I:** ``gravity-work: cell`` is refused and the global
-  gravity-work fixer is removed (``I.rst:1031-1032``, ``:1070-1071``).
+  gravity-work fixer is removed (``I.rst:1038-1039``, ``:1077-1078``).
 * **Lane C:** every Riemann solver and reconstruction of the pin stays
   (``C.rst:1621``).
 * **Lane S:** no line ceiling (``S.rst:1643-1644``).
@@ -217,7 +215,7 @@ contract) and its skeleton (declarations only, in no build).
      - Xinyue Wang (``I.rst:5``)
      - ``gravity_work.hpp`` 86, ``vertical_implicit.hpp`` 121,
        ``vic_kernels.hpp`` 92
-     - ``I.rst:208-629``
+     - ``I.rst:213-634``
    * - EF
      - EOS, floors, positivity, tracers, sedimentation
      - Zoey Hu (``EF.rst:5``)
@@ -287,7 +285,7 @@ rows and sites in its sections 6 and 7.
   allocations and data-dependent branches in a step are listed with their
   fate and milestone (``X.rst:318-342``).
 * **Per lane**, sections 6 and 7: R ``R.rst:1521-1560``; C
-  ``C.rst:1336-1571``; I ``I.rst:694-825``; EF ``EF.rst:879-1057``; S
+  ``C.rst:1336-1571``; I ``I.rst:699-831``; EF ``EF.rst:879-1057``; S
   ``S.rst:1482-1613``; A ``A.rst:1053-1181``; O ``O.rst:1194-1293``; X
   ``X.rst:282-545``; K ``K.rst:561-625``.
 
@@ -359,7 +357,7 @@ ceilings.
        plus ``src/math`` (166)
      - 2,821
      - 2,032
-     - ``I.rst:870-873``, ``:961-965``
+     - ``I.rst:876-879``, ``:967-971``
    * - EF
      - eos, scalar, sedimentation, ``src/turbulence``,
        ``flux_positivity.*``
@@ -448,7 +446,7 @@ X's 4,274 (``X.rst:593-597``; pydisort D1 -51 and D2 -17 at
      - S deletes and counts them, O books none (``S.rst:1664-1667``)
    * - outside-lane deletions of I's rulings (a), (b)
      - R 136, X 124, A 18
-     - ``I.rst:967-972``
+     - ``I.rst:973-978``
    * - mesh fixer lines
      - X
      - ``X.rst:695``, ``:1314``; R books none (``R.rst`` section 9)
@@ -463,7 +461,7 @@ X's 4,274 (``X.rst:593-597``; pydisort D1 -51 and D2 -17 at
      - I
      - O's roll-up drops them from both its baseline and its "after"
        (``O.rst:2456-2473``); I keeps
-       them in 2,821 and 2,032 (``I.rst:870-872``, ``:951-960``)
+       them in 2,821 and 2,032 (``I.rst:876-878``, ``:957-966``)
    * - ``meshblock.cpp:1623-1653`` (31), ``:1226-1339`` less ``1336-1337``
        (112), ``cycle_diagnostics.hpp`` (16): 159 lines
      - X (deletion); O (new lines only)
@@ -493,7 +491,7 @@ X's 4,274 (``X.rst:593-597``; pydisort D1 -51 and D2 -17 at
 
 Order rules taken from the lanes' merge-order text: providers first
 (``X.rst:574-575``; ``K.rst:654-670``); R's own order (``R.rst:1567-1574``);
-C (``C.rst:1579-1589``); I (``I.rst:858-864``); EF (``EF.rst:1526-1529``);
+C (``C.rst:1579-1589``); I (``I.rst:864-870``); EF (``EF.rst:1526-1529``);
 S (``S.rst:1633-1637``, phases ``:1949-1975``); A (``A.rst:1210-1220``,
 phases ``:1318-1334``); O (``O.rst:1449-1458``); K (``K.rst:654-667``).
 "Against main" is the lane's own words, shortened. A step can start when
@@ -533,7 +531,7 @@ each other unless the dependency column says so.
      - snapy
      - none; V3 rebases on it
      - n/a
-     - ``I.rst:860``
+     - ``I.rst:866``
    * - 1
      - O1, O2, O2b, O3, O4
      - snapy
@@ -575,7 +573,7 @@ each other unless the dependency column says so.
      - snapy
      - #369
      - I-1, I-2 bitwise (hypothesis); I-3 rounding (target 1e-11)
-     - ``I.rst:862-863``, ``:988-1005``
+     - ``I.rst:868-869``, ``:994-1011``
    * - 2
      - A phase 1
      - snapy
@@ -617,7 +615,7 @@ each other unless the dependency column says so.
      - I-4, I-5 rounding (hypothesis); I-6 per-column FP64 retry
        (accepted, 1.1): bitwise when no column fails, beyond round-off
        for the unfailed columns of a failing block
-     - ``R.rst:1572``, ``:1746``; ``I.rst:1006-1017``
+     - ``R.rst:1572``, ``:1746``; ``I.rst:1012-1024``
    * - 2
      - X4 global phase; X5; X6; X7
      - snapy
@@ -627,7 +625,7 @@ each other unless the dependency column says so.
    * - 3
      - A phase 2; R-6
      - snapy
-     - R, I-4 (``I.rst:864``), X4, S rotation data, #370 in the reference
+     - R, I-4 (``I.rst:870``), X4, S rotation data, #370 in the reference
      - G2-G7 (tolerance)
      - ``A.rst:1214-1216``, ``:1324-1332``; ``R.rst:1573``, ``:1747-1748``
    * - 3
@@ -1032,27 +1030,27 @@ Every gate here is specified, not run.
    * - I
      - I1 rows = apply (W and K unit tests, RED if one side changes)
      - tolerance (round-off)
-     - ``I.rst:637-640``, ``:685``
+     - ``I.rst:642-645``, ``:690``
    * - I
      - I2 booked = G[register M]; I3 mass telescoping
      - unstated in the invariant line
-     - ``I.rst:641-645``, ``:686``
+     - ``I.rst:646-650``, ``:691``
    * - I
      - I4 linear in the explicit increment, on C's rest gate
      - hypothesis
-     - ``I.rst:646-656``, ``:687-688``
+     - ``I.rst:651-661``, ``:692-693``
    * - I
      - I5 no reference row (operator argument, no run)
      - none (design argument)
-     - ``I.rst:657-671``
+     - ``I.rst:662-676``
    * - I
      - #348 harness (bitwise gate of I-1, I-2); I-3 energy row
      - bitwise (hypothesis); hypothesis (target 1e-11)
-     - ``I.rst:675``, ``:678-680``, ``:988-1005``
+     - ``I.rst:680``, ``:683-685``, ``:994-1011``
    * - I
      - sync-counter test; per-column status test
      - bitwise (pass/fail)
-     - ``I.rst:689-691``
+     - ``I.rst:694-696``
    * - S
      - same-process x1 seams; seam single-valuedness; transport-only rows
        (nb and pz pairs)
@@ -1075,7 +1073,7 @@ of its lane's section 10.
 * **C:** C1-C4, C7, C8 the #349 dump set; C5 the floor-count test; C9 the
   ``fp32-foundations`` label (``C.rst:1277-1279``, ``:1329-1334``).
 * **I:** I-1 and I-2 the #348 harness, pin against PR; I-3 the energy-row
-  tolerance target (``I.rst:988-1005``).
+  tolerance target (``I.rst:994-1011``).
 * **EF:** EF-2 G-EF-2; EF-4 G-EF-4; EF-6 and EF-7 G-EF-9
   (``EF.rst:1459-1463``, ``:1473-1476``, ``:1484-1495``).
 * **S:** phase 1 the nb = 1, 2 and pz = 1, 2 bitwise runs
@@ -1144,16 +1142,13 @@ Lane I's (c) is decided (section 2).
 
 * **Cheng's approval of this document** is the condition for any
   implementation, build or runtime gate. No gate in section 8 has run.
-* **Lane I rev 2.5** (``1092aef9``) was not on ``zoeyzyhu/snapy
-  v3-design/I`` at 03:39 UTC; ``2d8685c8`` still marks the per-column retry
-  as open (section 2).
 * **R:** Xinyue's five notes, whose text R never had (``R.rst:1804``).
 * **EF on S:** EF's notes 3-5 on S are not verified against S
   (``EF.rst:2058-2061``).
-* **S, RULING V3-4** (section 2): corners are filled in the unpack of the
-  last round of each field set. S rev 2.3 (``bee1b276``,
-  ``S.rst:1565-1568``) still says the row's last round; S rev 2.4 carries
-  the wording, with no declaration change.
+* **S, RULING V3-4** (section 2).
+* **X wording, for X's next text commit:** ``X.rst:933`` says the corners
+  are "filled in the last round's unpack"; under V3-4 that is the last
+  round of each field set.
 * **The FOR CHENG items** of section 9.
 * **Estimates:** every "after" figure of section 6 and the 34,141 target
   margin rest on design estimates (section 6.4).
