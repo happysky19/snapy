@@ -5,7 +5,10 @@ V3 lane I: vertical implicit solver and gravity work
 :Owner: Xinyue Wang (alternate: Tianhao Le)
 :Revision: 2.3 (section 11 brought up to date: every question to lanes A, C,
            S and X answered and closed; lane R's confirmation and rev 2.4
-           recorded; X's answers applied to sections 6, 7 and the skeleton). Revision 2.2: Tianhao's two rev 2.1 findings: the gravity-work remainder
+           recorded; X's answers applied to sections 6, 7 and the skeleton;
+           C-N5 stays a **hypothesis**; (c), the per-column FP64 retry,
+           stays open with Cheng). Revision 2.2: Tianhao's two rev 2.1
+           findings: the gravity-work remainder
            moves to ``post_implicit``; ``vic.momentum_t@1`` is the third kept
            part). Revision 2.1: re-cite to lane R's frozen header; backup owner Zoey Hu from
            18:00 EST 2026-11-17, while Xinyue is rate limited). Revision 2:
@@ -653,7 +656,7 @@ Every gate here is **specified, not run**: this round is design only.
   ``non-hydrostatic`` is (``implicit_hydro.cpp:326-329``). It
   differentiates neither the reconstruction nor the reference. The default
   reference is rebuilt from each stage's ``w`` by ``_hydro_ref_x1``
-  (``hydro.cpp:606-608``), called at ``hydro_forward.cpp:682``, before the
+  (``hydro.cpp:605-607``), called at ``hydro_forward.cpp:682``, before the
   solve (``hydro_forward.cpp:1607``, into ``hydro.cpp:526``). So within the
   solve it is a constant of the RHS. Lane C agrees: no reference row
   (rev 2.3). A
@@ -679,7 +682,7 @@ Every gate here is **specified, not run**: this round is design only.
   ``max |v|/c <= 1e-12`` (``C.rst:1284-1287``; **hypothesis**);
 - a sync-counter test: no host read between assemble and the last post;
 - a per-column status test: one NaN column is retried in FP64 and the
-  others keep FP32 (section 10(c)).
+  others keep FP32 (section 10(c); only if Cheng accepts (c)).
 
 
 6. FP32 contract
@@ -691,14 +694,16 @@ Every gate here is **specified, not run**: this round is design only.
 - **G in FP32.** The coefficients difference the geometry before the cast
   (``gravity_work.hpp:9-11``), for all grids. The curved explicit formula,
   which differences the potential after the cast, is gone.
-- **Fallback, per column.** Today a failed FP32 block is re-solved whole in
-  FP64 from ``rhs64`` (``hydro.cpp:529-535``). In V3, after the FP32 stage,
+- **Fallback, per column** (proposed; **FOR CHENG**, section 10(c)). Today
+  a failed FP32 block is re-solved whole in FP64 from ``rhs64``
+  (``hydro.cpp:527-535``). Under the proposal, in V3, after the FP32 stage,
   the FP64 stage is launched once more without a condition. A column
   predicate makes every column whose status bit is clear return at once.
   The FP64 launch takes ``rhs64`` and the FP64 primitive ``wi64``, as today.
   I chose a second launch over an FP64 path inside the FP32 kernel because
   the K = 2 kernel is already register-bound (#358 runs it at 64 threads).
-  The result change is in section 10(c).
+  The result change is in section 10(c). Until Cheng rules, today's
+  whole-block FP64 retry is the behaviour of record.
 - **Map to lane X's rows** (Tianhao's note 13). The row names are those of
   lane X's ``PrecisionPolicy`` as lane C cites them (``kPrimitive``,
   ``kReference``, ``kGauge``, ``kFlux``, ``kRegister``). ``kImplicit`` is
@@ -778,10 +783,23 @@ Every gate here is **specified, not run**: this round is design only.
   scalar, Tianhao's note 12). ``VicParams`` carries ``dt`` by value; a
   changed ``dt`` recaptures, and a device ``dt`` is refused in V3. The
   stage weight in the operator's dt (``hydro_forward.cpp:1568-1583``) is a
-  per-stage constant in the same key.
+  per-stage constant in the same key. The corrected-PE band scaling
+  (``implicit_hydro.cpp:413-419``, ``rx / dt``) stays a host scalar, as at
+  the pin. Consequence (**hypothesis**, not measured): under a CFL-varying
+  ``dt`` every step changes the key, so the solve's replay pays off only at
+  fixed ``dt``. The roadmap accepts this for now ("Initially recapture for
+  changed dt", ``V3_ROADMAP.md:124-127`` at the pin); a device ``dt`` is a
+  later optimisation, outside V3.
 - **FP64 retry: a predicated second FP64 launch, always run** (lane X's
   answer 1, ``X.rst:1011-1013``). There are no CUDA conditional nodes, so
   the launch count is fixed and eager runs the same ops as the replay.
+  X's answer settles the **launch mechanism** only. Whether the retry is
+  per column at all is (c), still **FOR CHENG** (section 10). X shows "FP64
+  retry per (failed) column" as its contract (``X.rst:296, 847``;
+  ``precision_policy.hpp:21``, at ``89415a6c``); lane I reads those rows as
+  pending Cheng's ruling on (c). If Cheng declines (c), the whole-block
+  FP64 retry stays, and its graph form (without the host read at
+  ``hydro.cpp:530``) is still to be agreed with lane X.
 - **Fixed storage.** a, b, c, delta, z0, z1, du0 and ``col_status`` are
   allocated once per
   (shape, dtype, device) and never ``set_data``-replaced.
@@ -793,8 +811,10 @@ Every gate here is **specified, not run**: this round is design only.
   not depend on the data.
 - **No segment boundary** for the solve (lane X's answer 5,
   ``X.rst:1023-1028``). It runs in the hydro forward's compute segment,
-  which starts after the stage's unpack and ends at the next exchange. A
-  mask or grid change bumps ``config_generation`` and recaptures.
+  which starts after the stage's unpack and ends at the next exchange
+  and, until X's G3 removes it, at the finiteness screen
+  (``implicit_hydro.cpp:476-487``; ``X.rst:1023-1028``). A mask or grid
+  change bumps ``config_generation`` and recaptures.
 
 
 8. Cross-repository interface changes and merge order
@@ -997,7 +1017,7 @@ round-off; and why.
 - ``kVicFaceWork``, ``kVicDiffusiveCell`` and ``kVicCartesianFaceWork``;
 - the scheme-0 module (Python only: from YAML it already returns ``nullptr``,
   ``implicit_hydro.cpp:91``);
-- the whole-block FP64 retry;
+- the whole-block FP64 retry (only if Cheng accepts (c));
 - the ``fixgrav=`` cycle meter (``meshblock.cpp:1336-1337``).
 
 **What each removal changes in results.**
@@ -1239,7 +1259,7 @@ and 101). No signature changed and no line moved. Lane I keeps citing R at
 rev 2.4 ``a15af81660f75b53f3e905b7ee15aa935ada855c``, which changes
 ``R.rst`` only: ``flux_register.hpp`` is unchanged against ``97c62312``,
 so there is no re-cite. R agreed the ``boundary(dim)`` face set
-(``R.rst:39-42, 632-645`` at ``a15af816``): S's ``wall``, ``outflow`` and
+(``R.rst:39-42, 632-649`` at ``a15af816``): S's ``wall``, ``outflow`` and
 ``custom`` faces with a fluid interior, plus every immersed-solid face
 with fluid on one side, all rows, outward from the fluid.
 
@@ -1285,10 +1305,10 @@ with fluid on one side, all rows, outward from the fluid.
   it and stays a hypothesis (section 5).
 - **Closed (rev 2.3).** I5: agreed, there is no reference row. The
   reference is built from the stage ``w`` before the solve
-  (``hydro_forward.cpp:682``, ``_hydro_ref_x1`` at ``hydro.cpp:606-608``;
-  solve at ``hydro_forward.cpp:1607``). **Cite note:** the PM's
-  ``hydro.cpp:605-607`` is the function's signature, not the call before
-  the solve.
+  (``hydro_forward.cpp:682``, ``_hydro_ref_x1`` defined at
+  ``hydro.cpp:605-607``; solve at ``hydro_forward.cpp:1607``). **Cite
+  note:** the PM's ``hydro.cpp:605-607`` is the function's signature; the
+  call before the solve is ``hydro_forward.cpp:682``.
 
 **Lane A (Jiachen): does lane I migrate ``ConstGravity`` to the
 ``SourceTerm`` interface?** ``A.rst`` (``JiachenLiu-Atmos/snapy``
@@ -1345,7 +1365,11 @@ All six are **closed (rev 2.3)** by ``X.rst:1009-1030`` at ``89415a6c``
 and applied in sections 6 and 7 and the skeleton:
 
 1. A predicated second FP64 launch, always run. There are no CUDA
-   conditional nodes.
+   conditional nodes. This settles the launch mechanism only: whether the
+   retry is per column is (c), still with Cheng (below). ``X.rst:296,
+   847`` and ``precision_policy.hpp:21`` show the per-column retry as X's
+   contract; lane I reads them as pending (c), as the X rev 3.14 review
+   asked X to mark them.
 2. ``kImplicit`` is X's row (``precision_policy.hpp:21``). The retry is
    that row forced to FP64, and the posts stay ``kFlux``.
 3. No: ``dt`` stays a host double keyed in ``GraphKey``, and a change
@@ -1353,11 +1377,15 @@ and applied in sections 6 and 7 and the skeleton:
 4. Yes: the OR of ``col_status`` goes through R's ``retry_flags()`` into
    X's one step-end read as cause bit 5. Lane I makes no read of its own.
 5. The solve needs no segment boundary. It sits in the hydro compute
-   segment.
+   segment, which ends at the next exchange and, until G3, at the
+   finiteness screen.
 6. Yes in V3: FP32 stays restricted to Cartesian ideal-moist (pin
    ``hydro.cpp:502-507``).
 
-**Cheng:** (c) of section 10. (a) and (b) were ruled on 2026-11-17.
+**Cheng:** (c) of section 10, the per-column FP64 retry, is **open**.
+(a) and (b) were ruled on 2026-11-17; no ruling on (c) is recorded. Lane
+X's answers 1 and 2 fix how a retry is launched and typed, not whether it
+is per column.
 
 
 11.1 Answers to Tianhao's review notes (lane I, revision 1)
@@ -1408,7 +1436,7 @@ and applied in sections 6 and 7 and the skeleton:
      - Superseded in rev 2.3 by lane X's answer 3: ``dt`` is a host double keyed in X's ``GraphKey``, and a change recaptures (section 7). The skeleton follows.
    * - 13
      - request, done
-     - Section 6 maps every lane I quantity to lane X's rows and proposes ``kImplicit`` for the solve (question to X).
+     - Section 6 maps every lane I quantity to lane X's rows. ``kImplicit`` is X's row for the solve (``precision_policy.hpp:21`` at ``89415a6c``; X's answer 2, rev 2.3).
    * - 14
      - request, done
      - Posts are :math:`M_f/(A_f\,\Delta t)` with the step ``dt``, before stage weights, per lane R's header (``R.hpp:4-5``); ``end_stage`` applies :math:`c_s\,\Delta t` (section 4).
@@ -1437,5 +1465,5 @@ all (``wc -l``). It is not part of any build. It uses lane R's
      - ``X1Measure``, ``X1GridKey``, ``CentroidSlopeStencil``, ``GravityWorkRows``, ``GravityWork``
      - ``gravity_work.hpp``, ``gravity_work_radial.hpp``; ``_pe_work``, ``_rx_work``, ``_g_work_lo/hi``
    * - ``vic_kernels.hpp``
-     - ``VicParams`` (device ``dt``), ``VicColumn`` (W and K rows, per-column Woodbury data and status), per-column kernel templates, ``CpuColumns``/``CudaColumns``, ``vic_stage``, 2 dispatch stubs; its header comment lists the kept files, ``lubksb.h`` and ``ludcmp.h`` included
+     - ``VicParams`` (host ``dt``, keyed in X's ``GraphKey``), ``VicColumn`` (W and K rows, per-column Woodbury data and status), per-column kernel templates, ``CpuColumns``/``CudaColumns``, ``vic_stage``, 2 dispatch stubs; its header comment lists the kept files, ``lubksb.h`` and ``ludcmp.h`` included
      - ``implicit_dispatch.hpp``; ``vic_assemble_{partial,full}_impl.h``; ``vic_gravity_work_impl.h``; the stub bodies of ``implicit_dispatch.cpp``/``.cu``

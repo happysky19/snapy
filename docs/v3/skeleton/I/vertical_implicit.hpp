@@ -34,7 +34,7 @@ struct VerticalImplicitOptionsImpl {
 
   ADD_ARG(VicMatrix, matrix) = VicMatrix::full;
   ADD_ARG(std::string, precision) = "auto";  //!< auto | float32 | float64
-  ADD_ARG(bool, fallback_fp64) = true;       //!< per-column, on device
+  ADD_ARG(bool, fallback_fp64) = true;  //!< per column if Cheng accepts (c)
   ADD_ARG(double, advection_cfl) = 1.0;
   ADD_ARG(double, shear_cfl) = 0.0;
 };
