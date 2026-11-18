@@ -3,7 +3,8 @@
 V3 lane C: reconstruction, Riemann solvers, well-balanced reference, conversion order
 =====================================================================================
 
-Revision 6.2, 2026-11-17. Owner: Tianhao Le (alternate: Xinyue). Design only:
+Revision 6.3, 2026-11-17 (text only: older R-C1 wording marked superseded;
+no declaration change). Revision 6.2. Owner: Tianhao Le (alternate: Xinyue). Design only:
 no implementation change. Declarations are in ``docs/v3/skeleton/C/`` (not
 built); the file-by-file line table is ``docs/v3/design/C_lines.csv``,
 produced by ``docs/v3/design/C_lines.py``.
@@ -60,7 +61,7 @@ Changes in revision 6.1 (from ``5caf684c``), after Cheng's read of 5.1:
   in section 11 now say so;
 * R-C1 is stated as ``R.rst:743-758`` states it: open, with lane S. Lane C's
   ``before_solve`` hook is a proposal, not a settled contract. Superseded
-  in 6.2: RULING V3-3 settles it.
+  in 6.2: RULING V3-3 settles it (3.8 "Lane R's interface"; section 11).
 
 Changes in revision 6 (from ``ab14e5a7``), aligned with lane R revision 2.2, header rev 4.2
 (happysky19/snapy ``v3-design/R`` ``4c59162ae37080d0ab307b2823742b44f46da7c3``), the head frozen at R's
@@ -79,7 +80,9 @@ amend it):
   R-C1 because lane S keeps in-place rotation (``R.rst:743-758``); it stays
   open, with lane S. Lane C proposes R's preferred option: ``solve_faces``
   calls a ``before_solve`` hook after the floors and the solid step, where R
-  would build its covariance with no extra copy (``sweep.hpp``).
+  would build its covariance with no extra copy (``sweep.hpp``). (Superseded
+  in 6.2: RULING V3-3 adopts the hook and closes R-C1, 3.8 "Lane R's
+  interface" and section 11.)
   Superseded in 6.2: RULING V3-3 settles that order;
 * ``riemann.mass@1`` stays dropped (``R.rst:168``, ``:741``);
 * ``riemann.central`` is formed from the post-immersed-solid states
@@ -143,7 +146,8 @@ in revision 6; ``R.rst``, header
 * ``riemann.central`` is formed from the post-solid states;
 * contract gaps kept open: R-C1 (the face states covariance reads),
   R-C2 (the 50 lines S counts inside D1), R-C3 (who posts
-  ``pressure_base1``).
+  ``pressure_base1``). (All three closed since: R-C2 and R-C3 in 6,
+  R-C1 by RULING V3-3 in 6.2; section 11.)
 
 Revision 5 (on ``a7155840``):
 
