@@ -97,18 +97,20 @@ moves above happened after the snapshot; this part cites the snapshot.
 ----------------------------------------------------
 
 Section 2 corrected 2026-11-17 (part 1.1) with the PM's reconciliation
-inputs, each checked below. Lanes O and S moved after the snapshot and
-change the totals, so they are cited at their live heads: O
-JiachenLiu-Atmos/snapy ``f5c8e9e1086ee1c56753e2b21af345ebb6cba28a``, S
-jihenghu/snapy ``7ca6d21c7319a30c5d193e2e79347c3778029553`` (rev 2.2). The
-other lanes' totals were re-read at their live heads and are unchanged: I
+inputs, each checked below, and updated in part 1.3 for O rev 5.3 and S rev
+2.3. Lanes O and S moved after the snapshot and change the totals, so they
+are cited at their live heads: O JiachenLiu-Atmos/snapy
+``36b61c401fd5f5d2a6917b9e05dcce3a00022815`` (rev 5.3), S jihenghu/snapy
+``bee1b27667601ea0b333c11595fe965d18de0f94`` (rev 2.3). The other lanes'
+totals were re-read at their live heads and are unchanged: I
 ``2d8685c80ca6edda1c1e4e631dce035d8dff75f6`` (``I.rst:961-965``), EF
 ``5b3f18d28c2db7305fd3fef8b04f0319b8a326c1`` (``EF.rst:1366-1370``), A
 ``c405d49133326bb6db30650df57166d53f507067`` (``A.rst:1272-1275``), X
 ``7bed6980dbf572233c09d64e2d40bbf29eed0b7d`` (``X.rst:615``), R
 ``c9ecc0ca`` and C ``5dc4d002`` (text-only moves), K unmoved. Their cites
 below stay at the snapshot of table 1. **Every figure in this section is
-provisional** until ``CONVERGED`` and the open row of table 3.
+provisional** until ``CONVERGED``; the "after" figures are the lanes'
+estimates.
 
 2.1 The baseline: all of ``src/`` at the pin
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -181,9 +183,10 @@ ceilings.
    * - S
      - coord, layout, bc
      - 8,472
-     - 7,460
-     - live ``S.rst:1822-1825``, ``:1828-1833``, ``:1853-1854``: rev 2.1's
-       7,445 plus rev 2.2's +15 (pack/unpack split, estimate); no ceiling
+     - 7,470
+     - live ``S.rst:1878-1890``: rev 2.1's 7,445, rev 2.2's +15 (pack/unpack
+       split) and rev 2.3's +10 (``gather_x1`` and anchor-relay split), both
+       estimates; no ceiling
    * - A
      - ``src/forcing`` less ``const_gravity.cpp``
      - 2,870
@@ -194,15 +197,20 @@ ceilings.
      - ``src/output``, ``src/input``, ``src/utils``, ``src/diagnostics``
      - 9,830
      - 4,473
-     - live ``O.rst:2394-2395``, ``:2397-2414``, ``:2429-2433``: 9,830 -
-       5,357 (settled cut, 54.5 %). O drops the 166 ``src/math`` lines from
-       both columns so they count once, in I (``O.rst:2401``, "Closed").
-       The draft's 4,453 used rev 3's cut 5,377; rev 4's is 5,357 (+20)
+     - live ``O.rst:1751``, ``:2453-2454``, ``:2456-2473``: 9,830 - 5,357
+       (settled cut, 54.5 %). O drops the 166 ``src/math`` lines from both
+       columns so they count once, in I (``O.rst:2460``, "Closed"). The
+       draft's 4,453 used rev 3's cut 5,377; rev 4's is 5,357 (+20). O's
+       ``restart.cpp`` (260) and ``budget.cpp`` (200) are new lines only
+       (``O.rst:1540-1546``)
    * - X
      - ``src/mesh``, ``src/interface``
      - 4,274
-     - 2,551
-     - ``X.rst:587-611``; needs O5, else a cut of 827 (``X.rst:751-755``;
+     - 2,392
+     - X states 2,551 (``X.rst:587-611``; live ``X.rst:615``), which keeps
+       the 159 ``src/mesh`` lines of table 3 as "joint, not counted".
+       Under V3-1 X counts their deletion (2.3): 2,551 - 159 = 2,392,
+       derived here. Needs O5, else a cut of 827 (``X.rst:751-755``;
        ``O.rst:1456-1459``)
    * - top level
      - ``src/snap.h``, ``src/add_arg.h``
@@ -212,7 +220,7 @@ ceilings.
    * - **snapy**
      -
      - **42,677**
-     - **28,691**
+     - **28,542**
      - sum of the rows above, provisional (2.4)
    * - K
      - kintera touched files
@@ -267,38 +275,43 @@ X's 4,274 (``X.rst:589-592``; pydisort D1 -51 and D2 -17 at
      - ``K.rst:766-774``
    * - ``src/math/{lubksb,ludcmp}.h`` (166)
      - I
-     - **closed** by O at ``f5c8e9e1``: O's roll-up drops them from both
-       its baseline and its "after" (live ``O.rst:2397-2414``); I keeps
+     - **closed** by O (since ``f5c8e9e1``): O's roll-up drops them from
+       both its baseline and its "after" (live ``O.rst:2456-2473``); I keeps
        them in 2,821 and 2,032 (``I.rst:844-846``, ``:925-934``)
    * - ``meshblock.cpp:1623-1653`` (31), ``:1226-1339`` less ``1336-1337``
        (112), ``cycle_diagnostics.hpp`` (16): 159 lines
-     - **open, provisional**
-     - Both lanes call them moved, counted in neither lane's cut (live
-       ``X.rst:970-985``; live ``O.rst:1475-1484``, ``:2898-2900``). X
-       lists ``meshblock.cpp`` (1,919 -> 1,919) and
-       ``cycle_diagnostics.hpp`` (16 -> 16) as joint rows not counted
-       (live ``X.rst:608``, ``:770-771``), and O absorbs the lines into its
-       estimated ``restart.cpp`` (260) and ``budget.cpp`` (200) (live
-       ``O.rst:1481-1483``). Neither says which "after" column holds them.
-       The PM has asked Xi and Jiachen; no owner is chosen here (2.4)
+     - X (deletion); O (new lines only)
+     - O rev 5.3 (live ``O.rst:91-106``, ``:1528-1548``): N = 159, counted
+       at the pin; under V3-1 X, the files' owner, counts the deletion, and
+       O's 260 + 200 are new lines only, set before the absorption and not
+       lowered. Xi's answer in the lane X thread agrees (X counts the
+       deletion). X's text at ``7bed6980`` still lists the lines as "joint,
+       not counted" (live ``X.rst:608``, ``:767-771``, ``:970-985``), so
+       its stated 2,551 holds them; O asks Xi to move the row
+       (``O.rst:106-107``). X's own cut items do not touch these ranges
+       (its gw1 takes only ``1336-1337``)
 
 2.4 Merged total, provisional
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* Baseline **42,677**, after **28,691**: cut 13,986 (-32.8 %), 5,450 under
+* Baseline **42,677**, after **28,542**: cut 14,135 (-33.1 %), 5,599 under
   the round target 34,141.
-* The PM's arithmetic is reproduced: 42,738 - 166 + 105 = 42,677, and the
-  draft's 28,551 + 105 (top level) + 20 (O, 4,473 not 4,453) + 15 (S rev
-  2.2) = 28,691.
-* **Open, the 159 ``src/mesh`` lines** (last row of table 3). If X's
-  "after" and O's estimates both hold them, the after is 28,532; if one of
-  them does, 28,691; if neither does, 28,850. The after therefore lies in
-  **28,532 to 28,850**, under the target in every case (5,291 to 5,609
-  lines under). The owner is for Xi and Jiachen to state.
-* S rev 2.2 (``7ca6d21c``) has an open design conflict in the lane S thread
-  (S rev 2.3, Jiheng); its +15 is S's estimate and may move with it.
+* Steps: the PM's arithmetic is reproduced, 42,738 - 166 + 105 = 42,677,
+  and 28,551 + 105 (top level) + 20 (O, 4,473 not 4,453) + 15 (S rev 2.2)
+  = 28,691 (part 1.1). Part 1.3 adds S rev 2.3's +10 and removes the 159
+  ``src/mesh`` lines from X's after: 28,691 + 10 - 159 = 28,542.
+* **The 159 lines are no longer open in the accounting**: O rev 5.3 and
+  Xi's answer assign the deletion to X and O's 260 + 200 are new lines
+  only (table 3), which is the lower end of part 1.1's range 28,532 to
+  28,850 (now 28,542 with S's +10). The one missing piece is textual: X's
+  section 9 at ``7bed6980`` still shows 2,551 with the lines as "joint,
+  not counted". Until X moves the row, X's document and table 2 differ by
+  159; no other figure depends on it.
+* S rev 2.3 (``bee1b276``) answers the S rev 2.2 design conflict in the lane
+  S thread; its review is not recorded here. Its +25 over rev 2.1 are S's
+  estimates and may move with that review.
 * The draft's 28,676 and 34,141 question is answered: 34,141 is the round
-  target (2.1), and the PM's inputs reconcile the after to 28,691.
+  target (2.1), and the PM's inputs reconcile the after (part 1.1).
 * Kintera, outside snapy's ``src/``: 2,678 -> 2,585.
 
 
@@ -886,8 +899,8 @@ Due Wednesday 08:00 EST, after ``CONVERGED``:
 
 * re-read every head in table 1 at the converged SHAs and update every
   cite;
-* settle with X and O the open row of table 3 (the 159 ``src/mesh``
-  lines) and replace the provisional figures of section 2;
+* confirm X's section 9 moves the 159 ``src/mesh`` lines to its deletion
+  (table 3) and replace the provisional figures of section 2;
 * add the per-lane contract summaries, the frozen register header
   (``flux_register.hpp``, frozen at ``4c59162a``), the FP32 and CUDA-graph
   contracts, and the FOR CHENG list in one place;
