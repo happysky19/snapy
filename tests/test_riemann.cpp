@@ -669,6 +669,50 @@ TEST_P(DeviceTest, g_r8_riemann_central_on_the_aam_decks) {
   EXPECT_LE(ew2, 1.e-13);
 }
 
+// C5 events (C.rst 3.6, R.rst 2.6 names riemann.pstar_clamp and riemann.llf):
+// a gentle jump clamps nothing; a strong expansion (u = -/+2000 m/s) makes
+// hllc's contact pressure non-positive on every interior face and sends roe
+// to its LLF fallback.
+TEST_P(DeviceTest, riemann_events_count_clamped_and_llf_faces) {
+  for (std::string type : {"hllc", "roe"}) {
+    auto opts = MeshBlockOptionsImpl::from_yaml("test_eos_temp2inteng.yaml");
+    opts->hydro()->riemann()->type() = type;
+    auto block = MeshBlock(opts);
+    block->to(device, dtype);
+    auto solver = block->phydro->priemann;
+    auto c = block->pcoord;
+    int nvar = block->phydro->peos->nvar();
+    auto shape = std::vector<int64_t>{nvar, c->options->nc3(),
+                                      c->options->nc2(), c->options->nc1()};
+    auto o = torch::device(device).dtype(dtype);
+    auto state = [&](double u) {
+      auto w = torch::zeros(shape, o);
+      w[IDN].fill_(1.);
+      w[IVX].fill_(u);
+      w[IPR].fill_(1.e5);
+      w[ICY].fill_(0.01);
+      return w;
+    };
+    int64_t n1 = std::min<int64_t>(c->iu() + 2, shape[3]) - c->il();
+    int64_t n2 = c->ju() + 1 - c->jl(), n3 = c->ku() + 1 - c->kl();
+    int64_t interior = n1 * n2 * n3;
+    for (double u : {1., 2000.}) {
+      auto flux = torch::zeros(shape, o);
+      solver->forward(state(-u), state(u), DIM1, flux);
+      auto ev = solver->events.cpu();
+      int k = type == "hllc" ? 0 : 1;
+      if (u < 10.) {
+        EXPECT_EQ(ev[0].item<int64_t>() + ev[1].item<int64_t>(), 0) << type;
+      } else if (type == "hllc") {
+        EXPECT_EQ(ev[0].item<int64_t>(), interior) << type;
+      } else {
+        EXPECT_GT(ev[k].item<int64_t>(), 0) << type;
+        EXPECT_LE(ev[k].item<int64_t>(), interior) << type;
+      }
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 

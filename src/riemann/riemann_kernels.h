@@ -274,7 +274,7 @@ void DISPATCH_MACRO roe_impl(T* flx, T const* wl, T const* wr, T el, T er,
                              bool ideal_moist, int nvapor, T gammad,
                              T const* inv_mu_ratio_m1, T const* cv_ratio_m1,
                              T const* u0, int stride_w, int stride_f,
-                             T* face_pressure = nullptr) {
+                             T* face_pressure = nullptr, T* llf = nullptr) {
   auto TINY_NUMBER = T(1.0e-10);
 
   auto ivx = IPR - dim;
@@ -456,6 +456,7 @@ void DISPATCH_MACRO roe_impl(T* flx, T const* wl, T const* wr, T el, T er,
           T(0.5) * (rholn * WL(ivx) + rhorn * WR(ivx)) - a * (rhorn - rholn);
     }
   }
+  if (llf != nullptr) *llf = llf_flag ? T(1) : T(0);
 }
 
 }  // namespace snap
@@ -581,24 +582,17 @@ DISPATCH_MACRO void riemann_central(T* cen, T const* wl, T const* wr,
   }
 }
 
-//! whether a call_riemann iterator carries riemann.central: one more output
-//! after the flux and the face pressure (the flux alone for shallow-roe).
-//! Host only.
-template <typename Iter>
-bool riemann_has_central(Iter const& iter, RiemannKind kind) {
-  return iter.noutputs() > (kind == RiemannKind::shallow_roe ? 1 : 2);
-}
-
 //! one face of kind K. p holds the iterator's operands at the face, in the
 //! order of call_riemann (riemann_dispatch.hpp): the outputs (flux, the face
-//! pressure except for shallow-roe, riemann.central if C), then wl, wr, e,
-//! gamma and c, (2, ...) with the right side one output stride after the
-//! left, and p0. C is a template parameter so that the face functions
-//! compile as before when riemann.central is not requested.
-template <RiemannKind K, bool C, typename T>
+//! pressure except for shallow-roe, riemann.central if C, roe's LLF flag if
+//! E), then wl, wr, e, gamma and c, (2, ...) with the right side one output
+//! stride after the left, and p0. C and E are template parameters so that
+//! the face functions compile as before when neither is requested.
+template <RiemannKind K, bool C, bool E, typename T>
 DISPATCH_MACRO void riemann_face(T* const* p, RiemannArgs<T> const& a) {
   auto s = a.stride;
-  constexpr int i = (K == RiemannKind::shallow_roe ? 1 : 2) + (C ? 1 : 0);
+  constexpr int o = K == RiemannKind::shallow_roe ? 1 : 2;
+  constexpr int i = o + (C ? 1 : 0) + (E ? 1 : 0);
   if constexpr (K == RiemannKind::hllc) {
     auto p0 = a.background ? *p[i + 5] : T(0);
     hllc_impl(p[0], p[i], p[i + 1], *p[i + 2], *(p[i + 2] + s), *p[i + 3],
@@ -611,11 +605,12 @@ DISPATCH_MACRO void riemann_face(T* const* p, RiemannArgs<T> const& a) {
     roe_impl(p[0], p[i], p[i + 1], *p[i + 2], *(p[i + 2] + s), *p[i + 3],
              *(p[i + 3] + s), *p[i + 4], *(p[i + 4] + s), a.dim, a.ny,
              a.ideal_moist, a.nvapor, a.gammad, a.inv_mu_ratio_m1,
-             a.cv_ratio_m1, a.u0, s, s, p[1]);
+             a.cv_ratio_m1, a.u0, s, s, p[1],
+             E ? p[o + (C ? 1 : 0)] : static_cast<T*>(nullptr));
   } else if constexpr (K == RiemannKind::shallow_roe) {
     shallow_roe_impl(p[0], p[i], p[i + 1], a.dim, a.dir_yz, s, s);
   }
-  if constexpr (C) riemann_central<K>(p[i - 1], p[i], p[i + 1], a);
+  if constexpr (C) riemann_central<K>(p[o], p[i], p[i + 1], a);
 }
 
 }  // namespace snap
