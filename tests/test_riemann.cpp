@@ -514,6 +514,56 @@ TEST_P(DeviceTest, hllc_pressure_split_dispatch_and_on_host) {
     EXPECT_EQ(full_flux[IDN].abs().max().item<double>(), 0.);
 }
 
+// C5: the solve writes riemann.central, the mass rows (dry and species) of
+// 1/2 (F(w_L) + F(w_R)), in the kernel. It replaces the two extra solves of
+// hydro_forward.cpp (F(w, w) of each side), so it must equal them to
+// round-off (C.rst section 5: 1e-14 relative, FP64); the other rows of the
+// part are not written.
+TEST_P(DeviceTest, riemann_central_matches_the_two_extra_solves) {
+  for (std::string type : {"hllc", "lmars", "roe"}) {
+    auto opts = MeshBlockOptionsImpl::from_yaml("test_eos_temp2inteng.yaml");
+    opts->hydro()->riemann()->type() = type;
+    auto block = MeshBlock(opts);
+    block->to(device, dtype);
+    auto solver = block->phydro->priemann;
+    auto coord = block->pcoord;
+    int nvar = block->phydro->peos->nvar(), ny = nvar - ICY;
+    ASSERT_GT(ny, 0);
+    auto shape =
+        std::vector<int64_t>{nvar, coord->options->nc3(), coord->options->nc2(),
+                             coord->options->nc1()};
+    auto o = torch::device(device).dtype(dtype);
+    torch::manual_seed(7);
+    auto state = [&] {
+      auto w = torch::zeros(shape, o);
+      w[IDN] = 1. + torch::rand_like(w[IDN]);
+      w.narrow(0, IVX, 3).copy_(20. * torch::rand_like(w.narrow(0, IVX, 3)) -
+                                10.);
+      w[IPR] = 1.e5 * (0.9 + 0.2 * torch::rand_like(w[IPR]));
+      w.narrow(0, ICY, ny).copy_(0.01 * torch::rand_like(w.narrow(0, ICY, ny)));
+      return w;
+    };
+    auto wl = state(), wr = state();
+    for (int dim : {DIM1, DIM2, DIM3}) {
+      auto flux = torch::zeros(shape, o), cen = torch::zeros(shape, o);
+      solver->forward(wl.clone(), wr.clone(), dim, flux, torch::Tensor(), cen);
+      auto fa = torch::zeros(shape, o), fb = torch::zeros(shape, o);
+      solver->forward(wl.clone(), wl.clone(), dim, fa);
+      solver->forward(wr.clone(), wr.clone(), dim, fb);
+      auto ref = 0.5 * (fa + fb);
+      auto mass = [&](torch::Tensor const& f) {
+        return torch::cat({f.narrow(0, IDN, 1), f.narrow(0, ICY, ny)});
+      };
+      double tol = dtype == torch::kFloat64 ? 1.e-14 : 2.e-6;
+      auto err = ((mass(cen) - mass(ref)).abs().max() / mass(ref).abs().max())
+                     .item<double>();
+      EXPECT_LE(err, tol) << type << " dim " << dim;
+      EXPECT_EQ(cen.narrow(0, IVX, 4).abs().max().item<double>(), 0.)
+          << type << " dim " << dim;
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 
