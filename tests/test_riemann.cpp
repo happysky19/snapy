@@ -1,6 +1,7 @@
 // C/C++
 #include <array>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <regex>
@@ -562,6 +563,110 @@ TEST_P(DeviceTest, riemann_central_matches_the_two_extra_solves) {
           << type << " dim " << dim;
     }
   }
+}
+
+// G-R8 (R.rst; lane A's G2, A.rst at c405d491): the kernel's riemann.central
+// against today's central, 1/2 (F(w_L, w_L) + F(w_R, w_R)), on the face
+// states the deck's reconstruction gives, every x2 and x3 face, one stage,
+// FP64: e_inf = max_f |dF_c| / max_f rho (|u_n| + c) <= 1e-13. The decks are
+// test_axial_momentum_flux_form's 3D arm (lmars, weno5, interp_order 4) and
+// W2 C16 (shallow water, shallow-roe yz), one panel each, under a smooth
+// non-uniform wind.
+const char* g_r8_3d_config = R"(
+reference-state: {Tref: 300., Pref: 1.e5}
+species:
+  - name: dry
+    composition: {H: 1.64813, He: 0.17591}
+    cv_R: 2.5
+geometry:
+  type: gnomonic-equiangle
+  bounds: {x1min: 6.0e6, x1max: 6.4e6, x2min_pi: -0.25, x2max_pi: 0.25, x3min_pi: -0.25, x3max_pi: 0.25}
+  cells: {nx1: 8, nx2: 8, nx3: 8, nghost: 3, interp_order: 4}
+dynamics:
+  equation-of-state: {type: ideal-gas, density-floor: 1.e-20, pressure-floor: 1.e-20, limiter: false}
+  reconstruct:
+    vertical:   {type: weno5, scale: true, shock: false}
+    horizontal: {type: weno5, scale: true, shock: false}
+  riemann-solver: {type: lmars}
+boundary-condition:
+  external: {x1-inner: reflecting, x1-outer: reflecting, x2-inner: custom, x2-outer: custom, x3-inner: custom, x3-outer: custom}
+)";
+
+const char* g_r8_w2_config = R"(
+geometry:
+  type: gnomonic-equiangle
+  bounds: {x1min: 6371000.0, x1max: 6371001.0, x2min_pi: -0.25, x2max_pi: 0.25, x3min_pi: -0.25, x3max_pi: 0.25}
+  cells: {nx1: 1, nx2: 16, nx3: 16, nghost: 3}
+dynamics:
+  equation-of-state: {type: shallow-water}
+  reconstruct:
+    vertical:   {type: weno5, scale: false, shock: false}
+    horizontal: {type: weno5, scale: false, shock: false}
+  riemann-solver: {type: shallow-roe, dir: yz}
+boundary-condition:
+  external: {x1-inner: reflecting, x1-outer: reflecting, x2-inner: custom, x2-outer: custom, x3-inner: custom, x3-outer: custom}
+)";
+
+double g_r8_e_inf(const char* config, double rho0, double p0, double u0,
+                  torch::Device device) {
+  auto fname = std::string("test_riemann_g_r8.yaml");
+  {
+    std::ofstream f(fname);
+    f << config;
+  }
+  auto block = MeshBlock(MeshBlockOptionsImpl::from_yaml(fname));
+  std::remove(fname.c_str());
+  block->to(device, torch::kFloat64);
+  auto coord = block->pcoord;
+  auto hydro = block->phydro;
+  auto peos = hydro->peos;
+  int nvar = peos->nvar(), ny = std::max(nvar - ICY, 0);
+  auto o = torch::device(device).dtype(torch::kFloat64);
+  auto x2 = coord->x2v.to(o).view({1, -1, 1});
+  auto x3 = coord->x3v.to(o).view({-1, 1, 1});
+  auto w = torch::zeros({nvar, coord->options->nc3(), coord->options->nc2(),
+                         coord->options->nc1()},
+                        o);
+  w[IDN] = rho0 * (1. + 0.1 * torch::sin(3. * x2) * torch::cos(2. * x3));
+  w[IVY] = u0 * torch::cos(x3) * (1. + 0.2 * torch::sin(5. * x2));
+  w[IVZ] = 0.5 * u0 * torch::sin(2. * x2) * torch::cos(3. * x3);
+  if (nvar > IPR) w[IPR] = p0 * (1. + 0.05 * torch::cos(4. * x2 + x3));
+
+  double e = 0.;
+  for (int dim : {DIM2, DIM3}) {
+    auto lr = hydro->precon23->forward(w, dim);
+    auto like = torch::zeros_like(w);
+    auto flux = like.clone(), cen = like.clone();
+    hydro->priemann->forward(lr[ILT].clone(), lr[IRT].clone(), dim, flux,
+                             torch::Tensor(), cen);
+    auto fa = like.clone(), fb = like.clone();
+    hydro->priemann->forward(lr[ILT].clone(), lr[ILT].clone(), dim, fa);
+    hydro->priemann->forward(lr[IRT].clone(), lr[IRT].clone(), dim, fb);
+    auto ref = 0.5 * (fa + fb);
+    auto mass = [&](torch::Tensor const& f) {
+      return ny > 0 ? torch::cat({f.narrow(0, IDN, 1), f.narrow(0, ICY, ny)})
+                    : f.narrow(0, IDN, 1);
+    };
+    int ivn = dim == DIM2 ? IVY : IVZ;
+    double scale = 0.;
+    for (int side : {ILT, IRT}) {
+      auto s = lr[side];
+      auto c = peos->compute("WA->L", {s, peos->compute("W->A", {s})});
+      scale =
+          std::max(scale, (s[IDN] * (s[ivn].abs() + c)).max().item<double>());
+    }
+    e = std::max(e, (mass(cen) - mass(ref)).abs().max().item<double>() / scale);
+  }
+  return e;
+}
+
+TEST_P(DeviceTest, g_r8_riemann_central_on_the_aam_decks) {
+  if (dtype != torch::kFloat64) GTEST_SKIP() << "G-R8 is an FP64 gate";
+  double e3d = g_r8_e_inf(g_r8_3d_config, 1.2, 1.e5, 20., device);
+  double ew2 = g_r8_e_inf(g_r8_w2_config, 2.94e4, 0., 38.6, device);
+  std::printf("G-R8 e_inf: 3D arm deck %.3e, W2 C16 deck %.3e\n", e3d, ew2);
+  EXPECT_LE(e3d, 1.e-13);
+  EXPECT_LE(ew2, 1.e-13);
 }
 
 int main(int argc, char** argv) {
