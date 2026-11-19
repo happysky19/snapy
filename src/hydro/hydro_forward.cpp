@@ -454,13 +454,26 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
   bool gw_cell = options->grav() && options->grav()->grav1() != 0. &&
                  options->grav()->gravity_work() == "cell";
 
+  // FaceFloor (C.rst 3.7): the faces a floor changed go to the monitor
+  auto& monitor = freg.monitor();
+  auto post_floors = [&](Reconstruct const& recon) {
+    if (!recon->floored.defined()) return;
+    monitor.count("face_floor.rho", recon->floored[0]);
+    monitor.count("face_floor.p", recon->floored[1]);
+    monitor.count("face_floor.species", recon->floored[2]);
+  };
   auto reconstruct_sweep = [&](int dim, torch::Tensor& background) {
     auto recon = dim == DIM1 ? precon1 : precon23;
-    if (!fp32()) return recon->forward(w, dim);
+    if (!fp32()) {
+      auto lr = recon->forward(w, dim);
+      post_floors(recon);
+      return lr;
+    }
     auto gauge = perturb.pressure0.mean(dim - 1, true);
     auto input = w.to(torch::kFloat32);
     input[IPR].copy_((perturb.pressure0 - gauge) + perturb.pressure_delta);
     auto lr = recon->forward(input, dim, false);
+    post_floors(recon);
     // Horizontal Cartesian sweeps need FP64 only for pressure cancellation.
     // Covariance consumers still require total face states; retain their path.
     bool active_horizontal = (dim == DIM2 && !options->disable_flux_x2()) ||
@@ -632,6 +645,7 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
       // negative perturbations.
       wtmp = precon1->forward(fp32() ? wx1.to(torch::kFloat32) : wx1, DIM1,
                               /*floor=*/false);
+      post_floors(precon1);
 
       wx1[IPR].copy_(pressure);
       wx1[IDN].copy_(density);
@@ -646,6 +660,12 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
         pl += split.gauge;
         pr += split.gauge;
       }
+      // FaceFloor: the WB fallbacks below count as floors, faces is..iu+1
+      auto fallback = [&](torch::Tensor const& x) {
+        return (x > 0.).logical_not().narrow(-1, is, iu + 2 - is);
+      };
+      monitor.count("face_floor.p", fallback(pl));
+      monitor.count("face_floor.p", fallback(pr));
       if (split_flux) {
         wtmp[ILT][IPR].copy_(torch::where(
             pl > 0., wtmp[ILT][IPR] + split.face_delta,
@@ -660,6 +680,8 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
 
       auto dl = wtmp[ILT][IDN] + dsf[ILT];
       auto dr = wtmp[IRT][IDN] + dsf[IRT];
+      monitor.count("face_floor.rho", fallback(dl));
+      monitor.count("face_floor.rho", fallback(dr));
       // Positivity fallback = the adjacent cell's density, not dsf: a
       // reference that overestimates density aloft (a bottom-anchored
       // isentrope did, by orders of magnitude) turns every floor event at a
@@ -682,8 +704,12 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
         wtmp[1 - o][IVX].select(-1, i).neg_();
       }
     } else {
-      wtmp = fp32() ? reconstruct_sweep(DIM1, pressure_base1)
-                    : precon1->forward(wx1, DIM1);
+      if (fp32()) {
+        wtmp = reconstruct_sweep(DIM1, pressure_base1);
+      } else {
+        wtmp = precon1->forward(wx1, DIM1);
+        post_floors(precon1);
+      }
       if (grav1) {
         if (phys_x1inner) _revise_x1inner_lr(wtmp[ILT], wtmp[IRT]);
         if (phys_x1outer) _revise_x1outer_lr(wtmp[ILT], wtmp[IRT]);
