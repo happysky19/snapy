@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <regex>
 
 // external
@@ -22,6 +23,7 @@
 #include <snap/riemann/riemann_kernels.h>
 
 #include <snap/eos/equation_of_state.hpp>
+#include <snap/hydro/balance_column.hpp>
 #include <snap/mesh/meshblock.hpp>
 #include <snap/riemann/riemann.hpp>
 #include <snap/utils/on_host.hpp>
@@ -607,7 +609,69 @@ boundary-condition:
   external: {x1-inner: reflecting, x1-outer: reflecting, x2-inner: custom, x2-outer: custom, x3-inner: custom, x3-outer: custom}
 )";
 
-double g_r8_e_inf(const char* config, double rho0, double p0, double u0,
+// the decks' initial states, as test_axial_momentum_flux_form.py builds them:
+// the 3D arm's isothermal column in the scheme's balance (balance_column),
+// times the rigid-rotation factor, with the perturbed jet (arm (f) at
+// Omega = the wind's rate); W2's steady zonal flow at the Earth's rate
+constexpr double kWsb = 5.e-6, kUpert = 10., kP0 = 1.e5, kRho0 = 0.1;
+constexpr double kSwOmega = 7.292e-5, kSwU0 = 38.6, kSwPhi0 = 2.94e4;
+
+torch::Tensor g_r8_3d_state(MeshBlock block) {
+  auto coord = block->pcoord;
+  auto o = coord->x1v.options().dtype(torch::kFloat64);
+  int ng = coord->options->nghost(), nx1 = coord->options->nx1();
+  double g = 10.;
+  auto r = coord->x1v.narrow(0, ng, nx1).cpu().to(torch::kFloat64);
+  auto dr = coord->dx1f.narrow(0, ng, nx1).cpu().to(torch::kFloat64);
+  auto p = kP0 * torch::exp(-(r - r[0]) * kRho0 * g / kP0);
+  auto col = torch::zeros({IPR + 1, 1, 1, nx1}, torch::kFloat64);
+  col[IDN][0][0] = p * kRho0 / kP0;
+  col[IPR][0][0] = p;
+  auto wb = std::get<0>(balance_column(col, dr.contiguous(), g));
+  int nvar = block->phydro->peos->nvar();
+  auto w = torch::zeros({nvar, coord->options->nc3(), coord->options->nc2(),
+                         coord->options->nc1()},
+                        o);
+  for (int c : {IDN, IPR}) {
+    auto row = wb[c][0][0].to(o);
+    w[c].narrow(-1, ng, nx1).copy_(row);
+    w[c].narrow(-1, 0, ng).copy_(row.narrow(0, 0, 1).expand({ng}));
+    w[c].narrow(-1, ng + nx1, ng).copy_(row.narrow(0, nx1 - 1, 1).expand({ng}));
+  }
+  auto bufs = block->named_buffers();
+  auto lon = bufs["coord.longitude"].to(o), lat = bufs["coord.latitude"].to(o);
+  auto rc = coord->x1v.to(o) * torch::cos(lat);
+  auto fac = torch::exp((kWsb * kWsb + 2. * kWsb * kWsb) * rc * rc /
+                        (2. * kP0 / kRho0));
+  w[IDN] *= fac;
+  w[IPR] *= fac;
+  auto k = bufs["coord.aam_k_c"].to(o);
+  auto u_east =
+      kWsb * rc + kUpert * torch::cos(lat).pow(2) * torch::sin(2. * lon);
+  w[IVY] = u_east * k[1] / torch::cos(lat);
+  w[IVZ] = u_east * k[2] / torch::cos(lat);
+  return w;
+}
+
+torch::Tensor g_r8_w2_state(MeshBlock block) {
+  auto coord = block->pcoord;
+  auto o = coord->x1v.options().dtype(torch::kFloat64);
+  int nvar = block->phydro->peos->nvar();
+  auto w = torch::zeros({nvar, coord->options->nc3(), coord->options->nc2(),
+                         coord->options->nc1()},
+                        o);
+  auto bufs = block->named_buffers();
+  auto lat = bufs["coord.latitude"].to(o), a = coord->x1v.to(o);
+  auto k = bufs["coord.aam_k_c"].to(o);
+  w[IDN] = kSwPhi0 - (a * kSwOmega * kSwU0 + 0.5 * kSwU0 * kSwU0) *
+                         torch::sin(lat).pow(2);
+  w[IVY] = kSwU0 * k[1] + 0. * a;
+  w[IVZ] = kSwU0 * k[2] + 0. * a;
+  return w;
+}
+
+double g_r8_e_inf(const char* config,
+                  std::function<torch::Tensor(MeshBlock)> state,
                   torch::Device device) {
   auto fname = std::string("test_riemann_g_r8.yaml");
   {
@@ -617,20 +681,10 @@ double g_r8_e_inf(const char* config, double rho0, double p0, double u0,
   auto block = MeshBlock(MeshBlockOptionsImpl::from_yaml(fname));
   std::remove(fname.c_str());
   block->to(device, torch::kFloat64);
-  auto coord = block->pcoord;
   auto hydro = block->phydro;
   auto peos = hydro->peos;
   int nvar = peos->nvar(), ny = std::max(nvar - ICY, 0);
-  auto o = torch::device(device).dtype(torch::kFloat64);
-  auto x2 = coord->x2v.to(o).view({1, -1, 1});
-  auto x3 = coord->x3v.to(o).view({-1, 1, 1});
-  auto w = torch::zeros({nvar, coord->options->nc3(), coord->options->nc2(),
-                         coord->options->nc1()},
-                        o);
-  w[IDN] = rho0 * (1. + 0.1 * torch::sin(3. * x2) * torch::cos(2. * x3));
-  w[IVY] = u0 * torch::cos(x3) * (1. + 0.2 * torch::sin(5. * x2));
-  w[IVZ] = 0.5 * u0 * torch::sin(2. * x2) * torch::cos(3. * x3);
-  if (nvar > IPR) w[IPR] = p0 * (1. + 0.05 * torch::cos(4. * x2 + x3));
+  auto w = state(block).to(device);
 
   double e = 0.;
   for (int dim : {DIM2, DIM3}) {
@@ -655,6 +709,8 @@ double g_r8_e_inf(const char* config, double rho0, double p0, double u0,
       scale =
           std::max(scale, (s[IDN] * (s[ivn].abs() + c)).max().item<double>());
     }
+    // the kernel wrote the mass rows: the gate cannot pass vacuously
+    EXPECT_GT(mass(cen).abs().max().item<double>(), 0.);
     e = std::max(e, (mass(cen) - mass(ref)).abs().max().item<double>() / scale);
   }
   return e;
@@ -662,8 +718,8 @@ double g_r8_e_inf(const char* config, double rho0, double p0, double u0,
 
 TEST_P(DeviceTest, g_r8_riemann_central_on_the_aam_decks) {
   if (dtype != torch::kFloat64) GTEST_SKIP() << "G-R8 is an FP64 gate";
-  double e3d = g_r8_e_inf(g_r8_3d_config, 1.2, 1.e5, 20., device);
-  double ew2 = g_r8_e_inf(g_r8_w2_config, 2.94e4, 0., 38.6, device);
+  double e3d = g_r8_e_inf(g_r8_3d_config, g_r8_3d_state, device);
+  double ew2 = g_r8_e_inf(g_r8_w2_config, g_r8_w2_state, device);
   std::printf("G-R8 e_inf: 3D arm deck %.3e, W2 C16 deck %.3e\n", e3d, ew2);
   EXPECT_LE(e3d, 1.e-13);
   EXPECT_LE(ew2, 1.e-13);
