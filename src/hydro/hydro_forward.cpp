@@ -415,8 +415,15 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
   auto solve = [&](torch::Tensor lr, int dim, torch::Tensor flux,
                    torch::Tensor face_pressure, torch::Tensor& background,
                    torch::Tensor central = torch::Tensor()) {
+    // the solve's events (C5): hllc's clamped contact pressure, roe's LLF
+    auto post_events = [&] {
+      if (!priemann->events.defined()) return;
+      freg.monitor().count("riemann.pstar_clamp", priemann->events[0]);
+      freg.monitor().count("riemann.llf", priemann->events[1]);
+    };
     if (!split_flux) {
       priemann->forward(lr[ILT], lr[IRT], dim, flux, face_pressure, central);
+      post_events();
       return;
     }
     TORCH_CHECK(!central.defined(),
@@ -439,6 +446,7 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
     if (fp32()) lr = lr.to(torch::kFloat32);
     priemann->forward_perturbations(lr[ILT], lr[IRT], dim, flux, background,
                                     face_pressure);
+    post_events();
     // Public face pressure and all implicit/energy consumers keep TOTALS.
     if (face_pressure.defined() && face_pressure.numel())
       face_pressure += background;

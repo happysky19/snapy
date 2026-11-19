@@ -16,9 +16,10 @@
 namespace snap {
 namespace {
 
-// One CPU loop for every face-function kind: each face is riemann_face<K, C>,
-// C when the iterator carries riemann.central.
-template <RiemannKind K, bool C>
+// One CPU loop for every face-function kind: each face is
+// riemann_face<K, C, E>, C when the iterator carries riemann.central, E when
+// it carries roe's LLF flag.
+template <RiemannKind K, bool C, bool E>
 void riemann_cpu_loop(at::TensorIterator& iter, int dim,
                       RiemannParams const& params,
                       torch::Tensor const& inv_mu_ratio_m1,
@@ -46,11 +47,11 @@ void riemann_cpu_loop(at::TensorIterator& iter, int dim,
 
     iter.for_each(
         [&](char** data, const int64_t* strides, int64_t n) {
-          scalar_t* p[C ? 9 : 8];
+          scalar_t* p[(C ? 9 : 8) + (E ? 1 : 0)];
           for (int64_t i = 0; i < n; ++i) {
             for (int k = 0; k < nt; ++k)
               p[k] = reinterpret_cast<scalar_t*>(data[k] + i * strides[k]);
-            riemann_face<K, C>(p, a);
+            riemann_face<K, C, E>(p, a);
           }
         },
         grain_size);
@@ -64,18 +65,23 @@ void riemann_cpu(at::TensorIterator& iter, int kind, int dim,
                  torch::Tensor const& inv_mu_ratio_m1,
                  torch::Tensor const& cv_ratio_m1, torch::Tensor const& u0) {
   auto k = static_cast<RiemannKind>(kind);
-  bool c = riemann_has_central(iter, k);
-#define SNAP_RIEMANN_CPU(K)                                                 \
-  return c ? riemann_cpu_loop<K, true>(iter, dim, params, inv_mu_ratio_m1,  \
-                                       cv_ratio_m1, u0)                     \
-           : riemann_cpu_loop<K, false>(iter, dim, params, inv_mu_ratio_m1, \
-                                        cv_ratio_m1, u0)
+  bool c = params.central;
+#define SNAP_RIEMANN_CPU(K)                                           \
+  return c ? riemann_cpu_loop<K, true, false>(                        \
+                 iter, dim, params, inv_mu_ratio_m1, cv_ratio_m1, u0) \
+           : riemann_cpu_loop<K, false, false>(                       \
+                 iter, dim, params, inv_mu_ratio_m1, cv_ratio_m1, u0)
   switch (k) {
     case RiemannKind::hllc:
       SNAP_RIEMANN_CPU(RiemannKind::hllc);
     case RiemannKind::lmars:
       SNAP_RIEMANN_CPU(RiemannKind::lmars);
     case RiemannKind::roe:
+      if (params.llf)
+        return c ? riemann_cpu_loop<RiemannKind::roe, true, true>(
+                       iter, dim, params, inv_mu_ratio_m1, cv_ratio_m1, u0)
+                 : riemann_cpu_loop<RiemannKind::roe, false, true>(
+                       iter, dim, params, inv_mu_ratio_m1, cv_ratio_m1, u0);
       SNAP_RIEMANN_CPU(RiemannKind::roe);
     case RiemannKind::shallow_roe:
       SNAP_RIEMANN_CPU(RiemannKind::shallow_roe);

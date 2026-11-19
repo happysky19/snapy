@@ -85,6 +85,11 @@ class RiemannSolverImpl : public torch::nn::Cloneable<RiemannSolverImpl> {
   //! the solver, from options->type()
   RiemannKind kind = RiemannKind::hllc;
 
+  //! the last face-function solve's events on its interior faces, int64
+  //! (2,): riemann.pstar_clamp (hllc's contact pressure clamped) and
+  //! riemann.llf (roe's LLF fallback)
+  torch::Tensor events;
+
   //! non-owning reference to parent
   HydroImpl const* phydro = nullptr;
 
