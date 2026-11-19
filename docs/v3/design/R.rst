@@ -891,7 +891,9 @@ was profiled.
 * **R-C3** (``C.rst:1724-1728``). Adopted: ``part_slot(1,
   "pressure_base1")``, written by C's ``WellBalancedX1``. It is requested
   as ``pressure_base1@1`` on the split path only, and reconciled by
-  ``replace`` as a companion.
+  ``replace`` as a companion. The write lands in R-6b (section 10); until
+  then C7 keeps ``pressure_base1`` as an FP64 return value (ruling
+  2026-11-19).
 * **Counter names.** C's five are adopted: ``face_floor.rho``,
   ``face_floor.p``, ``face_floor.species``, ``riemann.pstar_clamp`` and
   ``riemann.llf`` (``C.rst:1086-1088``).
@@ -1590,7 +1592,8 @@ None of these has run. Each says how it would be checked.
   2. C's and EF's posts;
   3. the seam ``replace`` and ``boundary.prescribed`` with S (G-R2, G-R9);
   4. I's ``vic.*`` and gravity work, with I-7's deletions (D3);
-  5. A's phases and ``Fixer`` (D4);
+  5. A's phases and ``Fixer`` (D4), with the ``kGauge`` companions and
+     the ``pressure_base1`` write (R-6b);
   6. O's consumers (G-R4).
 
 
@@ -1768,7 +1771,18 @@ the ``after_combine`` runner are in X's, K's, I's and A's files, not R's.
    G-R11 moved to I-4, ruling 2026-11-19: once I-4 posts ``vic.*`` into
    ``total(1)``, the pin's separate ``mc / dt`` term in m1 would count the
    implicit transfer twice.)
-7. **R-7**: O's consumers (G-R4).
+7. **R-6b**: the ``kGauge`` companions (W3, with R-6; ruling
+   2026-11-19). R adds FP64 companion storage for ``riemann.pstar`` and
+   ``pressure_base1@1`` (3.1; section 6), allocated at ``reset()`` in
+   ``kGauge`` whatever ``kFlux`` is. ``replace`` reconciles a companion
+   with its own FP64 peer, so the ``kFlux`` peer layout of R-4 is
+   unchanged. This step takes the ``pressure_base1`` register write that
+   C7 defers: ``WellBalancedX1`` writes ``part_slot(1,
+   "pressure_base1")`` (R-C3, 4.2 C), and C7's FP64 return value is
+   retired here. R-5's contract is unchanged: its posts, ``kFlux`` parts,
+   amounts and phases. Gate: bitwise against the parent on the split-path
+   decks (``test_x1_seam_split``, ``test_x1_seam_split_mp``).
+8. **R-7**: O's consumers (G-R4).
 
 Each step is one PR and keeps every existing test.
 
