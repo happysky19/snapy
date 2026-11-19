@@ -13,7 +13,7 @@
 // snap
 #include <snap/coord/coordinate.hpp>
 #include <snap/recon/reconstruct.hpp>
-#include <snap/riemann/riemann_solver.hpp>
+#include <snap/riemann/riemann.hpp>
 
 // arg
 #include <snap/add_arg.h>
