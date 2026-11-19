@@ -1051,7 +1051,7 @@ the program manager's eight additions, C = lane C rev 5, I = lane I rev 2.
      - X request
      - Coriolis/metric read the register
      - ``A_f total(1)`` in ``post_implicit`` replaces ``:1636-1646``
-       (G-R11)
+       (G-R11; in I-4 since 2026-11-19)
    * - 22
      - X request
      - solid-faces rule
@@ -1413,6 +1413,25 @@ per column. Only the failed columns are retried in FP64, inside the stage.
 ``implicit.column``
 is set only if a column also fails in FP64.
 
+**Transition (I-5, rulings of 2026-11-19; ``I.rst`` rev 2.6 section 10).**
+I-5 declares ``implicit.column`` in the hydro register's
+``RegisterRequest::retry`` and flags it with the OR of lane I's
+``col_status``. Until I-6, that is the OR after the whole-block FP64
+fallback (``hydro.cpp:536-541`` at I-4), the meaning of the pin's latch.
+``picorr->solve_failed_tensor()`` is the same OR on the device, so slot 5
+of X's stacked read is unchanged until a lane X step, which lane X names,
+reads ``retry_flags()`` in its place; I-5 does not make that switch.
+
+**I-6 (lane R's rulings of 2026-11-19; I-6 is not merged).** When I-6
+makes the FP64 retry per column, two rules hold:
+
+1. Lane I's ``fp64_fallbacks`` buffer and the register's
+   ``implicit.fp64_columns`` counter both count the retried columns, so
+   they agree.
+2. ``implicit.column`` flags each column whose last solve failed: for a
+   retried column, its FP64 solve. ``solve_failed_tensor()`` follows that
+   result, so slot 5 keeps its meaning until lane X switches it.
+
 .. list-table:: What changes
    :header-rows: 1
    :widths: 25 37 38
@@ -1435,7 +1454,8 @@ is set only if a column also fails in FP64.
      - one step-end read (unchanged)
    * - ``fp64_fallbacks`` meter
      - counts blocks
-     - ``count("implicit.fp64_columns", n)`` counts columns
+     - ``count("implicit.fp64_columns", n)`` counts the retried columns,
+       as does ``fp64_fallbacks`` (I-6 rule 1 above)
    * - Cheng's ruling
      -
      - (c) accepted, 22:20 EST: row 1 stands. ``flag_retry`` with cause
@@ -1498,9 +1518,9 @@ None of these has run. Each says how it would be checked.
      - ``|F_own - F_peer|`` with 2 blocks in one process
      - measured, for K6
    * - G-R11
-     - ``A_f total(1)`` equals ``Phi`` (``:1641``, ``:1646``)
+     - ``A_f total(1)`` equals ``Phi`` (``:1641``, ``:1646``); run in I-4
      - compare in ``post_implicit``
-     - 1 ulp (I-4 rounding)
+     - at most 4 ulp of the larger operand (RULINGS I-4.gr11)
    * - G-R12
      - carry momentum frame
      - compare the carry's rows against the pin on a cubed-sphere deck with
@@ -1744,8 +1764,10 @@ the ``after_combine`` runner are in X's, K's, I's and A's files, not R's.
 4. **R-4**: seam ``replace`` with S, then ``boundary.prescribed``
    (G-R2, G-R9, G-R10).
 5. **R-5**: I's ``vic.*``; gravity work reads the register; D3 with I-7.
-6. **R-6**: A's phases, ``Fixer``; D4; m1 from ``A_f total(1)``
-   (G-R11).
+6. **R-6**: A's phases, ``Fixer``; D4. (m1 from ``A_f total(1)`` and
+   G-R11 moved to I-4, ruling 2026-11-19: once I-4 posts ``vic.*`` into
+   ``total(1)``, the pin's separate ``mc / dt`` term in m1 would count the
+   implicit transfer twice.)
 7. **R-7**: O's consumers (G-R4).
 
 Each step is one PR and keeps every existing test.
