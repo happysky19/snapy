@@ -29,6 +29,8 @@ struct RiemannParams {
   bool central = false;
   //! roe: the iterator carries the LLF flag (an output after central)
   bool llf = false;
+  //! the iterator carries the wave speed (the last output)
+  bool speed = false;
 };
 
 }  // namespace snap

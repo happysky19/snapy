@@ -164,11 +164,16 @@ static torch::Tensor lax_friedrichs_flux(torch::Tensor const& priml,
 torch::Tensor RiemannSolverImpl::forward(torch::Tensor wl, torch::Tensor wr,
                                          int dim, torch::Tensor vel_or_flux,
                                          torch::Tensor face_pressure,
-                                         torch::Tensor central) {
+                                         torch::Tensor central,
+                                         torch::Tensor wave_speed) {
   TORCH_CHECK(!central.defined() || (kind != RiemannKind::upwind &&
                                      kind != RiemannKind::plume_roe),
               "riemann.central is not defined for Riemann solver type ",
               options->type(), " (no hydro mass rows)");
+  TORCH_CHECK(
+      !wave_speed.defined() ||
+          (kind != RiemannKind::upwind && kind != RiemannKind::plume_roe),
+      "wave_speed is not defined for Riemann solver type ", options->type());
   if (kind == RiemannKind::upwind) {
     TORCH_CHECK(
         !face_pressure.defined(),
@@ -194,7 +199,7 @@ torch::Tensor RiemannSolverImpl::forward(torch::Tensor wl, torch::Tensor wr,
   }
 
   return solve(wl, wr, dim, vel_or_flux, face_pressure, torch::Tensor(),
-               central);
+               central, wave_speed);
 }
 
 torch::Tensor RiemannSolverImpl::forward_perturbations(
@@ -205,7 +210,7 @@ torch::Tensor RiemannSolverImpl::forward_perturbations(
   TORCH_CHECK(reference_pressure.defined(),
               "HLLC perturbations require a shared face pressure background");
   return solve(wl, wr, dim, flx, face_pressure_delta, reference_pressure,
-               torch::Tensor());
+               torch::Tensor(), torch::Tensor());
 }
 
 //! the faces of an x<dim> per-face tensor (nc3, nc2, nc1) the block owns:
@@ -225,7 +230,8 @@ torch::Tensor RiemannSolverImpl::solve(torch::Tensor wl, torch::Tensor wr,
                                        int dim, torch::Tensor flx,
                                        torch::Tensor face_pressure,
                                        torch::Tensor reference_pressure,
-                                       torch::Tensor central) {
+                                       torch::Tensor central,
+                                       torch::Tensor wave_speed) {
   auto pcoord = phydro->pmb->pcoord;
   auto peos = phydro->peos;
   bool aneos = peos->options->type() == "aneos";
@@ -331,6 +337,11 @@ torch::Tensor RiemannSolverImpl::solve(torch::Tensor wl, torch::Tensor wr,
     llf = torch::empty_like(wl[IDN]);
     config.add_owned_output(llf.unsqueeze(0));
     params.llf = true;
+  }
+  // max |S| of each face, the last output
+  if (wave_speed.defined()) {
+    config.add_owned_output(wave_speed.unsqueeze(0));
+    params.speed = true;
   }
   config.add_input(wl).add_input(wr);
   for (auto const& t : {e, gamma, c})

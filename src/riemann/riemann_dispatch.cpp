@@ -17,9 +17,9 @@ namespace snap {
 namespace {
 
 // One CPU loop for every face-function kind: each face is
-// riemann_face<K, C, E>, C when the iterator carries riemann.central, E when
-// it carries roe's LLF flag.
-template <RiemannKind K, bool C, bool E>
+// riemann_face<K, C, E, W>, C when the iterator carries riemann.central, E
+// when it carries roe's LLF flag, W when it carries the wave speed.
+template <RiemannKind K, bool C, bool E, bool W>
 void riemann_cpu_loop(at::TensorIterator& iter, int dim,
                       RiemannParams const& params,
                       torch::Tensor const& inv_mu_ratio_m1,
@@ -47,15 +47,34 @@ void riemann_cpu_loop(at::TensorIterator& iter, int dim,
 
     iter.for_each(
         [&](char** data, const int64_t* strides, int64_t n) {
-          scalar_t* p[(C ? 9 : 8) + (E ? 1 : 0)];
+          scalar_t* p[(C ? 9 : 8) + (E ? 1 : 0) + (W ? 1 : 0)];
           for (int64_t i = 0; i < n; ++i) {
             for (int k = 0; k < nt; ++k)
               p[k] = reinterpret_cast<scalar_t*>(data[k] + i * strides[k]);
-            riemann_face<K, C, E>(p, a);
+            riemann_face<K, C, E, W>(p, a);
           }
         },
         grain_size);
   });
+}
+
+// the runtime flags to template arguments: C, W for every kind, E for roe
+template <RiemannKind K, bool E, bool C>
+void riemann_cpu_w(bool w, at::TensorIterator& iter, int dim,
+                   RiemannParams const& params, torch::Tensor const& t1,
+                   torch::Tensor const& t2, torch::Tensor const& t3) {
+  if (w) return riemann_cpu_loop<K, C, E, true>(iter, dim, params, t1, t2, t3);
+  riemann_cpu_loop<K, C, E, false>(iter, dim, params, t1, t2, t3);
+}
+
+template <RiemannKind K, bool E>
+void riemann_cpu_cw(RiemannParams const& params, at::TensorIterator& iter,
+                    int dim, torch::Tensor const& t1, torch::Tensor const& t2,
+                    torch::Tensor const& t3) {
+  if (params.central)
+    return riemann_cpu_w<K, E, true>(params.speed, iter, dim, params, t1, t2,
+                                     t3);
+  riemann_cpu_w<K, E, false>(params.speed, iter, dim, params, t1, t2, t3);
 }
 
 }  // namespace
@@ -64,32 +83,29 @@ void riemann_cpu(at::TensorIterator& iter, int kind, int dim,
                  RiemannParams const& params,
                  torch::Tensor const& inv_mu_ratio_m1,
                  torch::Tensor const& cv_ratio_m1, torch::Tensor const& u0) {
-  auto k = static_cast<RiemannKind>(kind);
-  bool c = params.central;
-#define SNAP_RIEMANN_CPU(K)                                           \
-  return c ? riemann_cpu_loop<K, true, false>(                        \
-                 iter, dim, params, inv_mu_ratio_m1, cv_ratio_m1, u0) \
-           : riemann_cpu_loop<K, false, false>(                       \
-                 iter, dim, params, inv_mu_ratio_m1, cv_ratio_m1, u0)
-  switch (k) {
+  auto const& t1 = inv_mu_ratio_m1;
+  auto const& t2 = cv_ratio_m1;
+  auto const& t3 = u0;
+  switch (static_cast<RiemannKind>(kind)) {
     case RiemannKind::hllc:
-      SNAP_RIEMANN_CPU(RiemannKind::hllc);
+      return riemann_cpu_cw<RiemannKind::hllc, false>(params, iter, dim, t1, t2,
+                                                      t3);
     case RiemannKind::lmars:
-      SNAP_RIEMANN_CPU(RiemannKind::lmars);
+      return riemann_cpu_cw<RiemannKind::lmars, false>(params, iter, dim, t1,
+                                                       t2, t3);
     case RiemannKind::roe:
       if (params.llf)
-        return c ? riemann_cpu_loop<RiemannKind::roe, true, true>(
-                       iter, dim, params, inv_mu_ratio_m1, cv_ratio_m1, u0)
-                 : riemann_cpu_loop<RiemannKind::roe, false, true>(
-                       iter, dim, params, inv_mu_ratio_m1, cv_ratio_m1, u0);
-      SNAP_RIEMANN_CPU(RiemannKind::roe);
+        return riemann_cpu_cw<RiemannKind::roe, true>(params, iter, dim, t1, t2,
+                                                      t3);
+      return riemann_cpu_cw<RiemannKind::roe, false>(params, iter, dim, t1, t2,
+                                                     t3);
     case RiemannKind::shallow_roe:
-      SNAP_RIEMANN_CPU(RiemannKind::shallow_roe);
+      return riemann_cpu_cw<RiemannKind::shallow_roe, false>(params, iter, dim,
+                                                             t1, t2, t3);
     default:
       TORCH_CHECK(false, "[call_riemann] kind ", kind,
                   " is a torch formula, not a face function");
   }
-#undef SNAP_RIEMANN_CPU
 }
 
 }  // namespace snap

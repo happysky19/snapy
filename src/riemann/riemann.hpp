@@ -111,11 +111,17 @@ class RiemannSolverImpl : public torch::nn::Cloneable<RiemannSolverImpl> {
    * riemann.central there, the mass rows (IDN and the species) of
    * 1/2 (F(w_L) + F(w_R)) from the face states it solved; other rows are
    * left as they are.
+   *
+   * wave_speed, if defined (same kinds), (...) as face_pressure: the kernel
+   * writes max |S| of each face (C.rst 3.6): hllc max(-b_m, b_p), lmars
+   * |u*| + c, roe max(|lambda_-|, |lambda_+|), shallow-roe the larger
+   * acoustic speed of its Roe average.
    */
   torch::Tensor forward(torch::Tensor wl, torch::Tensor wr, int dim,
                         torch::Tensor vel_or_flux,
                         torch::Tensor face_pressure = torch::Tensor(),
-                        torch::Tensor central = torch::Tensor());
+                        torch::Tensor central = torch::Tensor(),
+                        torch::Tensor wave_speed = torch::Tensor());
 
   //! hllc only. Pressure rows are perturbations about one shared face
   //! background. Returns perturbation normal-momentum flux and contact
@@ -129,13 +135,15 @@ class RiemannSolverImpl : public torch::nn::Cloneable<RiemannSolverImpl> {
 
  protected:
   FORWARD_HAS_DEFAULT_ARGS({4, torch::nn::AnyValue(torch::Tensor())},
-                           {5, torch::nn::AnyValue(torch::Tensor())})
+                           {5, torch::nn::AnyValue(torch::Tensor())},
+                           {6, torch::nn::AnyValue(torch::Tensor())})
 
  private:
   //! the face functions' solve: one EOS face pass, rotation, call_riemann
   torch::Tensor solve(torch::Tensor wl, torch::Tensor wr, int dim,
                       torch::Tensor flx, torch::Tensor face_pressure,
-                      torch::Tensor reference_pressure, torch::Tensor central);
+                      torch::Tensor reference_pressure, torch::Tensor central,
+                      torch::Tensor wave_speed);
 };
 using RiemannSolver = std::shared_ptr<RiemannSolverImpl>;
 

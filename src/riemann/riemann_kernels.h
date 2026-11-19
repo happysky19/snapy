@@ -31,7 +31,7 @@ void DISPATCH_MACRO hllc_impl(T* flx, T* wl, T* wr, T el, T er, T gammal,
                               T gammar, T cl, T cr, int dim, int ny,
                               int stride_w, int stride_f,
                               T* face_pressure = nullptr,
-                              T reference_pressure = T(0)) {
+                              T reference_pressure = T(0), T* speed = nullptr) {
   // With a shared face background, pressure rows and momentum pressure flux
   // are perturbations. Wave speeds and energy transport still use totals.
   // Typed constants keep float instantiations on FP32 arithmetic throughout.
@@ -78,6 +78,8 @@ void DISPATCH_MACRO hllc_impl(T* flx, T* wl, T* wr, T el, T er, T gammal,
 
   auto bp = ar > T(0.0) ? ar : (TINY_NUMBER);
   auto bm = al < T(0.0) ? al : -(TINY_NUMBER);
+  // wave_speed (C.rst 3.6): max |S| of the face, max(-b_m, b_p)
+  if (speed != nullptr) *speed = -bm > bp ? -bm : bp;
 
   //--- Step 5. Compute the contact wave speed and pressure
 
@@ -188,7 +190,8 @@ namespace snap {
 template <typename T>
 void DISPATCH_MACRO lmars_impl(T* flx, T* wl, T* wr, T hl, T hr, T gammal,
                                T gammar, int dim, int ny, int stride_w,
-                               int stride_f, T* face_pressure = nullptr) {
+                               int stride_f, T* face_pressure = nullptr,
+                               T* speed = nullptr) {
   auto ivx = IPR - dim;
   auto ivy = IVX + ((ivx - IVX) + 1) % 3;
   auto ivz = IVX + ((ivx - IVX) + 2) % 3;
@@ -213,6 +216,8 @@ void DISPATCH_MACRO lmars_impl(T* flx, T* wl, T* wr, T hl, T hr, T gammal,
 
   auto ubar = 0.5 * (wli[IVX] + wri[IVX]) +
               0.5 / (rhobar * cbar) * (wli[IPR] - wri[IPR]);
+  // wave_speed (C.rst 3.6): |u*| + c
+  if (speed != nullptr) *speed = abs(ubar) + cbar;
 
   // Compute fluxes depending on the sign of ubar
   T rd = 1.0;
@@ -274,7 +279,8 @@ void DISPATCH_MACRO roe_impl(T* flx, T const* wl, T const* wr, T el, T er,
                              bool ideal_moist, int nvapor, T gammad,
                              T const* inv_mu_ratio_m1, T const* cv_ratio_m1,
                              T const* u0, int stride_w, int stride_f,
-                             T* face_pressure = nullptr, T* llf = nullptr) {
+                             T* face_pressure = nullptr, T* llf = nullptr,
+                             T* speed = nullptr) {
   auto TINY_NUMBER = T(1.0e-10);
 
   auto ivx = IPR - dim;
@@ -375,6 +381,8 @@ void DISPATCH_MACRO roe_impl(T* flx, T const* wl, T const* wr, T el, T er,
   T spd_m = abs(lam_m);
   T spd_0 = abs(lam_0);
   T spd_p = abs(lam_p);
+  // wave_speed (C.rst 3.6): max(|lambda_-|, |lambda_+|)
+  if (speed != nullptr) *speed = roe_max(spd_m, spd_p);
 
   bool llf_flag = false;
   T du = WR(ivx) - WL(ivx);
@@ -474,7 +482,8 @@ namespace snap {
 
 template <typename T>
 void DISPATCH_MACRO shallow_roe_impl(T* flx, T const* wl, T const* wr, int dim,
-                                     int dir_yz, int stride_w, int stride_f) {
+                                     int dir_yz, int stride_w, int stride_f,
+                                     T* speed = nullptr) {
   int ivx, ivy, ivz;
   if (dir_yz) {
     ivx = dim == 2 ? IVY : IVZ;
@@ -517,6 +526,8 @@ void DISPATCH_MACRO shallow_roe_impl(T* flx, T const* wl, T const* wr, int dim,
   T speed0 = abs(ubar - cbar);
   T speed1 = abs(ubar);
   T speed2 = abs(ubar + cbar);
+  // wave_speed: the larger acoustic speed of the Roe average
+  if (speed != nullptr) *speed = speed0 > speed2 ? speed0 : speed2;
 
   SFLX(IDN) = T(0.5) * (SWL(IDN) * SWL(ivx) + SWR(IDN) * SWR(ivx));
   SFLX(ivx) =
@@ -585,30 +596,44 @@ DISPATCH_MACRO void riemann_central(T* cen, T const* wl, T const* wr,
 //! one face of kind K. p holds the iterator's operands at the face, in the
 //! order of call_riemann (riemann_dispatch.hpp): the outputs (flux, the face
 //! pressure except for shallow-roe, riemann.central if C, roe's LLF flag if
-//! E), then wl, wr, e, gamma and c, (2, ...) with the right side one output
-//! stride after the left, and p0. C and E are template parameters so that
-//! the face functions compile as before when neither is requested.
-template <RiemannKind K, bool C, bool E, typename T>
+//! E, the wave speed if W), then wl, wr, e, gamma and c, (2, ...) with the
+//! right side one output stride after the left, and p0. C, E and W are
+//! template parameters so that the face functions compile as before when
+//! none is requested.
+template <RiemannKind K, bool C, bool E, bool W, typename T>
 DISPATCH_MACRO void riemann_face(T* const* p, RiemannArgs<T> const& a) {
   auto s = a.stride;
   constexpr int o = K == RiemannKind::shallow_roe ? 1 : 2;
-  constexpr int i = o + (C ? 1 : 0) + (E ? 1 : 0);
+  constexpr int i = o + (C ? 1 : 0) + (E ? 1 : 0) + (W ? 1 : 0);
+  [[maybe_unused]] T* const spd = W ? p[i - 1] : static_cast<T*>(nullptr);
   if constexpr (K == RiemannKind::hllc) {
     auto p0 = a.background ? *p[i + 5] : T(0);
-    hllc_impl(p[0], p[i], p[i + 1], *p[i + 2], *(p[i + 2] + s), *p[i + 3],
-              *(p[i + 3] + s), *p[i + 4], *(p[i + 4] + s), a.dim, a.ny, s, s,
-              p[1], p0);
+    if constexpr (W)
+      hllc_impl(p[0], p[i], p[i + 1], *p[i + 2], *(p[i + 2] + s), *p[i + 3],
+                *(p[i + 3] + s), *p[i + 4], *(p[i + 4] + s), a.dim, a.ny, s, s,
+                p[1], p0, spd);
+    else
+      hllc_impl(p[0], p[i], p[i + 1], *p[i + 2], *(p[i + 2] + s), *p[i + 3],
+                *(p[i + 3] + s), *p[i + 4], *(p[i + 4] + s), a.dim, a.ny, s, s,
+                p[1], p0);
   } else if constexpr (K == RiemannKind::lmars) {
-    lmars_impl(p[0], p[i], p[i + 1], *p[i + 2], *(p[i + 2] + s), *p[i + 3],
-               *(p[i + 3] + s), a.dim, a.ny, s, s, p[1]);
+    if constexpr (W)
+      lmars_impl(p[0], p[i], p[i + 1], *p[i + 2], *(p[i + 2] + s), *p[i + 3],
+                 *(p[i + 3] + s), a.dim, a.ny, s, s, p[1], spd);
+    else
+      lmars_impl(p[0], p[i], p[i + 1], *p[i + 2], *(p[i + 2] + s), *p[i + 3],
+                 *(p[i + 3] + s), a.dim, a.ny, s, s, p[1]);
   } else if constexpr (K == RiemannKind::roe) {
     roe_impl(p[0], p[i], p[i + 1], *p[i + 2], *(p[i + 2] + s), *p[i + 3],
              *(p[i + 3] + s), *p[i + 4], *(p[i + 4] + s), a.dim, a.ny,
              a.ideal_moist, a.nvapor, a.gammad, a.inv_mu_ratio_m1,
              a.cv_ratio_m1, a.u0, s, s, p[1],
-             E ? p[o + (C ? 1 : 0)] : static_cast<T*>(nullptr));
+             E ? p[o + (C ? 1 : 0)] : static_cast<T*>(nullptr), spd);
   } else if constexpr (K == RiemannKind::shallow_roe) {
-    shallow_roe_impl(p[0], p[i], p[i + 1], a.dim, a.dir_yz, s, s);
+    if constexpr (W)
+      shallow_roe_impl(p[0], p[i], p[i + 1], a.dim, a.dir_yz, s, s, spd);
+    else
+      shallow_roe_impl(p[0], p[i], p[i + 1], a.dim, a.dir_yz, s, s);
   }
   if constexpr (C) riemann_central<K>(p[o], p[i], p[i + 1], a);
 }

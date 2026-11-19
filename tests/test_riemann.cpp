@@ -769,6 +769,45 @@ TEST_P(DeviceTest, riemann_events_count_clamped_and_llf_faces) {
   }
 }
 
+// C5 wave_speed (C.rst 3.6): max |S| of each face. With the same state on
+// both sides every kind's speed is |u_n| + c: hllc's b_m = u - c, b_p =
+// u + c; lmars' u* = u; roe's lambda_-/+ = u -/+ c. The states vary from face
+// to face, with both signs of u_n, in every direction.
+TEST_P(DeviceTest, riemann_wave_speed_is_the_fastest_signal) {
+  for (std::string type : {"hllc", "lmars", "roe"}) {
+    auto opts = MeshBlockOptionsImpl::from_yaml("test_eos_temp2inteng.yaml");
+    opts->hydro()->riemann()->type() = type;
+    auto block = MeshBlock(opts);
+    block->to(device, dtype);
+    auto solver = block->phydro->priemann;
+    auto peos = block->phydro->peos;
+    auto c = block->pcoord;
+    int nvar = peos->nvar(), ny = nvar - ICY;
+    auto shape = std::vector<int64_t>{nvar, c->options->nc3(),
+                                      c->options->nc2(), c->options->nc1()};
+    auto o = torch::device(device).dtype(dtype);
+    torch::manual_seed(11);
+    auto w = torch::zeros(shape, o);
+    w[IDN] = 1. + torch::rand_like(w[IDN]);
+    w.narrow(0, IVX, 3).copy_(600. * torch::rand_like(w.narrow(0, IVX, 3)) -
+                              300.);
+    w[IPR] = 1.e5 * (0.9 + 0.2 * torch::rand_like(w[IPR]));
+    w.narrow(0, ICY, ny).copy_(0.01 * torch::rand_like(w.narrow(0, ICY, ny)));
+    auto cs = peos->compute("WA->L", {w, peos->compute("W->A", {w})});
+    for (int dim : {DIM1, DIM2, DIM3}) {
+      int ivn = dim == DIM1 ? IVX : dim == DIM2 ? IVY : IVZ;
+      auto flux = torch::zeros(shape, o);
+      auto ws = torch::full_like(w[IDN], -1.);
+      solver->forward(w.clone(), w.clone(), dim, flux, torch::Tensor(),
+                      torch::Tensor(), ws);
+      auto ref = w[ivn].abs() + cs;
+      double tol = dtype == torch::kFloat64 ? 1.e-12 : 1.e-5;
+      double err = ((ws - ref).abs() / ref).max().item<double>();
+      EXPECT_LE(err, tol) << type << " dim " << dim;
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 
