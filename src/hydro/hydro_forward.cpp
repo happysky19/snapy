@@ -482,6 +482,14 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
     input[IPR].copy_((perturb.pressure0 - gauge) + perturb.pressure_delta);
     auto lr = recon->forward(input, dim, false);
     post_floors(recon);
+    // FaceFloor on the FP32 split path: the total face states this path
+    // floors itself, on the faces the reconstruction computes
+    auto count_below = [&](torch::Tensor const& x, double floor, int axis) {
+      int ng = recon->pinterp1->stencils() / 2 + 1;
+      int64_t n = x.size(axis);
+      int64_t il = ng, iu = n - ng;
+      return (x < floor).narrow(axis, il, std::min<int64_t>(iu + 2, n) - il);
+    };
     // Horizontal Cartesian sweeps need FP64 only for pressure cancellation.
     // Covariance consumers still require total face states; retain their path.
     bool active_horizontal = (dim == DIM2 && !options->disable_flux_x2()) ||
@@ -495,15 +503,27 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
       background = 0.5 * (p0 + below);
       auto pressure = lr.select(1, IPR).to(torch::kFloat64);
       pressure += gauge;
+      monitor.count(
+          "face_floor.p",
+          count_below(pressure, peos->options->pressure_floor(), dim));
       pressure.clamp_min_(peos->options->pressure_floor());
       pressure -= background;
       lr.select(1, IPR).copy_(pressure);
+      monitor.count(
+          "face_floor.rho",
+          count_below(lr.select(1, IDN), peos->options->density_floor(), dim));
       lr.select(1, IDN).clamp_min_(peos->options->density_floor());
       return lr;
     }
     lr = lr.to(torch::kFloat64);
     for (int side : {ILT, IRT}) {
       lr[side][IPR] += gauge;
+      monitor.count(
+          "face_floor.p",
+          count_below(lr[side][IPR], peos->options->pressure_floor(), dim - 1));
+      monitor.count(
+          "face_floor.rho",
+          count_below(lr[side][IDN], peos->options->density_floor(), dim - 1));
       lr[side][IPR].clamp_min_(peos->options->pressure_floor());
       lr[side][IDN].clamp_min_(peos->options->density_floor());
     }
