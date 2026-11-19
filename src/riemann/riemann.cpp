@@ -163,7 +163,12 @@ static torch::Tensor lax_friedrichs_flux(torch::Tensor const& priml,
 
 torch::Tensor RiemannSolverImpl::forward(torch::Tensor wl, torch::Tensor wr,
                                          int dim, torch::Tensor vel_or_flux,
-                                         torch::Tensor face_pressure) {
+                                         torch::Tensor face_pressure,
+                                         torch::Tensor central) {
+  TORCH_CHECK(!central.defined() || (kind != RiemannKind::upwind &&
+                                     kind != RiemannKind::plume_roe),
+              "riemann.central is not defined for Riemann solver type ",
+              options->type(), " (no hydro mass rows)");
   if (kind == RiemannKind::upwind) {
     TORCH_CHECK(
         !face_pressure.defined(),
@@ -188,7 +193,8 @@ torch::Tensor RiemannSolverImpl::forward(torch::Tensor wl, torch::Tensor wr,
     return lax_friedrichs_flux(wl, wr, csl, csr);
   }
 
-  return solve(wl, wr, dim, vel_or_flux, face_pressure, torch::Tensor());
+  return solve(wl, wr, dim, vel_or_flux, face_pressure, torch::Tensor(),
+               central);
 }
 
 torch::Tensor RiemannSolverImpl::forward_perturbations(
@@ -198,13 +204,15 @@ torch::Tensor RiemannSolverImpl::forward_perturbations(
               "Riemann solver perturbations need hllc, not ", options->type());
   TORCH_CHECK(reference_pressure.defined(),
               "HLLC perturbations require a shared face pressure background");
-  return solve(wl, wr, dim, flx, face_pressure_delta, reference_pressure);
+  return solve(wl, wr, dim, flx, face_pressure_delta, reference_pressure,
+               torch::Tensor());
 }
 
 torch::Tensor RiemannSolverImpl::solve(torch::Tensor wl, torch::Tensor wr,
                                        int dim, torch::Tensor flx,
                                        torch::Tensor face_pressure,
-                                       torch::Tensor reference_pressure) {
+                                       torch::Tensor reference_pressure,
+                                       torch::Tensor central) {
   auto pcoord = phydro->pmb->pcoord;
   auto peos = phydro->peos;
   bool aneos = peos->options->type() == "aneos";
@@ -301,6 +309,8 @@ torch::Tensor RiemannSolverImpl::solve(torch::Tensor wl, torch::Tensor wr,
     face_pressure_out = direct ? face_pressure : torch::empty_like(wl[IDN]);
     config.add_owned_output(face_pressure_out.unsqueeze(0));
   }
+  // riemann.central: the mass rows of 1/2 (F(w_L) + F(w_R)), in the kernel
+  if (central.defined()) config.add_output(central);
   config.add_input(wl).add_input(wr);
   for (auto const& t : {e, gamma, c})
     if (t.defined()) config.add_input(t);
