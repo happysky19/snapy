@@ -413,11 +413,14 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
     return out;
   };
   auto solve = [&](torch::Tensor lr, int dim, torch::Tensor flux,
-                   torch::Tensor face_pressure, torch::Tensor& background) {
+                   torch::Tensor face_pressure, torch::Tensor& background,
+                   torch::Tensor central = torch::Tensor()) {
     if (!split_flux) {
-      priemann->forward(lr[ILT], lr[IRT], dim, flux, face_pressure);
+      priemann->forward(lr[ILT], lr[IRT], dim, flux, face_pressure, central);
       return;
     }
+    TORCH_CHECK(!central.defined(),
+                "riemann.central needs the total-state solve");
     if (!background.defined()) {
       // Horizontal (or gravity-free) sweeps: the shared face gauge need not
       // be hydrostatic. Its full gradient is retained in the momentum source.
@@ -838,19 +841,12 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
 
   //// ------------ (3.A) Calculate dimension 2 LR states ------------ ////
   // conserve-axial-momentum: full (#357): the Coriolis call also gets the
-  // solver's dissipative x2/x3 mass flux M - M_central, M_central = 1/2
-  // (F(wL, wL) + F(wR, wR)) from the face states of this stage
+  // solver's dissipative x2/x3 mass flux M - M_central; the solve writes
+  // M_central = 1/2 (F(wL) + F(wR)), riemann.central, in the kernel (C5)
   bool const c2 = axial_coriolis_form();
   TORCH_CHECK(
       !c2 || (!split_flux && !fp32()),
       "conserve-axial-momentum full needs FP64 and no perturbation-flux");
-  auto central = [&](torch::Tensor a, torch::Tensor b, int dim,
-                     torch::Tensor like) {
-    auto fa = torch::zeros_like(like), fb = torch::zeros_like(like);
-    priemann->forward(a.clone(), a.clone(), dim, fa);
-    priemann->forward(b.clone(), b.clone(), dim, fb);
-    return 0.5 * (fa + fb);
-  };
   torch::Tensor wtmp2, wtmp3;
   SyncOptions sync_opts;
   sync_opts.cross_panel_only(true).interpolate(false).type(kPrimitive);
@@ -958,12 +954,10 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
         _cov_wr[0] = cwr.clone();
         _cov_dry[0] = cov_dry(dcov, cwl);
       }
-      // riemann.central@2, kept for A until the next stage (R-2)
-      if (c2)
-        freg.part_slot(2, "riemann.central")
-            .copy_(central(wlr2[ILT], wlr2[IRT], DIM2, _flux2));
+      // riemann.central@2, kept for A until the next stage (R-2, C5)
       solve(wlr2, DIM2, freg.slot(2, "riemann"), torch::Tensor(),
-            pressure_base2);
+            pressure_base2,
+            c2 ? freg.part_slot(2, "riemann.central") : torch::Tensor());
       freg.post_slot(2, "riemann");
       if (dcov.defined()) add_cov(_flux2, dcov);
       cov2 = dcov.defined();
@@ -995,11 +989,10 @@ torch::Tensor HydroImpl::forward(double dt, torch::Tensor u,
         _cov_wr[1] = cwr.clone();
         _cov_dry[1] = cov_dry(dcov, cwl);
       }
-      if (c2)
-        freg.part_slot(3, "riemann.central")
-            .copy_(central(wlr3[ILT], wlr3[IRT], DIM3, _flux3));
+      // riemann.central@3, kept for A until the next stage (R-2, C5)
       solve(wlr3, DIM3, freg.slot(3, "riemann"), torch::Tensor(),
-            pressure_base3);
+            pressure_base3,
+            c2 ? freg.part_slot(3, "riemann.central") : torch::Tensor());
       freg.post_slot(3, "riemann");
       if (dcov.defined()) add_cov(_flux3, dcov);
       cov3 = dcov.defined();
