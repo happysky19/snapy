@@ -735,7 +735,9 @@ void MeshBlockImpl::advance_local(Variables &vars, double dt, int stage) {
   auto start = std::chrono::high_resolution_clock::now();
   // -------- (1) save initial state --------
   if (stage == 0) {
-    // the register's step sums and monitor start the step (R.rst 3.4)
+    // the register's step sums and monitor start the step (R.rst 3.4),
+    // before the split sources' step-start half, whose post_split must
+    // survive into the step
     freg.begin_step();
     auto splits = phydro->sources.splits();
     for (auto &s : splits) s->begin_split(hydro_u, dt);
